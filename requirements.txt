@@ -1,0 +1,5 @@
+# Hanabi Game Requirements
+# No external dependencies required for basic implementation
+# Add dependencies here as needed for game engine, testing, etc.
+
+PyYAML>=6.0
