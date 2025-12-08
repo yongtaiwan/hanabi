@@ -9,19 +9,47 @@ except ImportError:
     YAML_AVAILABLE = False
     import json
 
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from .game_engine import GameEngine
+from .game import Game
 from .moves import Move, Play, Discard, ColorHint, NumberHint
+from .enums import Color
 
 
 class GameHistory:
     """Tracks and saves game history for replay."""
-    
+
+    # Subdirectory for game records
+    RECORDS_DIR = "game_records"
+
+    @staticmethod
+    def _get_records_dir() -> str:
+        """Get the path to the game records directory, creating it if necessary."""
+        records_dir = GameHistory.RECORDS_DIR
+        if not os.path.exists(records_dir):
+            os.makedirs(records_dir)
+        return records_dir
+
+    @staticmethod
+    def _get_file_path(filename: str) -> str:
+        """
+        Get the full path for a game record file.
+        If filename is already a full path, returns it as-is.
+        Otherwise, places it in the game_records subdirectory.
+        """
+        # If filename is already a full path (contains path separator), use it as-is
+        if os.path.sep in filename or (os.path.altsep and os.path.altsep in filename):
+            return filename
+
+        # Otherwise, place it in the game_records subdirectory
+        records_dir = GameHistory._get_records_dir()
+        return os.path.join(records_dir, filename)
+
     def __init__(self, settings: Dict[str, Any]):
         """
         Initialize game history.
-        
+
         Args:
             settings: Game settings dictionary
         """
@@ -29,15 +57,15 @@ class GameHistory:
         self._moves: List[Dict[str, Any]] = []
         self._initial_state: Optional[Dict[str, Any]] = None
         self._start_time = datetime.now()
-    
-    def record_initial_state(self, engine: GameEngine) -> None:
+
+    def record_initial_state(self, game: Game) -> None:
         """Record the initial game state."""
-        self._initial_state = self._serialize_state(engine, concise=True)
-    
-    def record_move(self, player_index: int, move: Move, result: str, engine: GameEngine) -> None:
+        self._initial_state = self._serialize_state(game, concise=True)
+
+    def record_move(self, player_index: int, move: Move, result: str, game: Game) -> None:
         """
         Record a move and the resulting game state.
-        
+
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
@@ -48,17 +76,16 @@ class GameHistory:
             "p": player_index,  # Short field name
             "m": self._serialize_move(move),  # Short field name
             "r": result,  # Short field name
-            "s": self._serialize_state(engine, concise=True)  # Short field name, concise format
+            "s": self._serialize_state(game, concise=True)  # Short field name, concise format
         }
         self._moves.append(move_record)
-    
+
     def _card_to_short(self, card) -> str:
         """Convert a card to short notation (e.g., G5)."""
-        from .enums import Color
-        color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y', 
+        color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y',
                     Color.GREEN: 'G', Color.BLUE: 'B', Color.MULTI: 'M'}
         return f"{color_map.get(card.color, '?')}{card.number.value}"
-    
+
     def _serialize_move(self, move: Move) -> Dict[str, Any]:
         """Serialize a move to a dictionary (concise format)."""
         if isinstance(move, Play):
@@ -81,12 +108,12 @@ class GameHistory:
             }
         else:
             return {"t": "?", "m": str(move)}
-    
-    def _serialize_state(self, engine: GameEngine, concise: bool = False) -> Dict[str, Any]:
+
+    def _serialize_state(self, game: Game, concise: bool = False) -> Dict[str, Any]:
         """Serialize game state to a dictionary."""
-        state = engine.gameState
+        state = game.state
         common_view = state.commonView
-        
+
         if concise:
             # Concise format: use short notation and compact field names
             # Serialize player hands as short notation (e.g., ["G5", "B3", "R1"])
@@ -94,12 +121,14 @@ class GameHistory:
             for hand in state.playerHands:
                 cards = [self._card_to_short(card) for card in hand.cards]
                 player_hands.append(cards)
-            
+
             # Serialize player hints (only non-empty, compact format)
             # Omit empty hint dictionaries to save space
+            from .player import HintTrackingPlayer
             player_hints = []
-            for player_idx in range(engine.settings.numPlayers):
-                hints = engine.getPlayerHints(player_idx)
+            for player_idx in range(game.settings.numPlayers):
+                player = game.team.players[player_idx]
+                hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
                 hints_dict = {}
                 for card_idx, hint_data in hints.items():
                     hint_parts = []
@@ -111,19 +140,23 @@ class GameHistory:
                         hints_dict[card_idx] = "".join(hint_parts)  # e.g., "G" or "3" or "G3"
                 # Only add if non-empty (saves space)
                 player_hints.append(hints_dict if hints_dict else None)
-            
+
             # Serialize cards played as short notation (e.g., {"G": 5, "R": 3})
             cards_played = {}
             for color, number in common_view.cardsPlayed.items():
-                color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y', 
+                color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y',
                             Color.GREEN: 'G', Color.BLUE: 'B', Color.MULTI: 'M'}
                 cards_played[color_map.get(color, '?')] = number.value
-            
-            # Serialize discard pile as short notation list (e.g., ["G5", "R3", "B1"])
-            discard_pile = [self._card_to_short(card) for card in engine.getDiscardPile()]
-            
+
+            # Serialize discard pile as short notation list (reconstruct from common view)
+            discard_pile = []
+            for color, suit in common_view.cardsDiscarded.items():
+                for number, count in suit.cards.items():
+                    for _ in range(count):
+                        discard_pile.append(self._card_to_short(Card(color, number)))
+
             return {
-                "cp": engine.currentPlayer,  # current_player
+                "cp": game.currentPlayer,  # current_player
                 "ht": common_view.hintTokens,  # hint_tokens
                 "lt": common_view.liveTokens,  # live_tokens
                 "cd": common_view.cardsToDraw,  # cards_to_draw
@@ -131,8 +164,8 @@ class GameHistory:
                 "h": player_hints,  # hints
                 "pl": cards_played,  # cards_played (pl = played)
                 "dp": discard_pile,  # discard_pile
-                "sc": engine.getScore(),  # score
-                "f": engine.isFinished()  # finished
+                "sc": game.getScore(),  # score
+                "f": game.isFinished  # finished
             }
         else:
             # Original verbose format (for backward compatibility)
@@ -145,10 +178,12 @@ class GameHistory:
                         "number": card.number.value
                     })
                 player_hands.append(cards)
-            
+
+            from .player import HintTrackingPlayer
             player_hints = []
-            for player_idx in range(engine.settings.numPlayers):
-                hints = engine.getPlayerHints(player_idx)
+            for player_idx in range(game.settings.numPlayers):
+                player = game.team.players[player_idx]
+                hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
                 hints_dict = {}
                 for card_idx, hint_data in hints.items():
                     hint_entry = {}
@@ -159,20 +194,23 @@ class GameHistory:
                     if hint_entry:
                         hints_dict[card_idx] = hint_entry
                 player_hints.append(hints_dict if hints_dict else {})
-            
+
             cards_played = {}
             for color, number in common_view.cardsPlayed.items():
                 cards_played[color.name] = number.value
-            
+
+            # Reconstruct discard pile from common view
             discard_pile = []
-            for card in engine.getDiscardPile():
-                discard_pile.append({
-                    "color": card.color.name,
-                    "number": card.number.value
-                })
-            
+            for color, suit in common_view.cardsDiscarded.items():
+                for number, count in suit.cards.items():
+                    for _ in range(count):
+                        discard_pile.append({
+                            "color": color.name,
+                            "number": number.value
+                        })
+
             return {
-                "current_player": engine.currentPlayer,
+                "current_player": game.currentPlayer,
                 "hint_tokens": common_view.hintTokens,
                 "live_tokens": common_view.liveTokens,
                 "cards_to_draw": common_view.cardsToDraw,
@@ -180,17 +218,17 @@ class GameHistory:
                 "player_hints": player_hints,
                 "cards_played": cards_played,
                 "discard_pile": discard_pile,
-                "score": engine.getScore(),
-                "is_finished": engine.isFinished()
+                "score": game.getScore(),
+                "is_finished": game.isFinished
             }
-    
+
     def save_to_file(self, filename: Optional[str] = None) -> str:
         """
         Save game history to a YAML file (or JSON if YAML is not available).
-        
+
         Args:
             filename: Optional filename. If None, generates a timestamped filename.
-            
+
         Returns:
             The filename where the history was saved.
         """
@@ -212,7 +250,10 @@ class GameHistory:
         elif (filename.endswith('.yaml') or filename.endswith('.yml')) and not YAML_AVAILABLE:
             # Convert .yaml to .json if YAML is not available
             filename = filename.rsplit('.', 1)[0] + '.json'
-        
+
+        # Get the full path (in game_records subdirectory if not already a full path)
+        filepath = self._get_file_path(filename)
+
         history_data = {
             "s": self._settings,  # settings
             "st": self._start_time.isoformat(),  # start_time
@@ -221,34 +262,45 @@ class GameHistory:
             "m": self._moves,  # moves
             "tm": len(self._moves)  # total_moves
         }
-        
-        with open(filename, 'w') as f:
+
+        with open(filepath, 'w') as f:
             if YAML_AVAILABLE:
                 # Use custom dumper with flow style for lists to make it more compact
                 class CompactListDumper(yaml.SafeDumper):
                     def represent_list(self, data):
                         # Use flow style for lists (more compact)
                         return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
-                
+
                 CompactListDumper.add_representer(list, CompactListDumper.represent_list)
-                yaml.dump(history_data, f, Dumper=CompactListDumper, 
+                yaml.dump(history_data, f, Dumper=CompactListDumper,
                          default_flow_style=False, sort_keys=False, allow_unicode=True)
             else:
                 json.dump(history_data, f, indent=2)
-        
-        return filename
-    
+
+        return filepath
+
     def load_from_file(self, filename: str) -> Dict[str, Any]:
         """
         Load game history from a YAML or JSON file.
-        
+
         Args:
-            filename: The filename to load from
-            
+            filename: The filename to load from (can be just filename or full path)
+
         Returns:
             The loaded history data
         """
-        with open(filename, 'r') as f:
+        # Try the filename as-is first (in case it's a full path from file dialog)
+        filepath = filename
+        if not os.path.exists(filepath):
+            # If not found, try in the game_records subdirectory
+            filepath = self._get_file_path(filename)
+            if not os.path.exists(filepath):
+                # If still not found, try in the root directory (for backward compatibility)
+                if not os.path.exists(filename):
+                    raise FileNotFoundError(f"Game history file not found: {filename}")
+                filepath = filename
+
+        with open(filepath, 'r') as f:
             if (filename.endswith('.yaml') or filename.endswith('.yml')) and YAML_AVAILABLE:
                 return yaml.safe_load(f)
             else:

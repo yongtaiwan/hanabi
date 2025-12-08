@@ -7,15 +7,16 @@ A Python implementation of the Hanabi card game with strategy support.
 __version__ = "0.1.0"
 
 # Import main classes for easy access
-from .enums import Color, Number
-from .card import Card, Suit
-from .game import (
-    Hand, GameSettings, CommonView, PlayerView, GameState, Game, GameField,
+from .core.enums import Color, Number
+from .core.card import Card, Suit
+from .core.game import (
+    Hand, GameSettings, CommonView, PlayerView, GameState, Game,
     create_standard_game_settings
 )
-from .moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
-from .observer import Observer
-from .player import Player, BasePlayer, HumanPlayer, RandomPlayer, StrategyAlphaPlayer, PlayerTeam
+from .core.game_field import GameField
+from .core.moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
+from .core.observer import Observer
+from .core.player import Player, BasePlayer, HintTrackingPlayer, HumanPlayer, RandomPlayer, StrategyAlphaPlayer, PlayerTeam
 
 __all__ = [
     # Enums
@@ -45,6 +46,7 @@ __all__ = [
     'Observer',
     'Player',
     'BasePlayer',
+    'HintTrackingPlayer',
     'HumanPlayer',
     'RandomPlayer',
     'StrategyAlphaPlayer',

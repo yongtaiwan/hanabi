@@ -133,6 +133,7 @@ dmypy.json
 # Game history files (optional - uncomment if you don't want to track these)
 # hanabi_game_*.yaml
 # hanabi_game_*.json
+game_records/
 
 # Test output
 test_history

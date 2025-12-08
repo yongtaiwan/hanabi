@@ -3,12 +3,12 @@ Tests for ConsoleInput class.
 """
 
 import unittest
-from hanabi.game import create_standard_game_settings
-from hanabi.game_engine import GameEngine
-from hanabi.console_input import ConsoleInput
-from hanabi.player import HumanPlayer
-from hanabi.moves import Play, Discard, ColorHint, NumberHint
-from hanabi.enums import Color, Number
+from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import Game as GameEngine
+from hanabi.console.console_input import ConsoleInput
+from hanabi.core.player import HumanPlayer
+from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
+from hanabi.core.enums import Color, Number
 
 
 class TestConsoleInput(unittest.TestCase):

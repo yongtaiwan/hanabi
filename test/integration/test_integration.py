@@ -3,12 +3,12 @@ Integration tests for the full game flow.
 """
 
 import unittest
-from hanabi.game import create_standard_game_settings
-from hanabi.game_engine import GameEngine
-from hanabi.console_input import ConsoleInput
-from hanabi.game_history import GameHistory
-from hanabi.player import HumanPlayer
-from hanabi.moves import Play, Discard
+from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import Game as GameEngine
+from hanabi.console.console_input import ConsoleInput
+from hanabi.core.game_history import GameHistory
+from hanabi.core.player import HumanPlayer
+from hanabi.core.moves import Play, Discard
 
 
 class TestIntegration(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestIntegration(unittest.TestCase):
                     color = teammate_hand.cards[0].color
                     matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                     if matching:
-                        from hanabi.moves import ColorHint
+                        from hanabi.core.moves import ColorHint
                         move = ColorHint(teammate, matching, color)
                         success, msg = engine.processMove(current_player, move)
                         if success:

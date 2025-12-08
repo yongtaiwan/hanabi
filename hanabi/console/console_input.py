@@ -3,55 +3,57 @@ Console input parsing for Hanabi game.
 """
 
 from typing import Optional, Tuple
-from .enums import Color, Number
-from .moves import Move, Play, Discard, ColorHint, NumberHint
-from .game_engine import GameEngine
+from hanabi.core.enums import Color, Number
+from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
+from hanabi.core.game import Game, PlayerView
 
 
 class ConsoleInput:
     """Handles parsing of console input for Hanabi moves."""
-    
-    def __init__(self, engine: GameEngine):
+
+    def __init__(self, game: Game, player_index: int):
         """
         Initialize console input parser.
-        
+
         Args:
-            engine: The game engine
+            game: The game instance
+            player_index: Index of the player using this input parser
         """
-        self._engine = engine
-    
+        self._game = game
+        self._player_index = player_index
+
     def parse_move(self, player_index: int, input_str: str) -> Tuple[Optional[Move], Optional[str]]:
         """
         Parse a move from user input. Supports both full and simplified commands.
-        
+
         Simplified commands:
         - p<index> or play <index> - play a card
         - d<index> or discard <index> - discard a card
         - h<value> or h<color><value> or h<number><value> - give a hint
           Examples: h3 (hint number 3), hr (hint red), hy5 (hint yellow 5)
-        
+
         Args:
             player_index: Index of the player making the move
             input_str: The input string from the user
-            
+
         Returns:
             Tuple of (Move object or None, error message or None)
         """
         input_str = input_str.strip().lower()
         if not input_str:
             return None, "Empty input"
-        
+
         # Try simplified format first (single letter + optional number)
         if len(input_str) >= 2 and input_str[0] in ['p', 'd', 'h']:
             return self._parse_simplified(player_index, input_str)
-        
+
         # Otherwise parse as full command
         parts = input_str.split()
         if not parts:
             return None, "Invalid input format"
-        
+
         command = parts[0]
-        
+
         if command in ["play", "p"]:
             return self._parse_play(parts)
         elif command in ["discard", "d"]:
@@ -60,12 +62,12 @@ class ConsoleInput:
             return self._parse_hint(player_index, parts)
         else:
             return None, f"Unknown command: {command}. Use 'play'/'p', 'discard'/'d', or 'hint'/'h'"
-    
+
     def _parse_simplified(self, player_index: int, input_str: str) -> Tuple[Optional[Move], Optional[str]]:
         """Parse simplified command format."""
         cmd = input_str[0]
         rest = input_str[1:]
-        
+
         if cmd == 'p':  # play
             try:
                 card_index_ui = int(rest) if rest else None
@@ -73,14 +75,14 @@ class ConsoleInput:
                     return None, "Usage: p<index> (e.g., p1)"
                 # Convert 1-based UI index to 0-based internal index
                 card_index = card_index_ui - 1
-                state = self._engine.gameState
-                hand = state.playerHands[player_index]
+                state = self._game.state
+                hand = state.playerHands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
                     return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
                 return Play(card_index), None
             except ValueError:
                 return None, f"Invalid card index: {rest}"
-        
+
         elif cmd == 'd':  # discard
             try:
                 card_index_ui = int(rest) if rest else None
@@ -88,27 +90,27 @@ class ConsoleInput:
                     return None, "Usage: d<index> (e.g., d2)"
                 # Convert 1-based UI index to 0-based internal index
                 card_index = card_index_ui - 1
-                state = self._engine.gameState
-                hand = state.playerHands[player_index]
+                state = self._game.state
+                hand = state.playerHands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
                     return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
                 return Discard(card_index), None
             except ValueError:
                 return None, f"Invalid card index: {rest}"
-        
+
         elif cmd == 'h':  # hint
             return self._parse_simplified_hint(player_index, rest)
-        
+
         return None, f"Unknown command: {cmd}"
-    
+
     def _parse_simplified_hint(self, player_index: int, rest: str) -> Tuple[Optional[Move], Optional[str]]:
         """Parse simplified hint format: h<value> or h<color><value> or h<number><value>."""
-        state = self._engine.gameState
+        state = self._game.state
         num_players = len(state.playerHands)
-        
+
         # In 2-player game, automatically hint the other player
         if num_players == 2:
-            teammate_idx = 1 if player_index == 0 else 0
+            teammate_idx = 1 if self._player_index == 0 else 0
         else:
             # For 3+ players, need to specify player
             # Try to parse player number first
@@ -116,18 +118,18 @@ class ConsoleInput:
                 try:
                     teammate_idx = int(rest[0]) - 1
                     rest = rest[1:]
-                    if teammate_idx < 0 or teammate_idx >= num_players or teammate_idx == player_index:
-                        return None, f"Invalid player. Valid players: {', '.join(str(i+1) for i in range(num_players) if i != player_index)}"
+                    if teammate_idx < 0 or teammate_idx >= num_players or teammate_idx == self._player_index:
+                        return None, f"Invalid player. Valid players: {', '.join(str(i+1) for i in range(num_players) if i != self._player_index)}"
                 except ValueError:
                     return None, "Invalid player number"
             else:
                 return None, f"In {num_players}-player game, specify player: h<player><value>"
-        
+
         if not rest:
             return None, "Usage: h<value> (e.g., h3 for number 3, hr for red)"
-        
+
         teammate_hand = state.playerHands[teammate_idx]
-        
+
         # Try to parse as number first
         if rest.isdigit():
             try:
@@ -141,7 +143,7 @@ class ConsoleInput:
                 return NumberHint(teammate_idx, matching, number), None
             except (ValueError, KeyError):
                 return None, f"Invalid number: {rest}"
-        
+
         # Try to parse as color (single letter)
         color_map = {
             'r': Color.RED, 'red': Color.RED,
@@ -151,14 +153,14 @@ class ConsoleInput:
             'w': Color.WHITE, 'white': Color.WHITE,
             'm': Color.MULTI, 'multi': Color.MULTI
         }
-        
+
         if rest.lower() in color_map:
             color = color_map[rest.lower()]
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
             if not matching:
                 return None, f"Player {teammate_idx + 1} has no {color.name} cards"
             return ColorHint(teammate_idx, matching, color), None
-        
+
         # Try color + number format (e.g., "r3" for red 3)
         if len(rest) >= 2:
             color_char = rest[0].lower()
@@ -180,65 +182,65 @@ class ConsoleInput:
                         return None, f"Player {teammate_idx + 1} has no {color.name} cards"
                 except ValueError:
                     pass
-        
+
         return None, f"Invalid hint format: h{rest}. Use h<number> (e.g., h3) or h<color> (e.g., hr)"
-    
+
     def _parse_play(self, parts: list) -> Tuple[Optional[Move], Optional[str]]:
         """Parse a play move (accepts 1-based indices)."""
         if len(parts) < 2:
             return None, "Usage: play <card_index> (indices 1-5)"
-        
+
         try:
             card_index_ui = int(parts[1])
             # Convert 1-based UI index to 0-based internal index
             card_index = card_index_ui - 1
-            state = self._engine.gameState
-            hand = state.playerHands[self._engine.currentPlayer]
-            
+            state = self._game.state
+            hand = state.playerHands[self._player_index]
+
             if card_index < 0 or card_index >= len(hand.cards):
                 return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
-            
+
             return Play(card_index), None
         except ValueError:
             return None, f"Invalid card index: {parts[1]}"
-    
+
     def _parse_discard(self, parts: list) -> Tuple[Optional[Move], Optional[str]]:
         """Parse a discard move (accepts 1-based indices)."""
         if len(parts) < 2:
             return None, "Usage: discard <card_index> (indices 1-5)"
-        
+
         try:
             card_index_ui = int(parts[1])
             # Convert 1-based UI index to 0-based internal index
             card_index = card_index_ui - 1
-            state = self._engine.gameState
-            hand = state.playerHands[self._engine.currentPlayer]
-            
+            state = self._game.state
+            hand = state.playerHands[self._player_index]
+
             if card_index < 0 or card_index >= len(hand.cards):
                 return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
-            
+
             return Discard(card_index), None
         except ValueError:
             return None, f"Invalid card index: {parts[1]}"
-    
+
     def _parse_hint(self, player_index: int, parts: list) -> Tuple[Optional[Move], Optional[str]]:
         """Parse a hint move."""
         if len(parts) < 4:
             return None, "Usage: hint <player> <color|number> <value>"
-        
+
         try:
             teammate_idx = int(parts[1]) - 1  # Convert from 1-based to 0-based
-            state = self._engine.gameState
-            
+            state = self._game.state
+
             if teammate_idx < 0 or teammate_idx >= len(state.playerHands):
                 return None, f"Invalid player index. Valid players: 1-{len(state.playerHands)}"
-            
-            if teammate_idx == player_index:
+
+            if teammate_idx == self._player_index:
                 return None, "You cannot give a hint to yourself"
-            
+
             hint_type = parts[2].lower()
             teammate_hand = state.playerHands[teammate_idx]
-            
+
             if hint_type == "color":
                 # Parse color
                 color_str = parts[3].upper()
@@ -246,18 +248,18 @@ class ConsoleInput:
                     color = Color[color_str]
                 except KeyError:
                     return None, f"Invalid color: {color_str}. Valid colors: {', '.join(c.name for c in Color)}"
-                
+
                 # Find matching cards
                 matching_indices = []
                 for i, card in enumerate(teammate_hand.cards):
                     if card.color == color:
                         matching_indices.append(i)
-                
+
                 if not matching_indices:
                     return None, f"Player {teammate_idx + 1} has no {color_str} cards"
-                
+
                 return ColorHint(teammate_idx, matching_indices, color), None
-            
+
             elif hint_type == "number":
                 # Parse number
                 try:
@@ -269,20 +271,20 @@ class ConsoleInput:
                     number = number_map[number_value]
                 except (ValueError, KeyError):
                     return None, f"Invalid number: {parts[3]}. Must be 1-5"
-                
+
                 # Find matching cards
                 matching_indices = []
                 for i, card in enumerate(teammate_hand.cards):
                     if card.number == number:
                         matching_indices.append(i)
-                
+
                 if not matching_indices:
                     return None, f"Player {teammate_idx + 1} has no {number_value} cards"
-                
+
                 return NumberHint(teammate_idx, matching_indices, number), None
             else:
                 return None, f"Invalid hint type: {hint_type}. Use 'color' or 'number'"
-        
+
         except (ValueError, IndexError) as e:
             return None, f"Invalid hint format: {str(e)}"
 

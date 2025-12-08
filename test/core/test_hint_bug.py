@@ -3,11 +3,11 @@ Test to catch the hint message bug where player numbers are displayed incorrectl
 """
 
 import unittest
-from hanabi.game import create_standard_game_settings
-from hanabi.game_engine import GameEngine
-from hanabi.console_input import ConsoleInput
-from hanabi.player import HumanPlayer
-from hanabi.moves import NumberHint, ColorHint
+from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import Game as GameEngine
+from hanabi.console.console_input import ConsoleInput
+from hanabi.core.player import HumanPlayer
+from hanabi.core.moves import NumberHint, ColorHint
 
 
 class TestHintBug(unittest.TestCase):

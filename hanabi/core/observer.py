@@ -2,6 +2,8 @@
 Observer interface for Hanabi game.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -12,27 +14,27 @@ if TYPE_CHECKING:
 
 class Observer(ABC):
     """Observer interface for observing game state."""
-    
+
     @abstractmethod
-    def observe(self, player_index: int, move: 'Move') -> None:
+    def observe(self, player_index: int, move: Move) -> None:
         """
         Observe a move made by a player.
-        
+
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
         """
         pass
-    
+
     @property
     @abstractmethod
-    def gameSettings(self) -> 'GameSettings':
+    def gameSettings(self) -> GameSettings:
         """Get the game settings."""
         pass
-    
+
     @property
     @abstractmethod
-    def commonView(self) -> 'CommonView':
+    def commonView(self) -> CommonView:
         """Get the common view of the game state."""
         pass
 
