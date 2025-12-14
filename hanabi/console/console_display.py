@@ -8,7 +8,7 @@ from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
 from hanabi.core.game import GameSettings, CommonView, Hand, PlayerView
 from hanabi.core.game import Game
-from hanabi.core.moves import ColorHint, NumberHint
+from hanabi.core.moves import Move, ColorHint, NumberHint
 
 
 class Colors:
@@ -58,6 +58,9 @@ class ConsoleDisplay:
         """
         self.use_colors = use_colors and self._supports_colors()
         self._color_map = self._init_color_map()
+        # Track moves from previous round (since last turn of current player)
+        self._all_moves: List[tuple[int, Move, int]] = []  # List of (player_index, move, turn_number) tuples
+        self._last_player_turn: Dict[int, int] = {}  # Track last turn number for each player
 
     def _supports_colors(self) -> bool:
         """Check if terminal supports colors."""
@@ -264,8 +267,8 @@ class ConsoleDisplay:
         print(f"{Colors.BRIGHT_CYAN}HANABI - Player {player_index + 1}'s Turn{Colors.RESET}")
         print("=" * 70)
 
-        # Display what happened to this player since their last turn
-        self._display_move_history(game, player_index)
+        # Display moves from previous round (all players' moves since this player's last turn)
+        self._display_previous_round_moves(player_index)
 
         # Display tokens
         self._display_tokens(common_view, settings)
@@ -633,6 +636,90 @@ class ConsoleDisplay:
             return f"{Colors.YELLOW}mediocre, just a hint of scattered applause...{Colors.RESET}"
         else:
             return f"{Colors.BRIGHT_BLACK}horrible, booed by the crowd...{Colors.RESET}"
+
+    def record_move(self, player_index: int, move: Move, turn_number: int) -> None:
+        """
+        Record a move for tracking previous round moves.
+
+        Args:
+            player_index: Index of the player who made the move
+            move: The move that was made
+            turn_number: Turn number when the move was made
+        """
+        # Record this move with turn number
+        self._all_moves.append((player_index, move, turn_number))
+        # Update last turn: store the turn number BEFORE this move
+        # So when the player comes back, we show moves with turn > (turn_number - 1)
+        # This includes their own move from the previous turn
+        self._last_player_turn[player_index] = turn_number - 1
+
+    def _display_previous_round_moves(self, current_player_index: int) -> None:
+        """
+        Display all moves from the previous round (since current player's last turn).
+
+        Args:
+            current_player_index: Index of the current player
+        """
+        # Get the last turn number before this player's last move
+        # We want to show all moves that happened after that turn
+        # (including the current player's own move from their previous turn)
+        last_turn = self._last_player_turn.get(current_player_index, -1)
+
+        # Filter moves that happened after the turn before the current player's last move
+        # This includes the current player's own move from their previous turn
+        previous_round_moves = [
+            (player_idx, move, turn_num)
+            for player_idx, move, turn_num in self._all_moves
+            if turn_num > last_turn
+        ]
+
+        if not previous_round_moves:
+            # First turn or no moves since last turn
+            return
+
+        print(f"\n{Colors.BRIGHT_WHITE}Previous Round Moves:{Colors.RESET}")
+
+        # Display moves in order of turn number
+        for player_idx, move, turn_num in previous_round_moves:
+            # Format the move nicely
+            move_str = self._format_move_for_display(move, player_idx)
+            print(f"  {move_str}")
+
+    def _format_move_for_display(self, move: Move, player_index: int) -> str:
+        """
+        Format a move for display in the previous round moves section.
+
+        Args:
+            move: The move to format
+            player_index: Index of the player who made the move
+
+        Returns:
+            Formatted string representation of the move
+        """
+        from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
+
+        player_label = f"{Colors.BRIGHT_CYAN}Player {player_index + 1}{Colors.RESET}"
+
+        if isinstance(move, Play):
+            return f"{player_label}: {Colors.BRIGHT_GREEN}Played{Colors.RESET} card at position {move.card}"
+        elif isinstance(move, Discard):
+            return f"{player_label}: {Colors.BRIGHT_YELLOW}Discarded{Colors.RESET} card at position {move.card}"
+        elif isinstance(move, ColorHint):
+            color_name = move.color.name
+            color_code = self._color_map.get(move.color, Colors.BRIGHT_WHITE)
+            cards_str = ", ".join(str(c) for c in move.cards)
+            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} {color_code}{color_name}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
+        elif isinstance(move, NumberHint):
+            number = move.number.value
+            cards_str = ", ".join(str(c) for c in move.cards)
+            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} number {Colors.BRIGHT_WHITE}{number}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
+        else:
+            return f"{player_label}: {move}"
+
+    def clear_previous_round_moves(self) -> None:
+        """Clear the previous round moves (e.g., at start of new game)."""
+        self._all_moves = []
+        self._last_player_turn = {}
 
     def display_prompt(self, player_index: int) -> None:
         """Display input prompt."""

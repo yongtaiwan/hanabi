@@ -125,7 +125,36 @@ class GUIGame:
                 btn = tk.Button(
                     self._control_frame,
                     text=f"{num_players} Players",
-                    command=lambda n=num_players: self._start_new_game(n),
+                    command=lambda n=num_players: self._start_new_game(n, one_player_mode=False),
+                    bg="#95A5A6",
+                    fg="black",
+                    font=("Arial", 14, "bold"),
+                    padx=25,
+                    pady=12,
+                    width=18,
+                    highlightthickness=0
+                )
+                btn.pack(pady=8)
+                self._player_buttons.append(btn)
+
+            # Add separator
+            separator = tk.Frame(self._control_frame, height=2, bg="#34495E")
+            separator.pack(fill=tk.X, pady=10)
+
+            # Add 1-player mode buttons (1 human + AI players)
+            tk.Label(
+                self._control_frame,
+                text="1-Player Mode (with AI):",
+                bg="#2C3E50",
+                fg="white",
+                font=("Arial", 12, "bold")
+            ).pack(pady=(5, 8))
+
+            for num_players in range(2, 6):
+                btn = tk.Button(
+                    self._control_frame,
+                    text=f"1 Player + {num_players - 1} AI",
+                    command=lambda n=num_players: self._start_new_game(n, one_player_mode=True),
                     bg="#95A5A6",
                     fg="black",
                     font=("Arial", 14, "bold"),
@@ -151,33 +180,57 @@ class GUIGame:
             )
             self._replay_btn.pack(pady=8)
 
-    def _start_new_game(self, num_players: int):
+    def _start_new_game(self, num_players: int, one_player_mode: bool = False):
         """Start a new game with specified number of players."""
-        self._new_game_with_players(num_players)
+        self._new_game_with_players(num_players, one_player_mode)
 
     def _new_game(self):
         """Start a new game (legacy method - now uses _start_new_game)."""
         # This method is kept for compatibility but shouldn't be called directly
         pass
 
-    def _new_game_with_players(self, num_players: int):
+    def _new_game_with_players(self, num_players: int, one_player_mode: bool = False):
         """Start a new game with specified number of players."""
         self._is_replay_mode = False
         self._replay_history = None
         self._replay_move_index = 0
         self._game_ended = False  # Reset game ended flag
+        self._one_player_mode = one_player_mode  # Store for reference
 
         # Create game settings
         settings = create_standard_game_settings(num_players)
 
-        # Create GUIPlayers first, then create game with them
+        # Create players: 1 GUIPlayer (human) + rest as RandomPlayers (AI) if 1-player mode
         self._players = []
-        for i in range(num_players):
-            gui_player = GUIPlayer(i, None, self._display)  # game will be set after creation
+        if one_player_mode:
+            # 1-player mode: first player is human, rest are AI
+            from hanabi.ai import RandomPlayer
+
+            # Create human player (player 0)
+            gui_player = GUIPlayer(0, None, self._display)  # game will be set after creation
             self._players.append(gui_player)
 
-        # Create game with GUI players
-        team = PlayerTeam(self._players)
+            # Create AI players (players 1 to num_players-1)
+            # Note: We'll set the game reference after creating the game
+            for i in range(1, num_players):
+                # Create placeholder - will be replaced after game is created
+                self._players.append(None)
+        else:
+            # Multi-player mode: all players are human
+            for i in range(num_players):
+                gui_player = GUIPlayer(i, None, self._display)  # game will be set after creation
+                self._players.append(gui_player)
+
+        # For 1-player mode, we need to create the game first to get a reference for AI players
+        # Create placeholder team for now
+        if one_player_mode:
+            # Create temporary placeholder players for team creation
+            from hanabi.core.player import HumanPlayer
+            placeholder_players = [HumanPlayer(i) for i in range(num_players)]
+            team = PlayerTeam(placeholder_players)
+        else:
+            # Create game with GUI players
+            team = PlayerTeam(self._players)
 
         # Set up move callback for display updates
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
@@ -193,15 +246,33 @@ class GUIGame:
                 self._display.display_game_state(self._game, self._game.currentPlayer)
 
                 # Display move result in event history
-                self._display.display_move_result(True, move_message, player_index)
+                # Check if this is an AI player for display purposes
+                is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
+                self._display.display_move_result(True, move_message, player_index, is_ai_player)
 
             self._display.root.after(0, update_display)
 
         self._game = Game.create(team, settings, on_move=on_move_callback)
 
+        # For 1-player mode, replace placeholder players with actual AI players
+        if one_player_mode:
+            from hanabi.ai import RandomPlayer
+            actual_players = [self._players[0]]  # Keep the human player
+            for i in range(1, num_players):
+                ai_player = RandomPlayer(i, self._game)
+                actual_players.append(ai_player)
+            self._players = actual_players
+            # Update team with actual players
+            self._game._team = PlayerTeam(actual_players)
+            # Update common view for AI players
+            common_view = self._game.state.commonView
+            for player in actual_players:
+                player.set_common_view(common_view)
+
         # Set game reference in players (needed for display updates)
         for player in self._players:
-            player._game = self._game
+            if hasattr(player, '_game'):
+                player._game = self._game
 
         # Set up display
         self._display.set_game(self._game)
@@ -711,7 +782,9 @@ class GUIGame:
                 self._display.display_game_state(self._game, self._game.currentPlayer)
 
                 # Display move result in event history
-                self._display.display_move_result(True, move_message, player_index)
+                # Check if this is an AI player for display purposes
+                is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
+                self._display.display_move_result(True, move_message, player_index, is_ai_player)
 
             self._display.root.after(0, update_display)
 

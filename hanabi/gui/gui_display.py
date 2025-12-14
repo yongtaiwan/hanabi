@@ -226,7 +226,7 @@ class GUIDisplay:
             self._action_menu = None
             self._action_menu_context = None
 
-    def _add_event_to_history(self, message: str, event_type: str = "info", player_index: int = None):
+    def _add_event_to_history(self, message: str, event_type: str = "info", player_index: int = None, is_ai: bool = False):
         """Add an event to the history panel (concise format)."""
         # Make message concise
         concise_message = message
@@ -260,15 +260,17 @@ class GUIDisplay:
 
         # Add player prefix if message doesn't start with P\d+
         # Messages from engine are like "plays red 1" or "hints player 2: ..."
-        # We need to add "P1 " prefix
+        # We need to add "P1 " prefix (or "P1 (AI) " for AI players)
         # BUT: Don't add prefix for "Game Over" messages
         if not re.match(r'^P\d+', concise_message) and not concise_message.lower().startswith("game over"):
             if player_index is not None:
                 player_num = player_index + 1
-                concise_message = f"P{player_num} {concise_message}"
+                ai_suffix = " (AI)" if is_ai else ""
+                concise_message = f"P{player_num}{ai_suffix} {concise_message}"
             elif self._game:
                 player_num = self._current_player + 1
-                concise_message = f"P{player_num} {concise_message}"
+                ai_suffix = " (AI)" if is_ai else ""
+                concise_message = f"P{player_num}{ai_suffix} {concise_message}"
 
         # Remove duplicate player references at start (e.g., "P1 P1 hints" -> "P1 hints")
         concise_message = re.sub(r'^(P\d+)\s+\1\s+', r'\1 ', concise_message)
@@ -1227,7 +1229,7 @@ class GUIDisplay:
         """Set callback for when a move is made."""
         self._move_callback = callback
 
-    def display_move_result(self, success: bool, message: str, player_index: int = None) -> None:
+    def display_move_result(self, success: bool, message: str, player_index: int, is_ai: bool = False) -> None:
         """Display the result of a move in history panel."""
         if success:
             # Format message - pass player_index for hint formatting
@@ -1235,9 +1237,9 @@ class GUIDisplay:
             # If player_index is provided and message doesn't start with player info, add it
             if player_index is not None and not formatted_msg.startswith("Player ") and not formatted_msg.startswith("P"):
                 formatted_msg = f"P{player_index + 1} {formatted_msg}"
-            self._add_event_to_history(formatted_msg, "success", player_index)
+            self._add_event_to_history(formatted_msg, "success", player_index, is_ai)
         else:
-            self._add_event_to_history(f"Error: {message}", "error")
+            self._add_event_to_history(f"Error: {message}", "error", player_index, is_ai)
 
     def _update_last_turn_warning(self):
         """Update the last turn warning banner visibility."""
