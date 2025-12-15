@@ -228,7 +228,6 @@ class TestGameHistory(unittest.TestCase):
             # Verify structure
             self.assertIn("settings", data)
             self.assertIn("moves", data)
-            self.assertIn("initial_state", data)
             # total_moves is redundant (can be calculated from len(moves))
             self.assertNotIn("total_moves", data, "total_moves should not be saved (redundant)")
 

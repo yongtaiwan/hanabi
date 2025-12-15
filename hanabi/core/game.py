@@ -1127,6 +1127,10 @@ class Game:
         # Add new state to turns history
         self._turns.append(new_state)
 
+        # Notify players about the move BEFORE the callback
+        # This ensures hints are updated before display is refreshed
+        self._notify_players(player_index, move)
+
         # Notify global callback with old and new state (for display, logging, etc.)
         if self._on_move is not None:
             self._on_move(player_index, move, current_state, new_state)
@@ -1178,14 +1182,12 @@ class Game:
                 raise RuntimeError(f"Player {current_player} failed to provide a move: {e}") from e
 
             # Process the move (raises ValueError if invalid)
+            # Note: _processMove now calls _notify_players internally before the callback
             try:
                 self._processMove(current_player, move)
             except ValueError as e:
                 # Invalid move - end game with error
                 raise RuntimeError(f"Game ended due to invalid move: {e}") from e
-
-            # Notify players about the move
-            self._notify_players(current_player, move)
 
             # Advance turn
             self._advanceTurn()

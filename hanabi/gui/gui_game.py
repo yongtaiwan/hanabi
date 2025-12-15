@@ -48,7 +48,6 @@ class GUIGame:
         self._game_ended: bool = False  # Track if game has ended to prevent duplicate end screens
 
         self._setup_menu()
-        self._setup_menu()
         self._setup_ui()
 
     def _setup_menu(self):
@@ -272,14 +271,19 @@ class GUIGame:
                 self._history.record_move(player_index, move, result_msg, self._game)
 
             # Schedule display updates on GUI thread (Tkinter is not thread-safe)
-            def update_display():
-                # Update game state display
-                self._display.display_game_state(self._game, self._game.currentPlayer)
+            # Get turn number when move was made (new_state has the turn number after increment)
+            move_turn_number = new_state.turnNumber
 
-                # Display move result in event history
+            def update_display():
+                # Only update game state display if game is not finished
+                # (when game ends, display is already correct and we want to preserve hints)
+                if not self._game.isFinished:
+                    self._display.display_game_state(self._game, self._game.currentPlayer)
+
+                # Display move result in event history with correct turn number
                 # Check if this is an AI player for display purposes
                 is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
-                self._display.display_move_result(True, move_message, player_index, is_ai_player)
+                self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
 
             self._display.root.after(0, update_display)
 
@@ -363,39 +367,6 @@ class GUIGame:
         self._display.display_game_state(self._game, self._game.currentPlayer)
 
     # Removed _add_abandon_button - home button now serves this purpose
-
-    def _abandon_game(self):
-        """Add abandon game button to status bar."""
-        if self._abandon_btn:
-            return
-
-        status_frame = None
-        for widget in self._display.root.winfo_children():
-            if isinstance(widget, tk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
-                        status_frame = child
-                        break
-                if status_frame:
-                    break
-
-        if status_frame:
-            self._abandon_btn = tk.Button(
-                status_frame,
-                text="Abandon Game",
-                command=self._abandon_game,
-                bg="#95A5A6",
-                fg="black",
-                font=("Arial", 10, "bold"),
-                padx=10,
-                pady=3,
-                highlightthickness=0,
-                borderwidth=1,
-                relief=tk.RAISED
-            )
-            # Force text color after creation
-            self._abandon_btn.config(fg="black")
-            self._abandon_btn.pack(side=tk.RIGHT, padx=5)
 
     def _abandon_game(self):
         """Abandon current game/replay and return to start screen."""
@@ -729,11 +700,12 @@ class GUIGame:
         if self._display and hasattr(self._display, '_close_action_menu'):
             self._display._close_action_menu()
 
-        # Update display with final game state before showing game over
-        if self._game:
-            current_player = self._game.currentPlayer
-            self._display.display_game_state(self._game, current_player)
+        # If playing with AI (one-player mode), show human player's view (player 0) at bottom
+        if getattr(self, '_one_player_mode', False) and self._game:
+            # Update display to show player 0's view (human player)
+            self._display.display_game_state(self._game, 0)
 
+        # Display game end message (game state is already displayed from last move)
         self._display.display_game_end(self._game)
 
         # Home button already serves as back to start button
@@ -1111,8 +1083,7 @@ class GUIGame:
             # Apply the move
             try:
                 self._game._processMove(current_player, move)
-                # Notify players so hints are tracked
-                self._game._notify_players(current_player, move)
+                # Note: _processMove now calls _notify_players internally
                 # Advance to next player's turn (moves are deterministic)
                 self._game._advanceTurn()
             except ValueError as e:

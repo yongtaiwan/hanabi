@@ -462,14 +462,9 @@ class GameHistory:
         settings_dict = history_data.get("settings", {})
         num_players = settings_dict.get("num_players", 3)
         settings = create_standard_game_settings(num_players)
-        if not deck_short:
-            # Fallback: create a new deck (won't match original, but allows replay)
-            deck = create_deck_from_settings(settings)
-            deck.shuffle()
-        else:
-            # Reconstruct deck from saved cards
-            deck_cards = [GameHistory._short_to_card(short) for short in deck_short]
-            deck = Deck(deck_cards)
+        # Reconstruct deck from saved cards
+        deck_cards = [GameHistory._short_to_card(short) for short in deck_short]
+        deck = Deck(deck_cards)
 
         # Create start position with the reconstructed deck
         start_position = StartPosition(settings, deck)
