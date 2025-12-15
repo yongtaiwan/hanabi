@@ -315,22 +315,29 @@ class CommonView:
 class PlayerView:
     """View of the game state from a player's perspective."""
 
-    def __init__(self, teammates: Dict[int, Hand]):
+    def __init__(self, teammates: Dict[int, Hand], own_hand_size: int):
         """
         Initialize player view.
 
         Args:
             teammates: Dictionary mapping player index to their Hand
+            own_hand_size: The size of the player's own hand (cards are hidden)
         """
         self._teammates = {k: Hand(v.cards) for k, v in teammates.items()}
+        self._own_hand_size = own_hand_size
 
     @property
     def teammates(self) -> Dict[int, Hand]:
         """Get the teammates' hands (player index -> Hand)."""
         return {k: Hand(v.cards) for k, v in self._teammates.items()}
 
+    @property
+    def ownHandSize(self) -> int:
+        """Get the size of the player's own hand (cards are hidden)."""
+        return self._own_hand_size
+
     def __repr__(self) -> str:
-        return f"PlayerView(teammates={list(self._teammates.keys())})"
+        return f"PlayerView(teammates={list(self._teammates.keys())}, own_hand_size={self._own_hand_size})"
 
 
 class GameState:
@@ -1054,9 +1061,19 @@ class Game:
             player.set_game_settings(self.settings)
 
     def _set_common_view_for_players(self) -> None:
-        """Set common view for all players (called after state is created)."""
+        """
+        Set common view for all players (called after state is created and after each move).
+
+        IMPORTANT: This must be called after each move because GameState.__copy__() creates
+        a new CommonView object. Players need to reference the current state's CommonView,
+        not a stale one from a previous state.
+
+        Without this, players will see stale hint token counts and may generate invalid moves.
+        """
         assert self._turns, "Game not initialized. No turns yet."
-        # Set common view - all players share the same reference, so updates are automatic
+        # Set common view - players need the current state's commonView
+        # Note: Each GameState has its own CommonView, so we must update players' references
+        # after each state transition to ensure they see current values
         common_view = self.state.commonView
         for player in self._team.players:
             player.set_common_view(common_view)
@@ -1074,7 +1091,7 @@ class Game:
             player_index: Index of the player
 
         Returns:
-            PlayerView showing teammates' hands
+            PlayerView showing teammates' hands and own hand size
         """
         assert self._turns, "Game not initialized. No turns yet."
         assert 0 <= player_index < len(self._team.players), \
@@ -1085,7 +1102,8 @@ class Game:
             if i != player_index:
                 teammates[i] = hand
 
-        return PlayerView(teammates)
+        own_hand_size = len(self.state.playerHands[player_index].cards)
+        return PlayerView(teammates, own_hand_size)
 
     def _processMove(self, player_index: int, move: Move) -> None:
         """
@@ -1126,6 +1144,11 @@ class Game:
 
         # Add new state to turns history
         self._turns.append(new_state)
+
+        # Update players' commonView references to point to the new state's commonView
+        # This is critical because GameState.__copy__ creates a new CommonView object
+        # Players need to see the updated commonView from the current state
+        self._set_common_view_for_players()
 
         # Notify players about the move BEFORE the callback
         # This ensures hints are updated before display is refreshed

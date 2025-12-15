@@ -16,7 +16,8 @@ from .core.game import (
 from .core.game_field import GameField
 from .core.moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
 from .core.observer import Observer
-from .core.player import Player, BasePlayer, HintTrackingPlayer, HumanPlayer, RandomPlayer, StrategyAlphaPlayer, PlayerTeam
+from .core.player import Player, BasePlayer, HintTrackingPlayer, HumanPlayer, StrategyAlphaPlayer, PlayerTeam
+from .ai import RandomPlayer
 
 __all__ = [
     # Enums

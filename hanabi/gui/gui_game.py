@@ -294,11 +294,18 @@ class GUIGame:
             from hanabi.ai import RandomPlayer
             actual_players = [self._players[0]]  # Keep the human player
             for i in range(1, num_players):
-                ai_player = RandomPlayer(i, self._game)
+                ai_player = RandomPlayer(i)
+                # Set game settings on the new player instance
+                # This is required for hint generation to work
+                ai_player.set_game_settings(settings)
                 actual_players.append(ai_player)
             self._players = actual_players
             # Update team with actual players
             self._game._team = PlayerTeam(actual_players)
+            # CRITICAL: Set game settings on all players in the new team
+            # This ensures all players have access to gameSettings
+            for player in actual_players:
+                player.set_game_settings(settings)
             # Update common view for AI players
             common_view = self._game.state.commonView
             for player in actual_players:

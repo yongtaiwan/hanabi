@@ -312,7 +312,8 @@ class ConsoleDisplay:
         for i, hand in enumerate(state.playerHands):
             if i != player_index:
                 teammates[i] = hand
-        player_view = PlayerView(teammates)
+        own_hand_size = len(state.playerHands[player_index].cards)
+        player_view = PlayerView(teammates, own_hand_size)
         num_players = game.settings.numPlayers
 
         # Reorder teammates to start from the next player after current player

@@ -6,7 +6,7 @@ Plays games automatically and validates game state consistency.
 import random
 from typing import List, Dict, Tuple, Optional
 from hanabi.core.game import create_standard_game_settings, Game
-from hanabi.core.player import RandomPlayer
+from hanabi.ai import RandomPlayer
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card

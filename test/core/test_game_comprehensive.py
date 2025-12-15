@@ -9,7 +9,8 @@ from hanabi.core.game import (
     CommonView, Hand, StartPosition, Deck
 )
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
-from hanabi.core.player import HumanPlayer, PlayerTeam, RandomPlayer
+from hanabi.core.player import HumanPlayer, PlayerTeam
+from hanabi.ai import RandomPlayer
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card, Suit
 

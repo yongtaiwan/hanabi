@@ -212,57 +212,6 @@ class HumanPlayer(HintTrackingPlayer):
         """
         pass
 
-class RandomPlayer(BasePlayer):
-    """Player that makes random moves."""
-
-    def play(self, player_view: PlayerView) -> Move:
-        """
-        Make a random move.
-
-        Args:
-            player_view: The current view of the game
-
-        Returns:
-            A random move
-        """
-        # Get own hand (assuming player 0 is self, adjust as needed)
-        # For simplicity, we'll make random choices
-        common_view = self.commonView
-
-        # Randomly choose between play, discard, or hint
-        if common_view.hintTokens > 0 and len(player_view.teammates) > 0:
-            # Can give a hint
-            action = random.choice(['play', 'discard', 'hint'])
-        else:
-            # Cannot give a hint
-            action = random.choice(['play', 'discard'])
-
-        if action == 'play':
-            # Randomly play a card (assuming hand size)
-            # This is a simplified version - you'd need actual hand info
-            card_index = random.randint(0, self.gameSettings.maxCardsInHand - 1)
-            return Play(card_index)
-        elif action == 'discard':
-            # Randomly discard a card
-            card_index = random.randint(0, self.gameSettings.maxCardsInHand - 1)
-            return Discard(card_index)
-        else:  # hint
-            # Give a random hint to a random teammate
-            teammate = random.choice(list(player_view.teammates.keys()))
-            hint_type = random.choice(['color', 'number'])
-
-            if hint_type == 'color':
-                color = random.choice(list(Color))
-                # Simplified - would need to calculate matching cards
-                matching_cards = []
-                return ColorHint(teammate, matching_cards, color)
-            else:
-                number = random.choice(list(Number))
-                # Simplified - would need to calculate matching cards
-                matching_cards = []
-                return NumberHint(teammate, matching_cards, number)
-
-
 class StrategyAlphaPlayer(BasePlayer):
     """Strategy player implementing Alpha strategy."""
 

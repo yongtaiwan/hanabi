@@ -140,7 +140,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
         # Create AI players (players 1 to num_players-1)
         for i in range(1, num_players):
-            ai_player = RandomPlayer(i, game)
+            ai_player = RandomPlayer(i)
             players.append(ai_player)
     else:
         # Multi-player mode: all players are human

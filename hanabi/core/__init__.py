@@ -13,10 +13,12 @@ from .game import (
 from .game_field import GameField
 from .player import (
     Player, BasePlayer, HintTrackingPlayer, HumanPlayer,
-    RandomPlayer, StrategyAlphaPlayer, PlayerTeam
+    StrategyAlphaPlayer, PlayerTeam
 )
+# RandomPlayer is in hanabi.ai, not core.player
 from .observer import Observer
 from .game_history import GameHistory
+from .move_generation import generate_all_valid_moves
 
 __all__ = [
     # Enums
@@ -49,12 +51,14 @@ __all__ = [
     'BasePlayer',
     'HintTrackingPlayer',
     'HumanPlayer',
-    'RandomPlayer',
     'StrategyAlphaPlayer',
     'PlayerTeam',
+    # Note: RandomPlayer is in hanabi.ai, not here
     # Observer
     'Observer',
     # History
     'GameHistory',
+    # Move generation utilities
+    'generate_all_valid_moves',
 ]
 
