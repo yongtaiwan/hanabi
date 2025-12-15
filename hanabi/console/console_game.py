@@ -76,6 +76,14 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     display.clear_screen()
     display.clear_previous_round_moves()  # Initialize move tracking
 
+    # Initialize game history (before creating game so callback can use it)
+    history = GameHistory({
+        "num_players": num_players,
+        "max_live_tokens": settings.maxLiveTokens,
+        "max_hint_tokens": settings.maxHintTokens,
+        "max_cards_in_hand": settings.maxCardsInHand
+    })
+
     # Create game (will create players inside)
     # First create placeholder players, then replace with ConsolePlayers
     from hanabi.core.player import HumanPlayer
@@ -92,6 +100,12 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         # (old_state has turn N, move is made, new_state has turn N+1)
         move_turn_number = old_state.turnNumber + 1
         display.record_move(player_index, move, move_turn_number)
+
+        # Record move in history (using closure to access history and game)
+        if history and game:
+            # Format a simple result message for history (not used in new format, but kept for compatibility)
+            result_msg = f"Player {player_index} made move: {move}"
+            history.record_move(player_index, move, result_msg, game)
 
         # Check if this is an AI player (in 1-player mode, player 0 is human, rest are AI)
         is_ai_player = one_player_mode and player_index > 0
@@ -143,15 +157,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     for player in players:
         player.set_common_view(common_view)
 
-    # Initialize game history
-    history = GameHistory({
-        "num_players": num_players,
-        "max_live_tokens": settings.maxLiveTokens,
-        "max_hint_tokens": settings.maxHintTokens,
-        "max_cards_in_hand": settings.maxCardsInHand
-    })
-    # Note: history recording will need to be updated to work with Game instead of GameEngine
-    # For now, we'll skip it or update it later
+    # Record initial state in history (after game is fully set up)
+    history.record_initial_state(game)
 
     # Welcome message
     from .console_display import Colors
@@ -176,11 +183,13 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Game finished - display game end
     display.display_game_end(game)
 
-    # Save game history
+    # Save game history with final score
     from .console_display import Colors
-    # history_file = history.save_to_file()
-    # print(f"{Colors.BRIGHT_CYAN}Game history saved to: {Colors.BRIGHT_WHITE}{history_file}{Colors.RESET}")
-    # print(f"{Colors.BRIGHT_BLACK}You can use this file to replay the game later.{Colors.RESET}")
+    final_score = game.getScore()
+    history.record_final_score(game)
+    history_file = history.save_to_file(final_score=final_score)
+    print(f"{Colors.BRIGHT_CYAN}Game history saved to: {Colors.BRIGHT_WHITE}{history_file}{Colors.RESET}")
+    print(f"{Colors.BRIGHT_BLACK}You can use this file to replay the game later.{Colors.RESET}")
 
 
 if __name__ == "__main__":

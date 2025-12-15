@@ -91,6 +91,22 @@ class GUIDisplay:
         status_frame.pack(fill=tk.X, pady=(0, 10))
         status_frame.pack_propagate(False)
 
+        # Home button (top left, always visible during play/replay)
+        self._home_btn = tk.Button(
+            status_frame,
+            text="🏠 Home",
+            command=None,  # Will be set by GUIGame
+            bg="#E74C3C",
+            fg="black",
+            font=("Arial", 9, "bold"),
+            highlightthickness=0,
+            state=tk.DISABLED  # Disabled until game starts
+        )
+        self._home_btn.pack(side=tk.LEFT, padx=10, pady=5)
+
+        # Store reference to status frame for later use
+        self._status_frame = status_frame
+
         self._status_label = tk.Label(
             status_frame,
             text="Hanabi - Fireworks Game",
@@ -282,18 +298,34 @@ class GUIDisplay:
         # Trim whitespace
         concise_message = concise_message.strip()
 
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        # Get turn number from game state
-        # processMove() increments turn_number before updating, so:
-        # - After first move: turnNumber = 1 (display as T01)
-        # - After second move: turnNumber = 2 (display as T02)
-        # We use turnNumber directly since it's already 1-based after the first move
+        # Get turn number - use stored turn number for replay, otherwise from game state
         turn_number = 1
-        if self._game:
-            # Use turn number from game state (already 1-based after processMove)
+        if hasattr(self, '_replay_turn_numbers') and self._replay_turn_numbers:
+            # Use stored turn number for this specific move in replay
+            move_index = len(self._event_history)  # Current move index
+            if move_index < len(self._replay_turn_numbers):
+                turn_number = self._replay_turn_numbers[move_index]
+        elif self._game:
+            # Use turn number from game state (for live play)
+            # processMove() increments turn_number before updating, so:
+            # - After first move: turnNumber = 1 (display as T01)
+            # - After second move: turnNumber = 2 (display as T02)
             turn_number = self._game.state.turnNumber
-        # Pad turn number with 0 for alignment (e.g., T01, T02, ..., T10)
-        formatted_message = f"[{timestamp} T{turn_number:02d}] {concise_message}"
+
+        # Get timestamp - use replay timestamp if available for this specific move
+        timestamp = None
+        if hasattr(self, '_replay_timestamps') and self._replay_timestamps:
+            # Use timestamp from replay history if available
+            move_index = len(self._event_history)  # Current move index
+            if move_index < len(self._replay_timestamps):
+                timestamp = self._replay_timestamps[move_index]
+
+        # Format message with timestamp if available, otherwise just turn number
+        if timestamp:
+            formatted_message = f"[{timestamp} T{turn_number:02d}] {concise_message}"
+        else:
+            # Pad turn number with 0 for alignment (e.g., T01, T02, ..., T10)
+            formatted_message = f"[T{turn_number:02d}] {concise_message}"
         self._event_history.append((event_type, formatted_message))
 
         if self._history_text:
@@ -483,34 +515,181 @@ class GUIDisplay:
         )
 
     def _draw_center_area(self):
-        """Draw center area: tokens in center, played cards row above, discarded cards row below."""
+        """Draw center area: tokens on top, played cards centered, discarded cards and deck below with labels."""
         width = self._canvas.winfo_width() or 1200
         height = self._canvas.winfo_height() or 800
 
         center_x = width // 2
         center_y = height // 2
 
-        # Draw tokens in center
-        self._draw_tokens(center_x, center_y)
+        # Get table radius for positioning
+        table_radius = min(width, height) // 4
 
-        # Draw played cards (fireworks) in a row above center
-        self._draw_fireworks_row(center_x, center_y - 100)
+        # Draw tokens on top of table
+        tokens_y = center_y - table_radius + 40
+        self._draw_tokens(center_x, tokens_y)
 
-        # Draw discarded cards in a row below center
-        self._draw_discard_row(center_x, center_y + 100)
+        # Draw played cards (fireworks) centered, moved a bit higher
+        self._draw_fireworks_row(center_x, center_y - 30)
 
-        # Draw deck count
+        # Draw discarded cards in a row below center with label
+        discard_y = center_y + 70
+        self._draw_discard_row(center_x, discard_y)
+
+        # Draw deck cards with fixed grid layout: cards maintain positions as they're drawn
+        # Only show actual cards during replay mode, otherwise just show count
         state = self._game.state
         deck_count = state.commonView.cardsToDraw
-        self._canvas.create_text(
-            center_x, center_y + 180,
-            text=f"Deck: {deck_count} cards",
-            fill="white",
-            font=("Arial", 11, "bold")
-        )
+        draw_deck_index = state.drawDeckIndex
 
-    def _draw_tokens(self, center_x: int, center_y: int):
-        """Draw hint and life tokens centered."""
+        # Draw deck label and cards (with more spacing from discard pile)
+        deck_y = center_y + 180
+
+        # Only show actual cards in replay mode (_show_all_cards is True in replay)
+        if self._show_all_cards and self._game:
+            # Get the total initial deck size to create fixed grid
+            initial_deck = self._game.state.startPosition.drawDeck.cards
+            total_deck_size = len(initial_deck)
+
+            if total_deck_size > 0 and draw_deck_index < total_deck_size:
+                # Get remaining cards from deck (in order)
+                deck_cards = initial_deck[draw_deck_index:]
+
+                # Create a mapping: original_deck_index -> card (for remaining cards only)
+                remaining_cards_map = {}
+                for i, card in enumerate(deck_cards):
+                    original_index = draw_deck_index + i
+                    remaining_cards_map[original_index] = card
+
+                # Draw "Remaining Deck" label
+                self._canvas.create_text(
+                    center_x, deck_y - 35,
+                    text="Remaining Deck",
+                    fill="white",
+                    font=("Arial", 11, "bold")
+                )
+
+                # Fixed grid layout: at most 2 rows, cards maintain positions based on original deck index
+                # First card to draw (index 0) is rightmost of bottom row
+                # Last card to draw (index N-1) is leftmost of top row
+                card_width = 35
+                card_height = 50
+                horizontal_overlap = 15  # Overlap cards horizontally
+
+                # Calculate cards per row to fit all cards in at most 2 rows
+                cards_per_row = (total_deck_size + 1) // 2  # Ceiling division to fit in 2 rows
+                if cards_per_row == 0:
+                    cards_per_row = 1
+
+                num_rows = 2 if total_deck_size > cards_per_row else 1
+                row_height = card_height + 5  # Space between rows
+
+                # Calculate number of cards in each row
+                # Bottom row gets the first cards (lowest indices), top row gets the last cards (highest indices)
+                bottom_row_cards = total_deck_size - cards_per_row if total_deck_size > cards_per_row else total_deck_size
+                top_row_cards = cards_per_row
+
+                # Calculate width for each row
+                bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
+                max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
+
+                # Get table radius to ensure cards stay within table
+                max_width = table_radius * 1.6  # Allow some margin
+
+                # Scale down if needed
+                if max_row_width > max_width:
+                    scale = max_width / max_row_width
+                    horizontal_overlap = max(5, int(horizontal_overlap * scale))
+                    card_width = max(25, int(card_width * scale))
+                    # Recalculate row widths
+                    bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                    top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
+                    max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
+
+                # Position cards: use max_row_width for centering
+                start_x = center_x + max_row_width // 2 - card_width
+                start_y = deck_y + (num_rows - 1) * row_height  # Start from bottom row
+
+                # Build list of card positions: (original_index, card, row, col_from_right)
+                # Map each original deck index to its fixed position in the grid
+                card_positions = []
+                for original_index in range(total_deck_size):
+                    if original_index in remaining_cards_map:
+                        card = remaining_cards_map[original_index]
+
+                        # Determine which row: bottom row (0) gets first cards, top row (1) gets last cards
+                        if original_index < bottom_row_cards:
+                            # Bottom row: indices 0 to (bottom_row_cards - 1)
+                            row = 0
+                            col_from_right = original_index  # Position within bottom row (0 = rightmost)
+                        else:
+                            # Top row: indices bottom_row_cards to (total_deck_size - 1)
+                            row = 1
+                            col_from_right = original_index - bottom_row_cards  # Position within top row (0 = rightmost)
+
+                        card_positions.append((original_index, card, row, col_from_right))
+
+                # Sort by position (left to right, bottom to top) so we draw left cards first
+                # This ensures right cards are drawn last and appear on top (z-order)
+                # Sort by row (ascending), then by -col_from_right (descending) so right cards (lower col) are drawn last
+                card_positions.sort(key=lambda x: (x[2], -x[3]))  # Sort by row, then -col (descending)
+
+                for original_index, card, row, col_from_right in card_positions:
+                    # Position from right to left (rightmost is col 0)
+                    card_x = start_x - (col_from_right * horizontal_overlap)
+                    # Bottom row is row 0, top row is higher
+                    card_y = start_y - (row * row_height)
+
+                    # Draw card (drawing left cards first, right cards last so right cards are on top)
+                    color_code = self.COLOR_COLORS.get(card.color, "#FFFFFF")
+                    self._canvas.create_rectangle(
+                        card_x, card_y - card_height // 2,
+                        card_x + card_width, card_y + card_height // 2,
+                        fill=color_code,
+                        outline="#000000",
+                        width=1
+                    )
+                    # Draw number on top left (always black)
+                    self._canvas.create_text(
+                        card_x + 8, card_y - card_height // 2 + 8,
+                        text=str(card.number.value),
+                        fill="#000000",
+                        font=("Arial", 10, "bold"),
+                        anchor="nw"
+                    )
+            else:
+                # No cards left, show count
+                self._canvas.create_text(
+                    center_x, deck_y - 10,
+                    text="Remaining Deck",
+                    fill="white",
+                    font=("Arial", 11, "bold")
+                )
+                self._canvas.create_text(
+                    center_x, deck_y + 10,
+                    text=f"{deck_count} cards",
+                    fill="white",
+                    font=("Arial", 10)
+                )
+        else:
+            # Draw "Remaining Deck" label
+            self._canvas.create_text(
+                center_x, deck_y - 10,
+                text="Remaining Deck",
+                fill="white",
+                font=("Arial", 11, "bold")
+            )
+            # No cards left, show count
+            self._canvas.create_text(
+                center_x, deck_y + 10,
+                text=f"{deck_count} cards",
+                fill="white",
+                font=("Arial", 10)
+            )
+
+    def _draw_tokens(self, center_x: int, y: int):
+        """Draw hint and life tokens on top of table."""
         state = self._game.state
         settings = self._game.settings
 
@@ -519,9 +698,12 @@ class GUIDisplay:
         max_hints = settings.maxHintTokens
         max_lives = settings.maxLiveTokens
 
-        # Draw hint tokens (blue clock tokens) - centered
+        token_size = 18
+        token_spacing = 4
+
+        # Draw hint tokens (blue clock tokens)
         self._canvas.create_text(
-            center_x - 50, center_y - 30,
+            center_x - 50, y - 20,
             text="Hints",
             fill="white",
             font=("Arial", 11, "bold"),
@@ -529,16 +711,15 @@ class GUIDisplay:
         )
 
         hint_widgets = []
-        token_size = 18
-        hint_start_x = center_x - 50 - (min(max_hints, 4) * (token_size + 4)) // 2
+        hint_start_x = center_x - 50 - (min(max_hints, 4) * (token_size + token_spacing)) // 2
         for i in range(max_hints):
-            x = hint_start_x + (i % 4) * (token_size + 4)
-            y = center_y - 10 + (i // 4) * (token_size + 4)
+            x = hint_start_x + (i % 4) * (token_size + token_spacing)
+            token_y = y + (i // 4) * (token_size + token_spacing)
 
             color = "#4169E1" if i < hint_tokens else "#1A1A3E"
             widget = self._canvas.create_oval(
-                x, y,
-                x + token_size, y + token_size,
+                x, token_y,
+                x + token_size, token_y + token_size,
                 fill=color,
                 outline="#87CEEB",
                 width=2
@@ -546,9 +727,9 @@ class GUIDisplay:
             hint_widgets.append(widget)
         self._token_widgets["hint"] = hint_widgets
 
-        # Draw life tokens (black fuse tokens) - centered
+        # Draw life tokens (red/orange fuse tokens)
         self._canvas.create_text(
-            center_x + 50, center_y - 30,
+            center_x + 50, y - 20,
             text="Lives",
             fill="white",
             font=("Arial", 11, "bold"),
@@ -556,10 +737,10 @@ class GUIDisplay:
         )
 
         life_widgets = []
-        life_start_x = center_x + 50 - (max_lives * (token_size + 4)) // 2
+        life_start_x = center_x + 50 - (max_lives * (token_size + token_spacing)) // 2
         for i in range(max_lives):
-            x = life_start_x + i * (token_size + 4)
-            y = center_y - 10
+            x = life_start_x + i * (token_size + token_spacing)
+            token_y = y
 
             if i < life_tokens:
                 # Use same color for all remaining lives
@@ -568,8 +749,8 @@ class GUIDisplay:
                 color = "#000000"  # Black for lost lives
 
             widget = self._canvas.create_oval(
-                x, y,
-                x + token_size, y + token_size,
+                x, token_y,
+                x + token_size, token_y + token_size,
                 fill=color,
                 outline="#654321",
                 width=2
@@ -578,7 +759,7 @@ class GUIDisplay:
         self._token_widgets["life"] = life_widgets
 
     def _draw_fireworks_row(self, center_x: int, y: int):
-        """Draw fireworks (played cards) in a horizontal row."""
+        """Draw fireworks (played cards) in a horizontal row, centered."""
         state = self._game.state
         cards_played = state.commonView.cardsPlayed
 
@@ -587,12 +768,14 @@ class GUIDisplay:
         card_height = 70
         spacing = 15
         total_width = len(colors) * (card_width + spacing) - spacing
+        # Center the row: start_x is the left edge, so we subtract half the total width
         start_x = center_x - total_width // 2
 
         self._firework_widgets.clear()
 
         for i, color in enumerate(colors):
-            x = start_x + i * (card_width + spacing)
+            # Calculate x position for each card (card center)
+            x = start_x + i * (card_width + spacing) + card_width // 2
 
             if color in cards_played:
                 number = cards_played[color].value
@@ -627,6 +810,14 @@ class GUIDisplay:
 
     def _draw_discard_row(self, center_x: int, y: int):
         """Draw discarded cards grouped by color, overlapped so numbers are visible, centered and within table."""
+        # Draw "Discard Pile" label
+        self._canvas.create_text(
+            center_x, y - 35,
+            text="Discard Pile",
+            fill="white",
+            font=("Arial", 11, "bold")
+        )
+
         # Reconstruct discard pile from common view
         state = self._game.state
         discard_pile = []
@@ -637,8 +828,8 @@ class GUIDisplay:
 
         if not discard_pile:
             self._canvas.create_text(
-                center_x, y,
-                text="Discard Pile (empty)",
+                center_x, y + 10,
+                text="(empty)",
                 fill="#888888",
                 font=("Arial", 10)
             )
@@ -717,11 +908,13 @@ class GUIDisplay:
         x = start_x
         for color, number_list, color_width in color_groups:
             # Draw each unique (color, number) combination
+            # Draw from left to right so right cards are drawn last (on top) for z-order
             for i, (num, count) in enumerate(number_list):
                 # Overlap cards horizontally
                 card_x = x + i * horizontal_overlap
                 # If multiple cards with same color+number, stack them vertically
-                for stack_idx in range(count):
+                # Draw bottom cards first, top cards last (so top cards are visible)
+                for stack_idx in range(count - 1, -1, -1):  # Reverse order: draw bottom first
                     card_y = y - stack_idx * vertical_offset
 
                     # Draw card with slight offset for depth
@@ -740,14 +933,13 @@ class GUIDisplay:
                         outline="#000000",
                         width=2
                     )
-                    text_color = "#000000" if color in [Color.WHITE, Color.YELLOW] else "#FFFFFF"
-                    # Position number in top left corner (like playing cards) - smaller font
+                    # Position number in top left corner (like playing cards) - smaller font, always black
                     number_x = card_x - card_width // 2 + 4  # Left edge + small margin
                     number_y = card_y - card_height // 2 + 4  # Top edge + small margin
                     self._canvas.create_text(
                         number_x, number_y,
                         text=str(num),
-                        fill=text_color,
+                        fill="#000000",
                         font=("Arial", 10, "bold"),
                         anchor="nw"  # Top-left anchor
                     )
@@ -826,9 +1018,33 @@ class GUIDisplay:
             # Always place label above the cards (toward center)
             label_y = y - label_offset
 
+            # Get player name from replay history if available
+            player_name = f"Player {i + 1}"
+            # Check if game is over - don't show player type when game is over
+            game_is_over = False
+            if self._game:
+                # Check if game is over by checking turns left or status label
+                if hasattr(self._game, '_turns_left') and self._game._turns_left == 0:
+                    game_is_over = True
+                elif hasattr(self, '_status_label'):
+                    status_text = self._status_label.cget("text")
+                    if "Game Over" in status_text:
+                        game_is_over = True
+
+            if hasattr(self, '_replay_player_names') and self._replay_player_names:
+                if i < len(self._replay_player_names):
+                    player_type = self._replay_player_names[i]
+                    # Remove "Player" suffix if present (e.g., "GUIPlayer" -> "GUI")
+                    if player_type.endswith("Player"):
+                        player_type = player_type[:-6]  # Remove "Player"
+                    if player_type and not game_is_over:
+                        player_name = f"Player {i + 1} ({player_type})"
+            elif is_current_player and not game_is_over:
+                player_name += " (You)"
+
             self._canvas.create_text(
                 x, label_y,
-                text=f"Player {i + 1}" + (" (You)" if is_current_player else ""),
+                text=player_name,
                 fill="white" if is_current_player else "#CCCCCC",
                 font=("Arial", 12, "bold" if is_current_player else "normal")
             )
@@ -844,7 +1060,8 @@ class GUIDisplay:
                 # Get hints for this card (for all players, including current player)
                 from hanabi.core.player import HintTrackingPlayer
                 player = self._game.team.players[i]
-                hints = player.getHints() if (not self._show_all_cards and isinstance(player, HintTrackingPlayer)) else {}
+                # In replay mode, still get hints to show dots even when showing all cards
+                hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
                 card_hints = hints.get(card_idx, {})
 
                 # Check if card actually has hints (color or number is not None)
@@ -866,7 +1083,7 @@ class GUIDisplay:
                     clickable=True,  # All cards clickable for action menu
                     player_idx=i,
                     card_idx=card_idx,
-                    has_hints=has_hints if not is_current_player else False  # Don't show hint indicator dot for current player
+                    has_hints=has_hints  # Show hint indicator dot for all players in replay mode
                 )
                 self._card_widgets[(i, card_idx)] = widget
                 # Store card position for click detection
@@ -896,7 +1113,7 @@ class GUIDisplay:
 
         if show_front:
             bg_color = self.COLOR_COLORS.get(color, "#FFFFFF")
-            text_color = "#000000" if color in [Color.WHITE, Color.YELLOW] else "#FFFFFF"
+            text_color = "#000000"  # Use black for all numbers on cards
 
             widget = self._canvas.create_rectangle(
                 x - card_width // 2, y - card_height // 2,

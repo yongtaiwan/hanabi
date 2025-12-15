@@ -77,7 +77,6 @@ class GUIGame:
         self._control_frame = None
         self._player_buttons = []
         self._replay_btn = None
-        self._abandon_btn = None
         self._back_to_start_btn = None
 
         # Show start screen buttons
@@ -119,11 +118,26 @@ class GUIGame:
             # Call immediately to position buttons
             self.root.after_idle(center_buttons)
 
-            # Player selection buttons (2-5 players) - vertical layout
+            # Create 3-column layout
+            columns_frame = tk.Frame(self._control_frame, bg="#2C3E50")
+            columns_frame.pack()
+
+            # Column 1: Hot Seat (Multiplayer)
+            hot_seat_column = tk.Frame(columns_frame, bg="#2C3E50")
+            hot_seat_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
+
+            tk.Label(
+                hot_seat_column,
+                text="Hot Seat",
+                bg="#2C3E50",
+                fg="white",
+                font=("Arial", 14, "bold")
+            ).pack(pady=(0, 10))
+
             self._player_buttons = []
             for num_players in range(2, 6):
                 btn = tk.Button(
-                    self._control_frame,
+                    hot_seat_column,
                     text=f"{num_players} Players",
                     command=lambda n=num_players: self._start_new_game(n, one_player_mode=False),
                     bg="#95A5A6",
@@ -137,24 +151,23 @@ class GUIGame:
                 btn.pack(pady=8)
                 self._player_buttons.append(btn)
 
-            # Add separator
-            separator = tk.Frame(self._control_frame, height=2, bg="#34495E")
-            separator.pack(fill=tk.X, pady=10)
+            # Column 2: Single Player
+            single_player_column = tk.Frame(columns_frame, bg="#2C3E50")
+            single_player_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
-            # Add 1-player mode buttons (1 human + AI players)
             tk.Label(
-                self._control_frame,
-                text="1-Player Mode (with AI):",
+                single_player_column,
+                text="Single Player",
                 bg="#2C3E50",
                 fg="white",
-                font=("Arial", 12, "bold")
-            ).pack(pady=(5, 8))
+                font=("Arial", 14, "bold")
+            ).pack(pady=(0, 10))
 
-            for num_players in range(2, 6):
+            for num_ai in range(1, 5):  # 1-4 AIs
                 btn = tk.Button(
-                    self._control_frame,
-                    text=f"1 Player + {num_players - 1} AI",
-                    command=lambda n=num_players: self._start_new_game(n, one_player_mode=True),
+                    single_player_column,
+                    text=f"{num_ai} AI{'s' if num_ai > 1 else ''}",
+                    command=lambda n=num_ai + 1: self._start_new_game(n, one_player_mode=True),
                     bg="#95A5A6",
                     fg="black",
                     font=("Arial", 14, "bold"),
@@ -166,8 +179,20 @@ class GUIGame:
                 btn.pack(pady=8)
                 self._player_buttons.append(btn)
 
+            # Column 3: Replay
+            replay_column = tk.Frame(columns_frame, bg="#2C3E50")
+            replay_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
+
+            tk.Label(
+                replay_column,
+                text="Replay",
+                bg="#2C3E50",
+                fg="white",
+                font=("Arial", 14, "bold")
+            ).pack(pady=(0, 10))
+
             self._replay_btn = tk.Button(
-                self._control_frame,
+                replay_column,
                 text="Load Replay",
                 command=self._load_replay,
                 bg="#95A5A6",
@@ -240,6 +265,12 @@ class GUIGame:
             move_message = self._format_move_message(player_index, move, old_state, new_state)
             logger.debug(f"[on_move_callback] formatted message: {move_message}")
 
+            # Record move in history
+            if self._history and self._game:
+                # Format a simple result message for history (not used in new format, but kept for compatibility)
+                result_msg = move_message
+                self._history.record_move(player_index, move, result_msg, self._game)
+
             # Schedule display updates on GUI thread (Tkinter is not thread-safe)
             def update_display():
                 # Update game state display
@@ -281,6 +312,10 @@ class GUIGame:
         # Connect display's move callback to set move on current player
         self._display.set_move_callback(self._on_move_made)
 
+        # Enable home button (acts as abandon game during play)
+        if hasattr(self._display, '_home_btn'):
+            self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
+
         # Set up input handler
         self._input_handler = GUIInput(self._game, self._display)
         self._display.set_input_handler(self._input_handler)
@@ -298,8 +333,9 @@ class GUIGame:
             "max_hint_tokens": settings.maxHintTokens,
             "max_cards_in_hand": settings.maxCardsInHand
         })
-        # Note: history recording will need to be updated to work with Game
-        # For now, we'll skip it or update it later
+        # Record initial state
+        if self._game:
+            self._history.record_initial_state(self._game)
 
         # Hide start screen buttons
         if self._control_frame:
@@ -321,13 +357,14 @@ class GUIGame:
                 if isinstance(widget, tk.Frame):
                     widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Add abandon game button to status bar
-        self._add_abandon_button()
+        # Home button will serve as abandon game button during play
 
         # Initial display update to show the starting game state
         self._display.display_game_state(self._game, self._game.currentPlayer)
 
-    def _add_abandon_button(self):
+    # Removed _add_abandon_button - home button now serves this purpose
+
+    def _abandon_game(self):
         """Add abandon game button to status bar."""
         if self._abandon_btn:
             return
@@ -361,13 +398,15 @@ class GUIGame:
             self._abandon_btn.pack(side=tk.RIGHT, padx=5)
 
     def _abandon_game(self):
-        """Abandon current game and return to start screen."""
+        """Abandon current game/replay and return to start screen."""
         # Clear game state
         self._game = None
         self._players = []
         self._input_handler = None
         self._history = None
         self._is_replay_mode = False
+        self._replay_history = None
+        self._replay_move_index = 0
 
         # Clear the canvas and top panel (status bar)
         if self._display:
@@ -388,17 +427,58 @@ class GUIGame:
                 self._display._history_text.config(state=tk.DISABLED)
             if hasattr(self._display, '_event_history'):
                 self._display._event_history.clear()
+            # Clear replay-specific display state
+            self._display.set_game(None)
+            self._display.set_show_all_cards(False)
+            if hasattr(self._display, '_replay_player_names'):
+                self._display._replay_player_names = None
+
+        # Remove replay controls if any
+        status_frame = None
+        for widget in self._display.root.winfo_children():
+            if isinstance(widget, tk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                        status_frame = child
+                        break
+                if status_frame:
+                    break
+
+        if status_frame:
+            for widget in status_frame.winfo_children():
+                if isinstance(widget, tk.Frame) and hasattr(widget, '_replay_controls'):
+                    widget.destroy()
+
+        # Clear replay button references to prevent stale references
+        if hasattr(self, '_replay_first_btn'):
+            self._replay_first_btn = None
+        if hasattr(self, '_replay_prev_btn'):
+            self._replay_prev_btn = None
+        if hasattr(self, '_replay_next_btn'):
+            self._replay_next_btn = None
+        if hasattr(self, '_replay_last_btn'):
+            self._replay_last_btn = None
 
         # Hide game control buttons
-        if self._abandon_btn:
-            self._abandon_btn.pack_forget()
-            self._abandon_btn = None
         if self._back_to_start_btn:
             self._back_to_start_btn.pack_forget()
             self._back_to_start_btn = None
 
+        # Disable home button
+        if hasattr(self._display, '_home_btn'):
+            self._display._home_btn.config(state=tk.DISABLED, command=None)
+
         # Show start screen
         self._show_start_screen()
+
+        # Force a full repaint of the display
+        if self._display:
+            # Update the canvas frame to ensure it's visible
+            if hasattr(self._display, '_canvas_frame'):
+                self._display._canvas_frame.update_idletasks()
+            # Force root window update to ensure everything is repainted
+            self._display.root.update_idletasks()
+            self._display.root.update()
 
     def _ask_num_players(self) -> Optional[int]:
         """Ask user for number of players with clickable buttons."""
@@ -640,8 +720,10 @@ class GUIGame:
         self._game_ended = True
 
         if self._game and self._history:
-            # Save game history
-            self._history.save_to_file()
+            # Record and save game history with final score
+            final_score = self._game.getScore()
+            self._history.record_final_score(self._game)
+            self._history.save_to_file(final_score=final_score)
 
         # Close any open action menu
         if self._display and hasattr(self._display, '_close_action_menu'):
@@ -654,10 +736,7 @@ class GUIGame:
 
         self._display.display_game_end(self._game)
 
-        # Hide abandon button, show back to start button
-        if self._abandon_btn:
-            self._abandon_btn.pack_forget()
-
+        # Home button already serves as back to start button
         self._add_back_to_start_button()
 
     def _add_back_to_start_button(self):
@@ -722,8 +801,10 @@ class GUIGame:
                 raise ValueError("Invalid replay file format: expected a dictionary")
 
             # Check for required keys
-            if "s" not in history_data:
-                raise ValueError("Invalid replay file: missing settings (key 's')")
+            if "settings" not in history_data:
+                raise ValueError("Invalid replay file: missing settings")
+            if "deck" not in history_data:
+                raise ValueError("Invalid replay file: missing deck")
 
             self._replay_history = history_data
             self._replay_move_index = 0
@@ -743,14 +824,15 @@ class GUIGame:
                 if hasattr(self._display, '_history_frame'):
                     self._display._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
-            # Reconstruct game from history
+            # Reconstruct game from history (initial state, no moves applied yet)
             self._reconstruct_game_from_history(history_data)
+
+            # Enable home button (acts as abandon/back to start during replay)
+            if hasattr(self._display, '_home_btn'):
+                self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
 
             # Set up replay controls
             self._setup_replay_controls()
-
-            if not self._suppress_dialogs:
-                messagebox.showinfo("Replay Loaded", "Replay loaded successfully. Use controls to step through the game.")
         except Exception as e:
             import traceback
             error_msg = f"Failed to load replay: {str(e)}"
@@ -760,46 +842,60 @@ class GUIGame:
                 # In test mode, raise the exception so tests can catch it
                 raise
 
+    def _back_to_home(self):
+        """Return to home screen from replay mode."""
+        # Clear replay state
+        self._replay_history = None
+        self._replay_move_index = 0
+        self._is_replay_mode = False
+
+        # Clear game
+        self._game = None
+        self._display.set_game(None)
+        self._display.set_show_all_cards(False)
+
+        # Disable home button
+        if hasattr(self._display, '_home_btn'):
+            self._display._home_btn.config(state=tk.DISABLED, command=None)
+
+        # Clear canvas completely
+        if hasattr(self._display, 'canvas'):
+            self._display.canvas.delete("all")
+
+        # Remove replay controls
+        status_frame = None
+        for widget in self._display.root.winfo_children():
+            if isinstance(widget, tk.Frame):
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                        status_frame = child
+                        break
+                if status_frame:
+                    break
+
+        if status_frame:
+            for widget in status_frame.winfo_children():
+                if isinstance(widget, tk.Frame) and hasattr(widget, '_replay_controls'):
+                    widget.destroy()
+
+        # Show home screen - this will create/repaint the control frame
+        self._show_start_screen()
+
+        # Force a full repaint of the display
+        if self._display:
+            # Update the canvas frame to ensure it's visible
+            if hasattr(self._display, '_canvas_frame'):
+                self._display._canvas_frame.update_idletasks()
+            # Force root window update to ensure everything is repainted
+            self._display.root.update_idletasks()
+            self._display.root.update()
+
     def _reconstruct_game_from_history(self, history_data: dict):
         """Reconstruct game engine from history data."""
-        # History format uses "s" for settings
-        settings_dict = history_data.get("s", {})
-        num_players = settings_dict.get("num_players", 3)
-
-        settings = create_standard_game_settings(num_players)
-        from hanabi.core.player import HumanPlayer
-        placeholder_players = [HumanPlayer(i) for i in range(num_players)]
-        team = PlayerTeam(placeholder_players)
-        # Set up move callback for display updates (same as new game)
-        def on_move_callback(player_index: int, move: Move, old_state, new_state):
-            """Callback to update display when a move is made."""
-            # Format move message
-            move_message = self._format_move_message(player_index, move, old_state, new_state)
-
-            # Schedule display updates on GUI thread (Tkinter is not thread-safe)
-            def update_display():
-                # Update game state display
-                self._display.display_game_state(self._game, self._game.currentPlayer)
-
-                # Display move result in event history
-                # Check if this is an AI player for display purposes
-                is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
-                self._display.display_move_result(True, move_message, player_index, is_ai_player)
-
-            self._display.root.after(0, update_display)
-
-        self._game = Game.create(team, settings, on_move=on_move_callback)
-
-        # Apply moves from history up to current index
-        moves = history_data.get("m", [])
-        for move_data in moves[:self._replay_move_index]:
-            # TODO: Full deserialization would reconstruct exact game state
-            # For now, we just show the initial state
-            pass
-
-        self._display.set_game(self._game)
-        self._display.set_show_all_cards(True)  # Show all cards in replay
-        self._update_display()
+        # This method is called on initial load
+        # The history data and move index are already set in _load_replay
+        # Just update the display to show the current state
+        self._update_replay_display()
 
     def _setup_replay_controls(self):
         """Set up replay control buttons."""
@@ -827,7 +923,13 @@ class GUIGame:
         replay_frame._replay_controls = True  # Mark as replay controls
         replay_frame.pack(side=tk.LEFT, padx=10)
 
-        tk.Button(
+        # Note: Home button is now always visible in status bar, no need to add it here
+        # Add separator before replay controls
+        separator = tk.Frame(replay_frame, width=2, bg="#5A6B7D")
+        separator.pack(side=tk.LEFT, padx=5, fill=tk.Y)
+
+        # Store button references for enabling/disabling
+        self._replay_first_btn = tk.Button(
             replay_frame,
             text="⏮ First",
             command=self._replay_first,
@@ -835,9 +937,10 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0
-        ).pack(side=tk.LEFT, padx=2)
+        )
+        self._replay_first_btn.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
+        self._replay_prev_btn = tk.Button(
             replay_frame,
             text="⏪ Prev",
             command=self._replay_previous,
@@ -845,9 +948,10 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0
-        ).pack(side=tk.LEFT, padx=2)
+        )
+        self._replay_prev_btn.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
+        self._replay_next_btn = tk.Button(
             replay_frame,
             text="⏩ Next",
             command=self._replay_next,
@@ -855,9 +959,10 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0
-        ).pack(side=tk.LEFT, padx=2)
+        )
+        self._replay_next_btn.pack(side=tk.LEFT, padx=2)
 
-        tk.Button(
+        self._replay_last_btn = tk.Button(
             replay_frame,
             text="⏭ Last",
             command=self._replay_last,
@@ -865,48 +970,189 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0
-        ).pack(side=tk.LEFT, padx=2)
+        )
+        self._replay_last_btn.pack(side=tk.LEFT, padx=2)
+
+        # Update button states
+        self._update_replay_button_states()
+
+    def _update_replay_button_states(self):
+        """Update replay button states based on current position."""
+        if not hasattr(self, '_replay_history') or not self._replay_history:
+            return
+
+        moves = self._replay_history.get("moves", [])
+        total_moves = len(moves)
+        current_index = getattr(self, '_replay_move_index', 0)
+
+        # Disable First and Prev if at start
+        # Check if buttons exist and are valid widgets before configuring
+        if hasattr(self, '_replay_first_btn') and self._replay_first_btn is not None:
+            try:
+                self._replay_first_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
+            except (tk.TclError, AttributeError):
+                # Widget was destroyed, clear reference
+                self._replay_first_btn = None
+        if hasattr(self, '_replay_prev_btn') and self._replay_prev_btn is not None:
+            try:
+                self._replay_prev_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
+            except (tk.TclError, AttributeError):
+                self._replay_prev_btn = None
+
+        # Disable Next and Last if at end
+        if hasattr(self, '_replay_next_btn') and self._replay_next_btn is not None:
+            try:
+                self._replay_next_btn.config(state=tk.DISABLED if current_index >= total_moves else tk.NORMAL)
+            except (tk.TclError, AttributeError):
+                self._replay_next_btn = None
+        if hasattr(self, '_replay_last_btn') and self._replay_last_btn is not None:
+            try:
+                self._replay_last_btn.config(state=tk.DISABLED if current_index >= total_moves else tk.NORMAL)
+            except (tk.TclError, AttributeError):
+                self._replay_last_btn = None
 
     def _replay_first(self):
         """Go to first move in replay."""
         self._replay_move_index = 0
         self._update_replay_display()
+        self._update_replay_button_states()
 
     def _replay_previous(self):
         """Go to previous move in replay."""
         if self._replay_move_index > 0:
             self._replay_move_index -= 1
             self._update_replay_display()
+            self._update_replay_button_states()
 
     def _replay_next(self):
         """Go to next move in replay."""
         if self._replay_history:
-            moves = self._replay_history.get("m", [])
+            moves = self._replay_history.get("moves", [])
             if self._replay_move_index < len(moves):
                 self._replay_move_index += 1
                 self._update_replay_display()
+                self._update_replay_button_states()
 
     def _replay_last(self):
         """Go to last move in replay."""
         if self._replay_history:
-            moves = self._replay_history.get("m", [])
+            moves = self._replay_history.get("moves", [])
             self._replay_move_index = len(moves)
             self._update_replay_display()
+            self._update_replay_button_states()
 
     def _update_replay_display(self):
         """Update display for replay mode."""
-        if not self._replay_history or not self._game:
+        if not self._replay_history:
             return
 
-        # Reconstruct game state up to current move index
-        # (This would need full deserialization implementation)
-        self._update_display()
+        # Clear event history before reconstructing
+        if hasattr(self._display, '_event_history'):
+            self._display._event_history.clear()
+        if hasattr(self._display, '_history_text'):
+            self._display._history_text.config(state=tk.NORMAL)
+            self._display._history_text.delete("1.0", tk.END)
+            self._display._history_text.config(state=tk.DISABLED)
 
-        # Update status
-        moves = self._replay_history.get("m", [])
-        self._display._status_label.config(
-            text=f"Replay: Move {self._replay_move_index}/{len(moves)}"
-        )
+        # Store timestamps for each move if available in history
+        # (Currently not stored per-move, so this will be empty)
+        # If per-move timestamps are added to history format in the future, they can be used here
+        self._display._replay_timestamps = []
+
+        # Store turn numbers for each move (needed to show correct turn in event history)
+        moves = self._replay_history.get("moves", [])
+        replay_turn_numbers = []
+        for i in range(len(moves)):
+            # Turn numbers are 1-based, starting from 1 after the first move
+            replay_turn_numbers.append(i + 1)
+        self._display._replay_turn_numbers = replay_turn_numbers
+
+        # Store player names from history for display
+        players_list = self._replay_history.get("players", [])
+        self._display._replay_player_names = players_list
+
+        # Reconstruct game from history up to current move index
+        from hanabi.core.player import HumanPlayer
+        from hanabi.core.game_history import GameHistory
+
+        settings_dict = self._replay_history.get("settings", {})
+        num_players = settings_dict.get("num_players", 3)
+
+        # Use HintTrackingPlayer (HumanPlayer extends it) so hints are tracked
+        placeholder_players = [HumanPlayer(i) for i in range(num_players)]
+        team = PlayerTeam(placeholder_players)
+
+        # Set up move callback to track moves for event history
+        moves_applied = []  # Track moves for event history
+
+        def on_move_callback(player_index: int, move: Move, old_state, new_state):
+            """Callback to track moves for event history."""
+            # Store move info for later display in event history
+            moves_applied.append((player_index, move, old_state, new_state))
+
+        # Reconstruct game from history using the saved deck
+        self._game = GameHistory.create_game_from_history(self._replay_history, team, on_move=on_move_callback)
+
+        # Apply moves from history up to current index
+        moves = self._replay_history.get("moves", [])
+        for move_str in moves[:self._replay_move_index]:
+            # Get current player (moves are deterministic)
+            current_player = self._game.currentPlayer
+
+            # Parse move from short format
+            move = GameHistory._short_to_move(move_str, current_player, self._game)
+            if move is None:
+                logger.warning(f"Replay: Failed to parse move '{move_str}'")
+                continue  # Skip invalid moves
+
+            # Get state before move
+            old_state = self._game.state
+
+            # Apply the move
+            try:
+                self._game._processMove(current_player, move)
+                # Notify players so hints are tracked
+                self._game._notify_players(current_player, move)
+                # Advance to next player's turn (moves are deterministic)
+                self._game._advanceTurn()
+            except ValueError as e:
+                # Move might be invalid at this point in replay
+                logger.error(f"Replay: Failed to apply move '{move_str}': {e}")
+                # Continue anyway - might be able to recover
+                continue
+
+            # Get state after move
+            new_state = self._game.state
+
+            # Add move to event history
+            move_message = self._format_move_message(current_player, move, old_state, new_state)
+            # Check if this is an AI player (based on player class names from history)
+            players_list = self._replay_history.get("players", [])
+            is_ai_player = (current_player < len(players_list) and
+                          players_list[current_player] != "GUIPlayer" and
+                          players_list[current_player] != "HumanPlayer" and
+                          players_list[current_player] != "ConsolePlayer")
+            self._display.display_move_result(True, move_message, current_player, is_ai_player)
+
+        # Update display with the reconstructed game state
+        self._display.set_game(self._game)
+        self._display.set_show_all_cards(True)  # Show all cards in replay
+
+        # Force display update
+        current_player = self._game.currentPlayer
+        self._display.display_game_state(self._game, current_player)
+
+        # Update status label
+        if hasattr(self._display, '_status_label'):
+            self._display._status_label.config(
+                text=f"Replay: Move {self._replay_move_index}/{len(moves)}"
+            )
+
+        # Force GUI update
+        self._display.root.update_idletasks()
+
+        # Update replay button states
+        self._update_replay_button_states()
 
     def _toggle_replay_mode(self):
         """Toggle replay mode (if replay is loaded)."""

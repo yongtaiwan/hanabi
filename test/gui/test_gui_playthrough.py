@@ -201,9 +201,9 @@ class TestGUIPlaythrough(unittest.TestCase):
             # Try to load it back
             loaded_history = GameHistory({})
             loaded_data = loaded_history.load_from_file(temp_filename)
-            self.assertIn("s", loaded_data, "History should have settings")
-            self.assertIn("m", loaded_data, "History should have moves")
-            self.assertGreater(len(loaded_data["m"]), 0, "Should have recorded moves")
+            self.assertIn("settings", loaded_data, "History should have settings")
+            self.assertIn("moves", loaded_data, "History should have moves")
+            self.assertGreater(len(loaded_data["moves"]), 0, "Should have recorded moves")
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)
