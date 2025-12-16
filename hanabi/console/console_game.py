@@ -45,6 +45,28 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             else:
                 print("Please enter 'y' or 'n'.")
 
+    # Get AI player type if in 1-player mode
+    ai_player_type = None
+    if one_player_mode:
+        from hanabi.ai import RandomPlayer, CommonSensePlayer
+        ai_types = {
+            '1': ('Random', RandomPlayer),
+            '2': ('CommonSense', CommonSensePlayer),
+        }
+
+        print("\nSelect AI player type:")
+        for key, (name, _) in sorted(ai_types.items()):
+            print(f"  {key}. {name}")
+
+        while True:
+            choice = input("Enter choice (1-2): ").strip()
+            if choice in ai_types:
+                ai_player_type = ai_types[choice][1]
+                print(f"Selected: {ai_types[choice][0]}")
+                break
+            else:
+                print("Please enter 1 or 2.")
+
     # Get number of players
     if num_players is None:
         if one_player_mode:
@@ -127,11 +149,14 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
     game = Game.create(team, settings, on_move=on_move_callback)
 
-    # Create players: 1 ConsolePlayer (human) + rest as RandomPlayers (AI)
+    # Create players: 1 ConsolePlayer (human) + rest as AI players
     players = []
     if one_player_mode:
         # 1-player mode: first player is human, rest are AI
-        from hanabi.ai import RandomPlayer
+        # ai_player_type should be set above
+        if ai_player_type is None:
+            from hanabi.ai import RandomPlayer
+            ai_player_type = RandomPlayer  # Default fallback
 
         # Create human player (player 0)
         input_parser = ConsoleInput(game, 0)
@@ -140,7 +165,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
         # Create AI players (players 1 to num_players-1)
         for i in range(1, num_players):
-            ai_player = RandomPlayer(i)
+            ai_player = ai_player_type(i)
             players.append(ai_player)
     else:
         # Multi-player mode: all players are human
@@ -152,9 +177,10 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Update team with players
     game._team = PlayerTeam(players)
 
-    # Update common view for all players
+    # Set game settings and common view for all players
     common_view = game.state.commonView
     for player in players:
+        player.set_game_settings(settings)
         player.set_common_view(common_view)
 
     # Record initial state in history (after game is fully set up)
@@ -164,7 +190,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     from .console_display import Colors
     print(f"\n{Colors.BRIGHT_CYAN}Welcome to Hanabi!{Colors.RESET}")
     if one_player_mode:
-        print(f"{Colors.BRIGHT_GREEN}Playing in 1-player mode with {num_players - 1} AI player(s){Colors.RESET}")
+        ai_type_name = ai_player_type.__name__ if ai_player_type else "Random"
+        print(f"{Colors.BRIGHT_GREEN}Playing in 1-player mode with {num_players - 1} {ai_type_name} AI player(s){Colors.RESET}")
     print("=" * 70)
 
     # Play the game (game loop is handled by Game.play())

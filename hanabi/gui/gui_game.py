@@ -166,7 +166,7 @@ class GUIGame:
                 btn = tk.Button(
                     single_player_column,
                     text=f"{num_ai} AI{'s' if num_ai > 1 else ''}",
-                    command=lambda n=num_ai + 1: self._start_new_game(n, one_player_mode=True),
+                    command=lambda n=num_ai + 1: self._select_ai_type_and_start(n),
                     bg="#95A5A6",
                     fg="black",
                     font=("Arial", 14, "bold"),
@@ -208,13 +208,76 @@ class GUIGame:
         """Start a new game with specified number of players."""
         self._new_game_with_players(num_players, one_player_mode)
 
+    def _select_ai_type_and_start(self, num_players: int):
+        """Show dialog to select AI player type, then start game."""
+        if self._suppress_dialogs:
+            # In test mode, use default
+            self._new_game_with_players(num_players, one_player_mode=True, ai_player_type=None)
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select AI Player Type")
+        dialog.geometry("350x250")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.configure(bg="#34495E")
+
+        result = [None]
+
+        tk.Label(
+            dialog,
+            text="Select AI player type:",
+            font=("Arial", 12, "bold"),
+            bg="#34495E",
+            fg="white"
+        ).pack(pady=20)
+
+        button_frame = tk.Frame(dialog, bg="#34495E")
+        button_frame.pack(pady=10)
+
+        from hanabi.ai import RandomPlayer, CommonSensePlayer
+        ai_types = [
+            ("Random", RandomPlayer),
+            ("CommonSense", CommonSensePlayer),
+        ]
+
+        for name, ai_class in ai_types:
+            btn = tk.Button(
+                button_frame,
+                text=name,
+                command=lambda ac=ai_class: self._select_ai_type(dialog, result, ac),
+                bg="#3498DB",
+                fg="white",
+                font=("Arial", 11, "bold"),
+                width=15,
+                padx=10,
+                pady=8
+            )
+            btn.pack(pady=5, fill=tk.X)
+
+        dialog.wait_window()
+
+        if result[0]:
+            self._new_game_with_players(num_players, one_player_mode=True, ai_player_type=result[0])
+
+    def _select_ai_type(self, dialog, result, ai_class):
+        """Handle AI type selection."""
+        result[0] = ai_class
+        dialog.destroy()
+
     def _new_game(self):
         """Start a new game (legacy method - now uses _start_new_game)."""
         # This method is kept for compatibility but shouldn't be called directly
         pass
 
-    def _new_game_with_players(self, num_players: int, one_player_mode: bool = False):
-        """Start a new game with specified number of players."""
+    def _new_game_with_players(self, num_players: int, one_player_mode: bool = False, ai_player_type=None):
+        """Start a new game with specified number of players.
+
+        Args:
+            num_players: Total number of players
+            one_player_mode: If True, first player is human, rest are AI
+            ai_player_type: AI player class to use (if None, defaults to RandomPlayer)
+        """
         self._is_replay_mode = False
         self._replay_history = None
         self._replay_move_index = 0
@@ -224,11 +287,14 @@ class GUIGame:
         # Create game settings
         settings = create_standard_game_settings(num_players)
 
-        # Create players: 1 GUIPlayer (human) + rest as RandomPlayers (AI) if 1-player mode
+        # Create players: 1 GUIPlayer (human) + rest as AI players if 1-player mode
         self._players = []
         if one_player_mode:
             # 1-player mode: first player is human, rest are AI
-            from hanabi.ai import RandomPlayer
+            # Use provided AI type or default to RandomPlayer
+            if ai_player_type is None:
+                from hanabi.ai import RandomPlayer
+                ai_player_type = RandomPlayer
 
             # Create human player (player 0)
             gui_player = GUIPlayer(0, None, self._display)  # game will be set after creation
@@ -291,10 +357,14 @@ class GUIGame:
 
         # For 1-player mode, replace placeholder players with actual AI players
         if one_player_mode:
-            from hanabi.ai import RandomPlayer
+            # Use the provided AI player type or default to RandomPlayer
+            if ai_player_type is None:
+                from hanabi.ai import RandomPlayer
+                ai_player_type = RandomPlayer
+
             actual_players = [self._players[0]]  # Keep the human player
             for i in range(1, num_players):
-                ai_player = RandomPlayer(i)
+                ai_player = ai_player_type(i)
                 # Set game settings on the new player instance
                 # This is required for hint generation to work
                 ai_player.set_game_settings(settings)

@@ -21,8 +21,9 @@ from .card import Card
 class GameHistory:
     """Tracks and saves game history for replay."""
 
-    # Subdirectory for game records
-    RECORDS_DIR = "game_records"
+    # Subdirectory for ad-hoc game records (single games, GUI/CLI saves, etc.)
+    # Organized separately from structured experiment outputs.
+    RECORDS_DIR = os.path.join("game_records", "ad_hoc")
 
     @staticmethod
     def _get_records_dir() -> str:

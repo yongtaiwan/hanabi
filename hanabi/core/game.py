@@ -642,9 +642,10 @@ class GameState:
         # Check if firework is completed
         firework_completed = (card.number == Number.FIVE and previous_value == Number.FOUR)
 
-        if firework_completed:
-            assert self._common_view._hint_tokens < self.settings.maxHintTokens, \
-                f"Cannot gain hint token: already at maximum ({self.settings.maxHintTokens})"
+        # Standard Hanabi rule: gain a hint token when completing a firework,
+        # but only if we are below the maximum. If we're already at max,
+        # we simply don't gain an extra token (no assertion).
+        if firework_completed and self._common_view._hint_tokens < self.settings.maxHintTokens:
             self._common_view._hint_tokens += 1
 
         # Draw a new card if available

@@ -72,24 +72,38 @@ class ExperimentResults:
 class GameField:
     """Manages multiple games and game initialization for AI performance comparisons."""
 
-    # Root directory for all experiments (under game_records)
-    EXPERIMENTS_BASE_DIR = "game_records"
+    # Root directory for all AI comparison experiments.
+    # Layout:
+    #   game_records/
+    #     exp_ai_comparison/
+    #       <timestamp>/
+    #         2p/
+    #           settings.yaml
+    #           statistics.yaml
+    #           games/
+    #             all-games/
+    #             <run_id>/
+    #           ai/
+    #             <ai_name>/
+    #         3p/
+    #         4p/
+    #         5p/
+    EXPERIMENTS_BASE_DIR = os.path.join("game_records", "exp_ai_comparison")
 
     @staticmethod
     def _get_experiment_dir(experiment_id: str) -> str:
         """
         Get the path to a specific experiment directory, creating it if necessary.
 
-        Creates the following structure:
-        game_records/
-          experiment_<ID>/
-            settings.yaml
-            statistics.yaml
-            games/
-              all-games/
-              <run_id>/
-            ai/
-              <ai_name>/
+        Creates the following structure under EXPERIMENTS_BASE_DIR:
+            <experiment_id>/
+              settings.yaml
+              statistics.yaml
+              games/
+                all-games/
+                <run_id>/
+              ai/
+                <ai_name>/
 
         Args:
             experiment_id: The experiment identifier
@@ -101,7 +115,8 @@ class GameField:
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
 
-        experiment_dir = os.path.join(base_dir, f"experiment_{experiment_id}")
+        # experiment_id may contain subdirectories (e.g., "<timestamp>/2p")
+        experiment_dir = os.path.join(base_dir, experiment_id)
         if not os.path.exists(experiment_dir):
             os.makedirs(experiment_dir)
             # Create games/all-games subdirectory
