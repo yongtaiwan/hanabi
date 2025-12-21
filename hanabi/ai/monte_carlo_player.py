@@ -36,8 +36,8 @@ class MonteCarloConfig:
 
     def __init__(
         self,
-        min_think_time_s: float = 2.0,
-        max_think_time_s: float = 4.0,
+        min_think_time_s: float = 4.0,
+        max_think_time_s: float = 6.0,
         min_simulations: int = 10,
         max_simulations: int = 300,
         rollout_mc_steps: int = 1,
@@ -479,19 +479,26 @@ class MonteCarloPlayer(HintTrackingPlayer):
         t_per_eval = elapsed / evals_done
 
         # --- Compute total number of evaluations under time budget ---
-        # Use the full time budget range, not just the average
-        # We want to use at least min_think_time_s but not exceed max_think_time_s
-        target_time = (self._config.min_think_time_s + self._config.max_think_time_s) / 2.0
-        max_total_evals = int(target_time / t_per_eval)
-
-        # Apply bounds
+        # CRITICAL: Ensure we meet minimum simulations requirement first
         min_total_evals = self._config.min_simulations * num_moves
         max_total_evals_capped = self._config.max_simulations * num_moves
-        max_total_evals = max(max_total_evals, min_total_evals)
+
+        # Calculate time-based target
+        target_time = (self._config.min_think_time_s + self._config.max_think_time_s) / 2.0
+        time_based_evals = int(target_time / t_per_eval)
+
+        # Ensure we get at least min_simulations per move, but don't exceed max
+        # If time budget allows more, use that; otherwise, use minimum
+        max_total_evals = max(min_total_evals, time_based_evals)
         max_total_evals = min(max_total_evals, max_total_evals_capped)
 
         remaining_evals = max_total_evals - evals_done
         additional_worlds = max(0, remaining_evals // num_moves)
+
+        # CRITICAL: Ensure we meet minimum simulations per move
+        # This takes priority over time limits
+        min_worlds_needed = self._config.min_simulations - 1  # -1 because pilot already counted
+        additional_worlds = max(additional_worlds, min_worlds_needed)
 
         # Ensure we use at least the minimum thinking time
         # If we haven't used enough time yet, run more simulations
@@ -504,14 +511,17 @@ class MonteCarloPlayer(HintTrackingPlayer):
             additional_worlds = max(additional_worlds, additional_worlds_needed)
 
         # Cap additional worlds to not exceed max_think_time_s
-        # Estimate total time if we run all additional_worlds
+        # BUT: if we haven't met min_simulations yet, prioritize that over time limit
         estimated_total_time = current_elapsed + (additional_worlds * t_per_eval * num_moves)
-        if estimated_total_time > self._config.max_think_time_s:
-            # Reduce additional_worlds to fit within max time
+        total_sims_per_move = 1 + additional_worlds  # pilot + additional
+        if estimated_total_time > self._config.max_think_time_s and total_sims_per_move >= self._config.min_simulations:
+            # We've met minimum simulations, so cap to max time
             time_available = self._config.max_think_time_s - current_elapsed
             assert time_available > 0, f"Time available should be > 0, got {time_available}"
             assert t_per_eval > 0, f"Time per evaluation should be > 0, got {t_per_eval}"
             additional_worlds = max(0, int(time_available / (t_per_eval * num_moves)))
+            # But still ensure we meet minimum (may exceed max time if necessary)
+            additional_worlds = max(additional_worlds, min_worlds_needed)
 
         # --- Additional worlds ---
         if additional_worlds > 0:
@@ -522,13 +532,22 @@ class MonteCarloPlayer(HintTrackingPlayer):
             self._run_one_world_batch(player_view, moves, scores_sum, counts)
 
             # Check if we've exceeded max time during execution
+            # BUT: if we haven't met min_simulations yet, continue even if we exceed max time
             current_elapsed = time.perf_counter() - start
-            if current_elapsed >= self._config.max_think_time_s:
+            current_sims_per_move = 1 + (world_num + 1)  # pilot + completed additional worlds
+            if current_elapsed >= self._config.max_think_time_s and current_sims_per_move >= self._config.min_simulations:
                 debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped early at world {world_num + 1}/{additional_worlds} "
-                            f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s)")
+                            f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
+                            f"but met min_simulations: {current_sims_per_move} >= {self._config.min_simulations})")
                 logger.debug(debug_msg)
                 print(debug_msg, file=sys.stderr)
                 break
+            elif current_elapsed >= self._config.max_think_time_s:
+                # Exceeded max time but haven't met minimum - continue anyway
+                debug_msg = (f"[MonteCarloPlayer {self._player_index}] Exceeded max time ({current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s) "
+                            f"but continuing to meet min_simulations ({current_sims_per_move} < {self._config.min_simulations})")
+                logger.debug(debug_msg)
+                print(debug_msg, file=sys.stderr)
 
         # --- Choose move with best average score ---
         # Pure Monte Carlo: select move with highest average score from simulations

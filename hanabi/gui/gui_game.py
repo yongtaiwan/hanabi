@@ -240,13 +240,14 @@ class GUIGame:
 
         # For interactive play, use reasonable config for MonteCarlo
         # (slower than fast config but faster than default for better decisions)
-        # Need enough simulations to reliably distinguish playable cards from other moves
+        # Use reasonable thinking time for interactive play
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(
-                min_think_time_s=1.0,   # 1 second minimum
-                max_think_time_s=2.0,   # 2 seconds maximum
-                min_simulations=20,     # Minimum 20 simulations per move (reduced variance)
+                min_think_time_s=4.0,   # 4 seconds minimum
+                max_think_time_s=6.0,   # 6 seconds maximum
+                min_simulations=20,     # Minimum 20 simulations per move
                 max_simulations=200,    # Cap at 200 simulations
+                rollout_mc_steps=1,     # Use MC evaluation for first step in rollout
             )
             return MonteCarloPlayer(player_index, config=config)
 
