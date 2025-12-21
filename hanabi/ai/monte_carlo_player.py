@@ -693,6 +693,12 @@ class MonteCarloPlayer(HintTrackingPlayer):
         # Get hints we've received
         hints = self.getHints()
 
+        # Debug: log all hints to help diagnose hint tracking issues
+        if hints:
+            debug_msg = f"[MonteCarloPlayer {self._player_index}] Hints when sampling: {hints}"
+            logger.debug(debug_msg)
+            print(debug_msg, file=sys.stderr)
+
         # Build candidate sets for each position based on hints
         for pos in range(hand_size):
             candidate_set = set()
@@ -725,10 +731,31 @@ class MonteCarloPlayer(HintTrackingPlayer):
             candidate_sets.append(candidate_set)
 
         # 4. Sample our hand from the multiset
-        own_hand: List[Card] = []
+        # CRITICAL: Sample positions with complete hints (both color and number) FIRST
+        # to ensure those constraints are satisfied before other positions use those cards
+        own_hand: List[Card] = [None] * hand_size  # Pre-allocate list
         remaining_multiset = card_multiset.copy()
 
+        # Determine sampling order: positions with complete hints first, then others
+        sampling_order = []
+        # First: positions with both color and number hints (most constrained)
         for pos in range(hand_size):
+            pos_hints = hints.get(pos, {})
+            if pos_hints.get("color") is not None and pos_hints.get("number") is not None:
+                sampling_order.append(pos)
+        # Then: positions with one hint (color or number)
+        for pos in range(hand_size):
+            if pos not in sampling_order:
+                pos_hints = hints.get(pos, {})
+                if pos_hints.get("color") is not None or pos_hints.get("number") is not None:
+                    sampling_order.append(pos)
+        # Finally: positions with no hints
+        for pos in range(hand_size):
+            if pos not in sampling_order:
+                sampling_order.append(pos)
+
+        # Sample in the determined order
+        for pos in sampling_order:
             # Get candidates for this position (intersect with remaining multiset)
             candidates = [
                 card
@@ -737,17 +764,20 @@ class MonteCarloPlayer(HintTrackingPlayer):
             ]
 
             # In Hanabi, there should always be candidates available
-            # If hints are too restrictive, this might fail - that indicates a bug
+            # If hints are inconsistent with available cards, this indicates a bug in hint tracking
             assert len(candidates) > 0, (
                 f"No candidates for hand position {pos} (impossible in Hanabi). "
+                f"This likely indicates a bug in hint tracking - hints may be at wrong positions. "
                 f"Remaining multiset: {dict(remaining_multiset)}, "
                 f"Candidate set size: {len(candidate_sets[pos])}, "
-                f"Hints for position {pos}: {hints.get(pos, {})}"
+                f"Hints for position {pos}: {hints.get(pos, {})}, "
+                f"All hints: {hints}, "
+                f"Sampling order: {sampling_order}"
             )
 
             # Sample uniformly
             card = self._rng.choice(candidates)
-            own_hand.append(card)
+            own_hand[pos] = card
             remaining_multiset[card] -= 1
 
         # 5. Build deck from remaining multiset

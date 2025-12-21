@@ -155,11 +155,12 @@ class HintTrackingPlayer(BasePlayer):
 
         # Shift remaining hints to new indices
         # When a card is played/discarded:
-        # 1. The card at card_index is removed (cards after shift left by 1)
+        # 1. The card at card_index is removed (cards at positions > card_index shift left by 1)
         # 2. A new card is drawn and inserted at position 0 (all cards shift right by 1)
         # Net effect:
         # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
-        # - Cards at indices > card_index: no net change (left by 1 from removal, right by 1 from insertion)
+        # - Cards at indices > card_index: shift left by 1 (from removal), then right by 1 (from insertion) = no net change
+        # Special case: when card_index = 0, card removed and new card fills position 0, so no net change for other cards
         new_hints = {}
         for old_idx, hint_data in self._hints.items():
             if old_idx < card_index:
@@ -167,6 +168,7 @@ class HintTrackingPlayer(BasePlayer):
                 new_hints[old_idx + 1] = hint_data
             elif old_idx > card_index:
                 # Card shifted left by 1 from removal, then right by 1 from insertion = no net change
+                # This includes the special case when card_index = 0 (all remaining cards have old_idx > 0)
                 new_hints[old_idx] = hint_data
         self._hints = new_hints
 
