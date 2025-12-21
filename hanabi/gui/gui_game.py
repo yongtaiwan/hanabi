@@ -883,47 +883,46 @@ class GUIGame:
         if not filename:
             return
 
-        try:
-            history = GameHistory({})
-            history_data = history.load_from_file(filename)
+        history = GameHistory({})
+        history_data = history.load_from_file(filename)
 
-            # Validate history data
-            if not isinstance(history_data, dict):
-                raise ValueError("Invalid replay file format: expected a dictionary")
+        # Validate history data
+        if not isinstance(history_data, dict):
+            raise ValueError("Invalid replay file format: expected a dictionary")
 
-            # Check for required keys
-            if "settings" not in history_data:
-                raise ValueError("Invalid replay file: missing settings")
-            if "deck" not in history_data:
-                raise ValueError("Invalid replay file: missing deck")
+        # Check for required keys
+        if "settings" not in history_data:
+            raise ValueError("Invalid replay file: missing settings")
+        if "deck" not in history_data:
+            raise ValueError("Invalid replay file: missing deck")
 
-            self._replay_history = history_data
-            self._replay_move_index = 0
-            self._is_replay_mode = True
+        self._replay_history = history_data
+        self._replay_move_index = 0
+        self._is_replay_mode = True
 
-            # Hide start screen if visible
-            if self._control_frame:
-                self._control_frame.destroy()
-                self._control_frame = None
-                self._player_buttons = []
-                self._replay_btn = None
+        # Hide start screen if visible
+        if self._control_frame:
+            self._control_frame.destroy()
+            self._control_frame = None
+            self._player_buttons = []
+            self._replay_btn = None
 
-            # Show game display elements (same as _start_new_game)
-            if self._display:
-                self._display._status_label.pack(side=tk.LEFT, padx=10, pady=5)
-                self._display._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
-                if hasattr(self._display, '_history_frame'):
-                    self._display._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        # Show game display elements (same as _start_new_game)
+        if self._display:
+            self._display._status_label.pack(side=tk.LEFT, padx=10, pady=5)
+            self._display._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
+            if hasattr(self._display, '_history_frame'):
+                self._display._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
-            # Reconstruct game from history (initial state, no moves applied yet)
-            self._reconstruct_game_from_history(history_data)
+        # Reconstruct game from history (initial state, no moves applied yet)
+        self._reconstruct_game_from_history(history_data)
 
-            # Enable home button (acts as abandon/back to start during replay)
-            if hasattr(self._display, '_home_btn'):
-                self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
+        # Enable home button (acts as abandon/back to start during replay)
+        if hasattr(self._display, '_home_btn'):
+            self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
 
-            # Set up replay controls
-            self._setup_replay_controls()
+        # Set up replay controls
+        self._setup_replay_controls()
 
     def _back_to_home(self):
         """Return to home screen from replay mode."""
