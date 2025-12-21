@@ -53,11 +53,13 @@ def create_common_sense_player(player_index: int) -> CommonSensePlayer:
 def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
     """Factory for MonteCarloPlayer with reasonable config for comparison."""
     # Use a balanced config: not too slow, but still effective
+    # Disable verbose logging for faster experiments
     config = MonteCarloConfig(
         min_think_time_s=0.5,   # 500ms
         max_think_time_s=1.0,   # 1 second
         min_simulations=5,
         max_simulations=50,
+        verbose=False,  # Disable terminal output for faster experiments
     )
     return MonteCarloPlayer(player_index, config=config)
 

@@ -136,7 +136,20 @@ class HintTrackingPlayer(BasePlayer):
 
     def _updateHintsFromHint(self, hint: Hint) -> None:
         """Update hints when receiving a hint."""
+        # Get current hand size from game settings
+        hand_size = self.gameSettings.maxCardsInHand
+
         for card_idx in hint.cards:
+            # Validate card index is within bounds
+            if card_idx < 0 or card_idx >= hand_size:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"[HintTrackingPlayer {self._player_index}] Received hint with invalid card index {card_idx} "
+                    f"(hand size: {hand_size}). Ignoring this index."
+                )
+                continue
+
             if card_idx not in self._hints:
                 self._hints[card_idx] = {"color": None, "number": None}
 

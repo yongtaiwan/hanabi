@@ -1203,13 +1203,9 @@ class GUIDisplay:
                 # Check if card actually has hints (color or number is not None)
                 has_hints = bool(card_hints and (card_hints.get("color") is not None or card_hints.get("number") is not None))
 
-                # Check if card has both color and number hints (fully known)
-                has_both_hints = bool(card_hints and
-                                     card_hints.get("color") is not None and
-                                     card_hints.get("number") is not None)
-
-                # Show card front if: replay mode OR not current player OR current player has both hints
-                show_front = self._show_all_cards or not is_current_player or (is_current_player and has_both_hints)
+                # Show card front if: replay mode OR not current player
+                # Current player's cards always show back (?) with hint boxes outside
+                show_front = self._show_all_cards or not is_current_player
 
                 widget = self._create_card_widget(
                     card_x, card_y,
@@ -1268,16 +1264,52 @@ class GUIDisplay:
                 tags=("card",)
             )
 
-            # Add hint indicator dot if card has hints
-            if has_hints:
-                self._canvas.create_oval(
-                    x + card_width // 2 - 8, y - card_height // 2 + 3,
-                    x + card_width // 2 - 3, y - card_height // 2 + 8,
-                    fill="#FFD700",
-                    outline="#000000",
-                    width=1,
-                    tags=("card",)
-                )
+            # Add hint indicator boxes outside bottom of card if card has hints
+            if has_hints and player_idx is not None and card_idx is not None:
+                # Get actual hints from hint tracking
+                player_hints = self._hints.get(player_idx, {})
+                card_hints = player_hints.get(card_idx, {})
+                color_hint = card_hints.get("color")
+                number_hint = card_hints.get("number")
+
+                # Calculate position for boxes outside bottom of card
+                box_height = 18
+                box_width = 22
+                box_spacing = 3
+                # Position boxes below the card (outside)
+                bottom_y = y + card_height // 2 + 2
+
+                # Draw color hint box (left box)
+                if color_hint is not None:
+                    hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
+                    color_box_x = x - (box_width + box_spacing) // 2
+                    self._canvas.create_rectangle(
+                        color_box_x - box_width // 2, bottom_y,
+                        color_box_x + box_width // 2, bottom_y + box_height,
+                        fill=hint_color,
+                        outline="#000000",
+                        width=1,
+                        tags=("card",)
+                    )
+
+                # Draw number hint box (right box)
+                if number_hint is not None:
+                    number_box_x = x + (box_width + box_spacing) // 2
+                    self._canvas.create_rectangle(
+                        number_box_x - box_width // 2, bottom_y,
+                        number_box_x + box_width // 2, bottom_y + box_height,
+                        fill="#F5DEB3",  # Wheat color - unique for number hints
+                        outline="#000000",
+                        width=1,
+                        tags=("card",)
+                    )
+                    self._canvas.create_text(
+                        number_box_x, bottom_y + box_height // 2,
+                        text=str(number_hint.value),
+                        fill="#000000",
+                        font=("Arial", 12, "bold"),
+                        tags=("card",)
+                    )
         else:
             bg_color = "#2C3E50"
             outline_color = "#87CEEB" if clickable else "#666666"
@@ -1295,49 +1327,11 @@ class GUIDisplay:
             color_hint = hints.get("color")
             number_hint = hints.get("number")
 
-            if color_hint and number_hint:
-                hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
-                # Use black text for current player's cards, white for others
-                is_current_player_card = (player_idx == self._current_player)
-                text_color = "#000000" if is_current_player_card else "white"
-                self._canvas.create_text(
-                    x, y - 10,
-                    text=self.COLOR_NAMES.get(color_hint, "?")[0],
-                    fill=hint_color,
-                    font=("Arial", 20, "bold"),
-                    tags=("card",)
-                )
-                self._canvas.create_text(
-                    x, y + 10,
-                    text=str(number_hint.value),
-                    fill=text_color,
-                    font=("Arial", 18, "bold"),
-                    tags=("card",)
-                )
-            elif color_hint:
-                # Only color hint: show "?" with background color set to hint color
-                hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
-                # Update background color to hint color
-                self._canvas.itemconfig(widget, fill=hint_color)
-                self._canvas.create_text(
-                    x, y,
-                    text="?",
-                    fill="#000000",  # Black text on colored background
-                    font=("Arial", 24, "bold"),
-                    tags=("card",)
-                )
-            elif number_hint:
-                # Use black text for current player's cards, white for others
-                is_current_player_card = (player_idx == self._current_player)
-                text_color = "#000000" if is_current_player_card else "white"
-                self._canvas.create_text(
-                    x, y,
-                    text=str(number_hint.value),
-                    fill=text_color,
-                    font=("Arial", 24, "bold"),
-                    tags=("card",)
-                )
-            else:
+            # For current player's cards, always show "?" (hints shown in boxes outside)
+            is_current_player_card = (player_idx == self._current_player)
+
+            if is_current_player_card:
+                # Always show "?" for current player's cards
                 self._canvas.create_text(
                     x, y,
                     text="?",
@@ -1345,6 +1339,101 @@ class GUIDisplay:
                     font=("Arial", 24, "bold"),
                     tags=("card",)
                 )
+            else:
+                # For other players' cards, show hints on the card itself
+                if color_hint and number_hint:
+                    hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
+                    text_color = "white"
+                    self._canvas.create_text(
+                        x, y - 10,
+                        text=self.COLOR_NAMES.get(color_hint, "?")[0],
+                        fill=hint_color,
+                        font=("Arial", 20, "bold"),
+                        tags=("card",)
+                    )
+                    self._canvas.create_text(
+                        x, y + 10,
+                        text=str(number_hint.value),
+                        fill=text_color,
+                        font=("Arial", 18, "bold"),
+                        tags=("card",)
+                    )
+                elif color_hint:
+                    # Only color hint: show "?" with background color set to hint color
+                    hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
+                    # Update background color to hint color
+                    self._canvas.itemconfig(widget, fill=hint_color)
+                    self._canvas.create_text(
+                        x, y,
+                        text="?",
+                        fill="#000000",  # Black text on colored background
+                        font=("Arial", 24, "bold"),
+                        tags=("card",)
+                    )
+                elif number_hint:
+                    text_color = "white"
+                    self._canvas.create_text(
+                        x, y,
+                        text=str(number_hint.value),
+                        fill=text_color,
+                        font=("Arial", 24, "bold"),
+                        tags=("card",)
+                    )
+                else:
+                    self._canvas.create_text(
+                        x, y,
+                        text="?",
+                        fill="#888888",
+                        font=("Arial", 24, "bold"),
+                        tags=("card",)
+                    )
+
+            # Add hint indicator boxes outside bottom of card for current player's cards
+            if player_idx is not None and card_idx is not None and player_idx == self._current_player:
+                # Get actual hints from hint tracking
+                player_hints = self._hints.get(player_idx, {})
+                card_hints = player_hints.get(card_idx, {})
+                color_hint = card_hints.get("color")
+                number_hint = card_hints.get("number")
+
+                # Calculate position for boxes outside bottom of card
+                box_height = 18
+                box_width = 22
+                box_spacing = 3
+                # Position boxes below the card (outside)
+                bottom_y = y + card_height // 2 + 2
+
+                # Draw color hint box (left box)
+                if color_hint is not None:
+                    hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
+                    color_box_x = x - (box_width + box_spacing) // 2
+                    self._canvas.create_rectangle(
+                        color_box_x - box_width // 2, bottom_y,
+                        color_box_x + box_width // 2, bottom_y + box_height,
+                        fill=hint_color,
+                        outline="#000000",
+                        width=1,
+                        tags=("card",)
+                    )
+
+                # Draw number hint box (right box)
+                if number_hint is not None:
+                    number_box_x = x + (box_width + box_spacing) // 2
+                    self._canvas.create_rectangle(
+                        number_box_x - box_width // 2, bottom_y,
+                        number_box_x + box_width // 2, bottom_y + box_height,
+                        fill="#F5DEB3",  # Wheat color - unique for number hints
+                        outline="#000000",
+                        width=1,
+                        tags=("card",)
+                    )
+                    self._canvas.create_text(
+                        number_box_x, bottom_y + box_height // 2,
+                        text=str(number_hint.value),
+                        fill="#000000",
+                        font=("Arial", 12, "bold"),
+                        tags=("card",)
+                    )
 
         return widget
 
