@@ -755,10 +755,7 @@ class GUIGame:
         Sets the move on the current player so game.play() can retrieve it.
         """
         # Check if game is valid and not finished
-        if not self._game:
-            if not self._suppress_dialogs:
-                messagebox.showerror("Game Error", "No game is active.")
-            return
+        assert self._game is not None, "No game is active."
 
         if self._game.isFinished:
             # Game is finished - show end screen if not already shown
@@ -790,24 +787,12 @@ class GUIGame:
 
     def _run_game(self):
         """Run the game in a separate thread (non-blocking for GUI)."""
-        try:
-            self._game.play()
-        except RuntimeError as e:
-            # Game ended due to invalid move or player error
-            if not self._suppress_dialogs:
-                messagebox.showerror("Game Error", str(e))
+        # Let all exceptions propagate (fail fast on bugs)
+        # No defensive programming - assertions should crash with stack trace
+        self._game.play()
+        # Game finished normally
+        if self._game and self._game.isFinished:
             self._on_game_end()
-        except Exception as e:
-            # Unexpected error
-            import traceback
-            error_msg = f"Unexpected error: {e}\n\n{traceback.format_exc()}"
-            if not self._suppress_dialogs:
-                messagebox.showerror("Game Error", error_msg)
-            self._on_game_end()
-        finally:
-            # Game finished normally
-            if self._game and self._game.isFinished:
-                self._on_game_end()
 
     def _update_display(self):
         """Update the display."""
@@ -939,14 +924,6 @@ class GUIGame:
 
             # Set up replay controls
             self._setup_replay_controls()
-        except Exception as e:
-            import traceback
-            error_msg = f"Failed to load replay: {str(e)}"
-            if not self._suppress_dialogs:
-                messagebox.showerror("Error", error_msg)
-            else:
-                # In test mode, raise the exception so tests can catch it
-                raise
 
     def _back_to_home(self):
         """Return to home screen from replay mode."""

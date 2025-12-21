@@ -667,11 +667,8 @@ class CommonSensePlayer(HintTrackingPlayer):
         Returns:
             True if the move is valid
         """
-        try:
-            common_view = self.commonView
-            hand_size = player_view.ownHandSize
-        except (ValueError, AttributeError):
-            return False
+        common_view = self.commonView
+        hand_size = player_view.ownHandSize
 
         if isinstance(move, Play):
             if move.card < 0 or move.card >= hand_size:

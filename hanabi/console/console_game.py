@@ -208,16 +208,13 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     print("=" * 70)
 
     # Play the game (game loop is handled by Game.play())
+    # Let AssertionError propagate (fail fast on bugs)
+    # Only catch KeyboardInterrupt for user cancellation
     try:
         game.play()
     except KeyboardInterrupt:
         from .console_display import Colors
         print(f"\n{Colors.BRIGHT_YELLOW}Game quit by player.{Colors.RESET}")
-        return
-    except RuntimeError as e:
-        # Game ended due to invalid move or player error
-        from .console_display import Colors
-        print(f"\n{Colors.BRIGHT_RED}Game ended: {e}{Colors.RESET}")
         return
 
     # Game finished - display game end

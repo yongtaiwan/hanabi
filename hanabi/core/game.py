@@ -1199,10 +1199,12 @@ class Game:
             player_view = self._getPlayerView(current_player)
 
             # Get move from player
+            # Let AssertionError propagate (fail fast on bugs)
+            # Only catch ValueError for invalid moves (game logic, not bugs)
             try:
                 move = player.play(player_view)
-            except (ValueError, Exception) as e:
-                # Player failed to provide a move - end game with error
+            except ValueError as e:
+                # Invalid move from player - end game with error
                 raise RuntimeError(f"Player {current_player} failed to provide a move: {e}") from e
 
             # Process the move (raises ValueError if invalid)

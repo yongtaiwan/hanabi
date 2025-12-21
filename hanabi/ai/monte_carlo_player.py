@@ -16,7 +16,7 @@ import sys
 from typing import List, Dict, Set, Optional, TYPE_CHECKING
 from collections import Counter
 
-from hanabi.core.player import BasePlayer
+from hanabi.core.player import HintTrackingPlayer
 from hanabi.core.game import PlayerView, CommonView, GameSettings
 from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
@@ -192,8 +192,7 @@ class MCGameState:
 
             # Get total count from settings
             suit = self._settings.cards.get(color)
-            if suit is None:
-                continue
+            assert suit is not None, f"Suit for color {color} should exist in game settings"
             total_count = suit.cards.get(next_needed, 0)
 
             # Count discarded
@@ -361,7 +360,7 @@ class MCGameState:
         )
 
 
-class MonteCarloPlayer(BasePlayer):
+class MonteCarloPlayer(HintTrackingPlayer):
     """
     Monte Carlo AI player.
 
@@ -475,8 +474,9 @@ class MonteCarloPlayer(BasePlayer):
         # Calculate time per evaluation
         evals_done = num_moves
         assert evals_done > 0, f"No evaluations done (impossible). num_moves={num_moves}"
+        assert elapsed > 0, f"Elapsed time should be > 0, got {elapsed}"
 
-        t_per_eval = max(elapsed / evals_done, 1e-6)
+        t_per_eval = elapsed / evals_done
 
         # --- Compute total number of evaluations under time budget ---
         # Use the full time budget range, not just the average
@@ -499,9 +499,9 @@ class MonteCarloPlayer(BasePlayer):
         if current_elapsed < self._config.min_think_time_s:
             # Need more time - estimate how many more worlds we can run
             time_remaining = self._config.min_think_time_s - current_elapsed
-            if t_per_eval > 0:
-                additional_worlds_needed = max(1, int(time_remaining / (t_per_eval * num_moves)))
-                additional_worlds = max(additional_worlds, additional_worlds_needed)
+            assert t_per_eval > 0, f"Time per evaluation should be > 0, got {t_per_eval}"
+            additional_worlds_needed = max(1, int(time_remaining / (t_per_eval * num_moves)))
+            additional_worlds = max(additional_worlds, additional_worlds_needed)
 
         # Cap additional worlds to not exceed max_think_time_s
         # Estimate total time if we run all additional_worlds
@@ -509,10 +509,9 @@ class MonteCarloPlayer(BasePlayer):
         if estimated_total_time > self._config.max_think_time_s:
             # Reduce additional_worlds to fit within max time
             time_available = self._config.max_think_time_s - current_elapsed
-            if time_available > 0 and t_per_eval > 0:
-                additional_worlds = max(0, int(time_available / (t_per_eval * num_moves)))
-            else:
-                additional_worlds = 0
+            assert time_available > 0, f"Time available should be > 0, got {time_available}"
+            assert t_per_eval > 0, f"Time per evaluation should be > 0, got {t_per_eval}"
+            additional_worlds = max(0, int(time_available / (t_per_eval * num_moves)))
 
         # --- Additional worlds ---
         if additional_worlds > 0:
@@ -532,13 +531,14 @@ class MonteCarloPlayer(BasePlayer):
                 break
 
         # --- Choose move with best average score ---
+        # Pure Monte Carlo: select move with highest average score from simulations
+        # No hardcoded heuristics - rely on the Monte Carlo evaluation
         best_idx = 0
         best_avg = float("-inf")
         move_stats = []
 
         for i, move in enumerate(moves):
-            if counts[i] == 0:
-                continue
+            assert counts[i] > 0, f"Move {move} has 0 simulation counts (impossible - all moves should be evaluated)"
             avg = scores_sum[i] / counts[i]
             move_stats.append((move, avg, counts[i], scores_sum[i]))
             if avg > best_avg:
@@ -611,11 +611,11 @@ class MonteCarloPlayer(BasePlayer):
             if isinstance(move, Play):
                 # Access hands directly (not via property) to avoid copying
                 hand = sim_state._hands[self._player_index]
-                if move.card < len(hand):
-                    card_being_played = hand[move.card]
-                    debug_msg = f"[MonteCarloPlayer {self._player_index}] Evaluating {move}: playing {card_being_played} from hand {[str(c) for c in hand]}"
-                    logger.debug(debug_msg)
-                    print(debug_msg, file=sys.stderr)
+                assert move.card < len(hand), f"Card index {move.card} out of range for hand size {len(hand)}"
+                card_being_played = hand[move.card]
+                debug_msg = f"[MonteCarloPlayer {self._player_index}] Evaluating {move}: playing {card_being_played} from hand {[str(c) for c in hand]}"
+                logger.debug(debug_msg)
+                print(debug_msg, file=sys.stderr)
 
             # Apply the move to the cloned state
             sim_state.apply_move(self._player_index, move)
@@ -678,20 +678,43 @@ class MonteCarloPlayer(BasePlayer):
                 if card_multiset[card] > 0:
                     card_multiset[card] -= 1
 
-        # 3. Get candidate sets for our hand positions
+        # 3. Get candidate sets for our hand positions using hints
         hand_size = player_view.ownHandSize
         candidate_sets: List[Set[Card]] = []
 
-        # For simplicity, we'll use all remaining cards as candidates
-        # (A more sophisticated version would use hints, but this works)
-        remaining_cards = []
-        for card, count in card_multiset.items():
-            remaining_cards.extend([card] * count)
+        # Get hints we've received
+        hints = self.getHints()
 
+        # Build candidate sets for each position based on hints
         for pos in range(hand_size):
-            # For now, all remaining cards are candidates
-            # (In a more sophisticated version, we'd filter by hints)
-            candidate_sets.append(set(remaining_cards))
+            candidate_set = set()
+            pos_hints = hints.get(pos, {})
+
+            # If we have hints for this position, filter by them
+            if pos_hints:
+                color_hint = pos_hints.get("color")
+                number_hint = pos_hints.get("number")
+
+                # Filter cards by hints AND availability (count > 0)
+                for card, count in card_multiset.items():
+                    # Only consider cards that are actually available
+                    if count <= 0:
+                        continue
+                    # Must match color hint if present
+                    if color_hint is not None and card.color != color_hint:
+                        continue
+                    # Must match number hint if present
+                    if number_hint is not None and card.number != number_hint:
+                        continue
+                    # Card matches all hints and is available
+                    candidate_set.add(card)
+            else:
+                # No hints for this position - all remaining cards with count > 0 are candidates
+                for card, count in card_multiset.items():
+                    if count > 0:
+                        candidate_set.add(card)
+
+            candidate_sets.append(candidate_set)
 
         # 4. Sample our hand from the multiset
         own_hand: List[Card] = []
@@ -706,10 +729,12 @@ class MonteCarloPlayer(BasePlayer):
             ]
 
             # In Hanabi, there should always be candidates available
+            # If hints are too restrictive, this might fail - that indicates a bug
             assert len(candidates) > 0, (
                 f"No candidates for hand position {pos} (impossible in Hanabi). "
                 f"Remaining multiset: {dict(remaining_multiset)}, "
-                f"Candidate set size: {len(candidate_sets[pos])}"
+                f"Candidate set size: {len(candidate_sets[pos])}, "
+                f"Hints for position {pos}: {hints.get(pos, {})}"
             )
 
             # Sample uniformly
@@ -730,11 +755,9 @@ class MonteCarloPlayer(BasePlayer):
                 hands.append(own_hand.copy())
             else:
                 # Get teammate's hand
-                if i in player_view.teammates:
-                    teammate_hand = player_view.teammates[i]
-                    hands.append([card for card in teammate_hand.cards])
-                else:
-                    hands.append([])
+                assert i in player_view.teammates, f"Teammate {i} should exist in player_view.teammates"
+                teammate_hand = player_view.teammates[i]
+                hands.append([card for card in teammate_hand.cards])
 
         # 7. Build cards_discarded dict
         cards_discarded: Dict[Color, Dict[Number, int]] = {}
@@ -796,13 +819,13 @@ class MonteCarloPlayer(BasePlayer):
                 f"Depth: {depth}"
             )
 
-            # Select move: use MC evaluation for first N steps, then random
+            # Select move: use MC evaluation for first N steps, then pure random
             if mc_steps_remaining > 0:
                 # Use Monte Carlo evaluation for this step
                 move = self._select_move_with_mc_in_rollout(state, valid_moves)
                 mc_steps_remaining -= 1
             else:
-                # Pure random for remaining steps
+                # Pure random for remaining steps (pure Monte Carlo, no heuristics)
                 move = self._rng.choice(valid_moves)
 
             # Apply move
@@ -854,6 +877,8 @@ class MonteCarloPlayer(BasePlayer):
         """
         Fast random rollout to terminal (used during MC evaluation in rollout).
 
+        Pure random policy - no heuristics.
+
         Args:
             state: Starting game state
 
@@ -877,7 +902,9 @@ class MonteCarloPlayer(BasePlayer):
                 f"Depth: {depth}"
             )
 
+            # Pure random selection (pure Monte Carlo, no heuristics)
             move = self._rng.choice(valid_moves)
+
             state.apply_move(state.current_player, move)
             state.advance_player()
 
@@ -970,11 +997,8 @@ class MonteCarloPlayer(BasePlayer):
         Returns:
             True if move is valid
         """
-        try:
-            common_view = self.commonView
-            hand_size = player_view.ownHandSize
-        except (ValueError, AttributeError):
-            return False
+        common_view = self.commonView
+        hand_size = player_view.ownHandSize
 
         if isinstance(move, Play):
             if move.card < 0 or move.card >= hand_size:

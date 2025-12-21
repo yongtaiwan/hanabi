@@ -51,12 +51,8 @@ class RandomPlayer(BasePlayer):
         Returns:
             True if the move is valid, False otherwise
         """
-        try:
-            common_view = self.commonView
-            hand_size = player_view.ownHandSize
-        except (ValueError, AttributeError):
-            # Can't validate without commonView, assume invalid
-            return False
+        common_view = self.commonView
+        hand_size = player_view.ownHandSize
 
         # Validate Play moves
         if isinstance(move, Play):
@@ -184,33 +180,23 @@ class RandomPlayer(BasePlayer):
         # Only do a final check for hint moves to ensure tokens are still available
         # This is the only case where state can change between validation and selection
         if isinstance(selected, (ColorHint, NumberHint)):
-            try:
-                # Read hintTokens directly from commonView RIGHT NOW
-                tokens = self.commonView.hintTokens
-                if tokens <= 0:
-                    # Tokens are 0 - find another valid move from our list
-                    # Prefer non-play moves if available
-                    other_moves = [m for m in valid_moves if not isinstance(m, (ColorHint, NumberHint))]
-                    if other_moves:
-                        selected = random.choice(other_moves)
-                    else:
-                        # Only plays available, use one of them
-                        play_moves = [m for m in valid_moves if isinstance(m, Play)]
-                        if play_moves:
-                            selected = random.choice(play_moves)
-                        else:
-                            # Last resort
-                            hand_size = player_view.ownHandSize
-                            selected = Play(0) if hand_size > 0 else Play(0)
-            except (ValueError, AttributeError):
-                # Error accessing commonView - fall back to another move from valid list
+            # Read hintTokens directly from commonView RIGHT NOW
+            tokens = self.commonView.hintTokens
+            if tokens <= 0:
+                # Tokens are 0 - find another valid move from our list
+                # Prefer non-play moves if available
                 other_moves = [m for m in valid_moves if not isinstance(m, (ColorHint, NumberHint))]
                 if other_moves:
                     selected = random.choice(other_moves)
                 else:
-                    # Fallback to play
-                    hand_size = player_view.ownHandSize
-                    selected = Play(0) if hand_size > 0 else Play(0)
+                    # Only plays available, use one of them
+                    play_moves = [m for m in valid_moves if isinstance(m, Play)]
+                    if play_moves:
+                        selected = random.choice(play_moves)
+                    else:
+                        # Last resort
+                        hand_size = player_view.ownHandSize
+                        selected = Play(0) if hand_size > 0 else Play(0)
 
         return selected
 
@@ -225,13 +211,8 @@ class RandomPlayer(BasePlayer):
             List of all potential moves (game will validate them)
         """
         # Use the utility function to generate moves
-        try:
-            common_view = self.commonView
-            game_settings = self.gameSettings
-        except (ValueError, AttributeError):
-            # If commonView or gameSettings not set, only return play moves
-            hand_size = player_view.ownHandSize
-            return [Play(card_index) for card_index in range(hand_size)]
+        common_view = self.commonView
+        game_settings = self.gameSettings
 
         return generate_all_valid_moves(
             player_view=player_view,
