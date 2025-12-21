@@ -236,9 +236,23 @@ class GUIGame:
         button_frame.pack(pady=10)
 
         from hanabi.ai import RandomPlayer, CommonSensePlayer
+        from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
+
+        # For interactive play, use reasonable config for MonteCarlo
+        # (slower than fast config but faster than default for better decisions)
+        def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
+            config = MonteCarloConfig(
+                min_think_time_s=1.0,   # 1 second minimum
+                max_think_time_s=2.0,   # 2 seconds maximum
+                min_simulations=5,      # Minimum 5 simulations per move
+                max_simulations=200,   # Cap at 200 simulations
+            )
+            return MonteCarloPlayer(player_index, config=config)
+
         ai_types = [
             ("Random", RandomPlayer),
             ("CommonSense", CommonSensePlayer),
+            ("MonteCarlo", create_monte_carlo_player),
         ]
 
         for name, ai_class in ai_types:
@@ -325,6 +339,9 @@ class GUIGame:
         # Set up move callback for display updates
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
             """Callback to update display when a move is made."""
+            # Update hint tracking in display (independent of player implementations)
+            self._display.update_hints_from_move(player_index, move)
+
             # Format move message
             logger.debug(f"[on_move_callback] player={player_index}, move={move}, old_state={old_state is not None}, new_state={new_state is not None}")
             move_message = self._format_move_message(player_index, move, old_state, new_state)
@@ -344,13 +361,29 @@ class GUIGame:
                 # Only update game state display if game is not finished
                 # (when game ends, display is already correct and we want to preserve hints)
                 if not self._game.isFinished:
-                    self._display.display_game_state(self._game, self._game.currentPlayer)
+                    # In single player mode, always show human player's view (player 0)
+                    # In multi-player mode, show current player's view
+                    display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+                    self._display.display_game_state(self._game, display_player)
 
                 # Display move result in event history with correct turn number
                 # Check if this is an AI player for display purposes
                 is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
                 self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
 
+                # Force immediate GUI update to ensure display refreshes right away
+                # This ensures the display updates immediately after each move, even for fast AI players
+                try:
+                    # Process all pending GUI events to ensure the display updates immediately
+                    # This is critical for ensuring updates are visible when AI players move quickly
+                    self._display.root.update_idletasks()
+                except:
+                    # Ignore errors (e.g., if window was closed)
+                    pass
+
+            # Schedule update immediately (0 = highest priority, runs as soon as possible)
+            # The callback will call update_idletasks() to force immediate processing
+            # This ensures the display refreshes after each move, not just after all AI players move
             self._display.root.after(0, update_display)
 
         self._game = Game.create(team, settings, on_move=on_move_callback)
@@ -407,6 +440,10 @@ class GUIGame:
         self._game_thread = threading.Thread(target=self._run_game, daemon=True)
         self._game_thread.start()
 
+        # Start a periodic GUI update processor to ensure updates are processed immediately
+        # This helps when AI players make moves quickly in sequence
+        self._process_gui_updates()
+
         # Initialize game history
         self._history = GameHistory({
             "num_players": num_players,
@@ -441,7 +478,9 @@ class GUIGame:
         # Home button will serve as abandon game button during play
 
         # Initial display update to show the starting game state
-        self._display.display_game_state(self._game, self._game.currentPlayer)
+        # In single player mode, always show human player's view (player 0)
+        display_player = 0 if one_player_mode else self._game.currentPlayer
+        self._display.display_game_state(self._game, display_player)
 
     # Removed _add_abandon_button - home button now serves this purpose
 
@@ -733,6 +772,22 @@ class GUIGame:
         # Display updates are now handled by the global callback in Game
         self._players[current_player].set_move(move)
 
+    def _process_gui_updates(self):
+        """Periodically process GUI updates to ensure display refreshes immediately."""
+        # Only continue if game is active and not finished
+        if self._game and not self._game.isFinished:
+            # Process any pending GUI events
+            # This ensures display updates are processed even when AI players move quickly
+            try:
+                self._display.root.update_idletasks()
+            except:
+                # Ignore errors (e.g., if window was closed)
+                pass
+            # Schedule next check (every 50ms to ensure responsive updates)
+            # This helps ensure the display refreshes immediately after each move
+            self._display.root.after(50, self._process_gui_updates)
+        # If game is finished or doesn't exist, stop the periodic updates
+
     def _run_game(self):
         """Run the game in a separate thread (non-blocking for GUI)."""
         try:
@@ -759,8 +814,10 @@ class GUIGame:
         if not self._game:
             return
 
-        current_player = self._game.currentPlayer
-        self._display.display_game_state(self._game, current_player)
+        # In single player mode, always show human player's view (player 0)
+        # In multi-player mode, show current player's view
+        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+        self._display.display_game_state(self._game, display_player)
 
     def _on_game_end(self):
         """Handle game end."""
@@ -1136,6 +1193,8 @@ class GUIGame:
 
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
             """Callback to track moves for event history."""
+            # Update hint tracking in display (independent of player implementations)
+            self._display.update_hints_from_move(player_index, move)
             # Store move info for later display in event history
             moves_applied.append((player_index, move, old_state, new_state))
 
@@ -1172,6 +1231,9 @@ class GUIGame:
             # Get state after move
             new_state = self._game.state
 
+            # Update hint tracking (callback may have done this, but ensure it's done)
+            self._display.update_hints_from_move(current_player, move)
+
             # Add move to event history
             move_message = self._format_move_message(current_player, move, old_state, new_state)
             # Check if this is an AI player (based on player class names from history)
@@ -1187,8 +1249,10 @@ class GUIGame:
         self._display.set_show_all_cards(True)  # Show all cards in replay
 
         # Force display update
-        current_player = self._game.currentPlayer
-        self._display.display_game_state(self._game, current_player)
+        # In single player mode, always show human player's view (player 0)
+        # In replay mode, we can show any player, but for consistency use player 0 in single player mode
+        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+        self._display.display_game_state(self._game, display_player)
 
         # Update status label
         if hasattr(self._display, '_status_label'):
@@ -1212,17 +1276,40 @@ class GUIGame:
 
 def play_gui_game():
     """Main entry point for GUI game."""
-    # Enable debug logging if --debug flag is present
     import sys
-    import logging
-    if "--debug" in sys.argv or "-d" in sys.argv:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        logging.getLogger('hanabi.game').setLevel(logging.DEBUG)
-        print("Debug logging enabled. Check console for detailed game state information.")
+    import os
+
+    # Suppress macOS IMK warning (harmless but annoying)
+    # This warning comes from macOS Input Method Kit and doesn't affect functionality
+    if sys.platform == "darwin":  # macOS
+        # Set environment variable to reduce IMK logging
+        os.environ.setdefault("PYTHONUNBUFFERED", "1")
+        # Note: The IMKCFRunLoopWakeUpReliable warning is a known macOS/tkinter issue
+        # It's harmless and comes from system-level logging, so it can't be easily suppressed
+        # without affecting other error messages. It doesn't impact functionality.
+
+        # Enable debug logging if --debug flag is present
+        import logging
+        if "--debug" in sys.argv or "-d" in sys.argv:
+            # Configure logging to output to console (stderr)
+            # Use force=True to override any existing configuration
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%H:%M:%S',
+                force=True,  # Force reconfiguration if already configured
+                stream=sys.stderr  # Explicitly use stderr to ensure visibility
+            )
+            # Set specific loggers to DEBUG level
+            logging.getLogger('hanabi.game').setLevel(logging.DEBUG)
+            logging.getLogger('hanabi.ai.monte_carlo_player').setLevel(logging.DEBUG)
+            # Ensure root logger is at DEBUG
+            logging.root.setLevel(logging.DEBUG)
+            print("Debug logging enabled. Check console for detailed game state information.", file=sys.stderr)
+            print("Monte Carlo player debug logs will show simulation counts and scores per move.", file=sys.stderr)
+            # Test that logging works
+            test_logger = logging.getLogger('hanabi.ai.monte_carlo_player')
+            test_logger.debug("Monte Carlo debug logging is active")
 
     root = tk.Tk()
     # Start maximized

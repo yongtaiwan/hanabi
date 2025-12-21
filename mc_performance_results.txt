@@ -1,0 +1,1225 @@
+[MonteCarloPlayer 0] Current game state:
+  Score: {}
+  Hint tokens: 8, Live tokens: 3
+  Own hand size: 5
+  Candidate moves: 18
+  Play moves: ['Play(0)', 'Play(1)', 'Play(2)', 'Play(3)', 'Play(4)']
+[MonteCarloPlayer 0] Starting evaluation of 18 candidate moves
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(BLUE, 4) from hand ['Card(BLUE, 4)', 'Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(YELLOW, 2)', 'Card(RED, 1)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(GREEN, 1) from hand ['Card(BLUE, 4)', 'Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(YELLOW, 2)', 'Card(RED, 1)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(YELLOW, 3) from hand ['Card(BLUE, 4)', 'Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(YELLOW, 2)', 'Card(RED, 1)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(YELLOW, 2) from hand ['Card(BLUE, 4)', 'Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(YELLOW, 2)', 'Card(RED, 1)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(RED, 1) from hand ['Card(BLUE, 4)', 'Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(YELLOW, 2)', 'Card(RED, 1)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 4
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] Running 16 additional world batches...
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(GREEN, 2) from hand ['Card(GREEN, 2)', 'Card(RED, 2)', 'Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(RED, 2) from hand ['Card(GREEN, 2)', 'Card(RED, 2)', 'Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(WHITE, 4) from hand ['Card(GREEN, 2)', 'Card(RED, 2)', 'Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(RED, 4) from hand ['Card(GREEN, 2)', 'Card(RED, 2)', 'Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(GREEN, 5) from hand ['Card(GREEN, 2)', 'Card(RED, 2)', 'Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(WHITE, 1) from hand ['Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(YELLOW, 4)', 'Card(RED, 5)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 1) from hand ['Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(YELLOW, 4)', 'Card(RED, 5)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(YELLOW, 4) from hand ['Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(YELLOW, 4)', 'Card(RED, 5)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(RED, 5) from hand ['Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(YELLOW, 4)', 'Card(RED, 5)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(GREEN, 2) from hand ['Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(YELLOW, 4)', 'Card(RED, 5)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 6
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(GREEN, 4) from hand ['Card(GREEN, 4)', 'Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(BLUE, 1) from hand ['Card(GREEN, 4)', 'Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(RED, 3) from hand ['Card(GREEN, 4)', 'Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(BLUE, 3) from hand ['Card(GREEN, 4)', 'Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(YELLOW, 1) from hand ['Card(GREEN, 4)', 'Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(GREEN, 3) from hand ['Card(GREEN, 3)', 'Card(WHITE, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)', 'Card(GREEN, 1)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 2) from hand ['Card(GREEN, 3)', 'Card(WHITE, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)', 'Card(GREEN, 1)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(GREEN, 5) from hand ['Card(GREEN, 3)', 'Card(WHITE, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)', 'Card(GREEN, 1)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(RED, 2) from hand ['Card(GREEN, 3)', 'Card(WHITE, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)', 'Card(GREEN, 1)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 3
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(GREEN, 1) from hand ['Card(GREEN, 3)', 'Card(WHITE, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)', 'Card(GREEN, 1)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 4
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(WHITE, 4) from hand ['Card(WHITE, 4)', 'Card(GREEN, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(GREEN, 1) from hand ['Card(WHITE, 4)', 'Card(GREEN, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(GREEN, 2) from hand ['Card(WHITE, 4)', 'Card(GREEN, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(GREEN, 5) from hand ['Card(WHITE, 4)', 'Card(GREEN, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(WHITE, 2) from hand ['Card(WHITE, 4)', 'Card(GREEN, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(GREEN, 2) from hand ['Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 4)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(GREEN, 5) from hand ['Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 4)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(WHITE, 4) from hand ['Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 4)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(BLUE, 4) from hand ['Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 4)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(WHITE, 2) from hand ['Card(GREEN, 2)', 'Card(GREEN, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 4)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(YELLOW, 4) from hand ['Card(YELLOW, 4)', 'Card(WHITE, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 3) from hand ['Card(YELLOW, 4)', 'Card(WHITE, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(YELLOW, 3) from hand ['Card(YELLOW, 4)', 'Card(WHITE, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(GREEN, 5) from hand ['Card(YELLOW, 4)', 'Card(WHITE, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(WHITE, 4) from hand ['Card(YELLOW, 4)', 'Card(WHITE, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 3) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(RED, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(GREEN, 5) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(RED, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(RED, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 4
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(BLUE, 1) from hand ['Card(BLUE, 1)', 'Card(YELLOW, 2)', 'Card(RED, 4)', 'Card(RED, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(YELLOW, 2) from hand ['Card(BLUE, 1)', 'Card(YELLOW, 2)', 'Card(RED, 4)', 'Card(RED, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(RED, 4) from hand ['Card(BLUE, 1)', 'Card(YELLOW, 2)', 'Card(RED, 4)', 'Card(RED, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(RED, 3) from hand ['Card(BLUE, 1)', 'Card(YELLOW, 2)', 'Card(RED, 4)', 'Card(RED, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(YELLOW, 1) from hand ['Card(BLUE, 1)', 'Card(YELLOW, 2)', 'Card(RED, 4)', 'Card(RED, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(GREEN, 5) from hand ['Card(GREEN, 5)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 6
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 1) from hand ['Card(GREEN, 5)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(WHITE, 1) from hand ['Card(GREEN, 5)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 3
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(WHITE, 1) from hand ['Card(GREEN, 5)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 4
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(WHITE, 2) from hand ['Card(GREEN, 5)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 1)', 'Card(WHITE, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(GREEN, 1)', 'Card(WHITE, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 3
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(GREEN, 1)', 'Card(WHITE, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(GREEN, 1) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(GREEN, 1)', 'Card(WHITE, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(WHITE, 2) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(GREEN, 1)', 'Card(WHITE, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(GREEN, 2) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(GREEN, 1)', 'Card(WHITE, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(BLUE, 4) from hand ['Card(BLUE, 4)', 'Card(WHITE, 3)', 'Card(RED, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 3) from hand ['Card(BLUE, 4)', 'Card(WHITE, 3)', 'Card(RED, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(RED, 5) from hand ['Card(BLUE, 4)', 'Card(WHITE, 3)', 'Card(RED, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(GREEN, 1) from hand ['Card(BLUE, 4)', 'Card(WHITE, 3)', 'Card(RED, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(GREEN, 3) from hand ['Card(BLUE, 4)', 'Card(WHITE, 3)', 'Card(RED, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 5
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 4
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(WHITE, 2) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(GREEN, 4) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(RED, 1) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(YELLOW, 2) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(BLUE, 4) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(GREEN, 2)', 'Card(BLUE, 3)', 'Card(GREEN, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(GREEN, 2) from hand ['Card(YELLOW, 2)', 'Card(GREEN, 2)', 'Card(BLUE, 3)', 'Card(GREEN, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(BLUE, 3) from hand ['Card(YELLOW, 2)', 'Card(GREEN, 2)', 'Card(BLUE, 3)', 'Card(GREEN, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(GREEN, 3) from hand ['Card(YELLOW, 2)', 'Card(GREEN, 2)', 'Card(BLUE, 3)', 'Card(GREEN, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(WHITE, 4) from hand ['Card(YELLOW, 2)', 'Card(GREEN, 2)', 'Card(BLUE, 3)', 'Card(GREEN, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 1)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(RED, 4)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(WHITE, 1) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 1)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(RED, 4)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 2
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(GREEN, 4) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 1)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(RED, 4)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(RED, 1) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 1)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(RED, 4)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(RED, 4) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 1)', 'Card(GREEN, 4)', 'Card(RED, 1)', 'Card(RED, 4)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 3
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(WHITE, 4) from hand ['Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(RED, 5)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(RED, 4) from hand ['Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(RED, 5)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(GREEN, 2) from hand ['Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(RED, 5)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(RED, 5)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(RED, 5) from hand ['Card(WHITE, 4)', 'Card(RED, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(RED, 5)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 0] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 0] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 0] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 3
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=2, cards=[3]) -> score: 2
+[MonteCarloPlayer 0] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 0] Evaluated 18 candidate moves
+[MonteCarloPlayer 0] Total simulations: 306 (target: 0.75s, actual: 0.730s)
+[MonteCarloPlayer 0] Simulations per move: pilot=1, additional=16
+[MonteCarloPlayer 0] Move evaluation results:
+  ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) avg=  1.41  sims= 17  total=    24.0
+  Play(card=0)                   avg=  1.35  sims= 17  total=    23.0
+  ColorHint(teammate=1, color=BLUE, cards=[1, 3]) avg=  1.35  sims= 17  total=    23.0
+  NumberHint(teammate=2, number=2, cards=[3]) avg=  1.24  sims= 17  total=    21.0
+  ColorHint(teammate=1, color=WHITE, cards=[2]) avg=  1.12  sims= 17  total=    19.0
+  ColorHint(teammate=2, color=BLUE, cards=[1]) avg=  1.12  sims= 17  total=    19.0
+  Play(card=3)                   avg=  1.06  sims= 17  total=    18.0
+  Play(card=4)                   avg=  1.00  sims= 17  total=    17.0
+  NumberHint(teammate=1, number=5, cards=[2, 3]) avg=  1.00  sims= 17  total=    17.0
+  NumberHint(teammate=2, number=1, cards=[0, 1, 2]) avg=  1.00  sims= 17  total=    17.0
+  Play(card=1)                   avg=  0.94  sims= 17  total=    16.0
+  ColorHint(teammate=1, color=GREEN, cards=[0]) avg=  0.94  sims= 17  total=    16.0
+  ColorHint(teammate=2, color=WHITE, cards=[3]) avg=  0.88  sims= 17  total=    15.0
+  ColorHint(teammate=2, color=RED, cards=[2]) avg=  0.88  sims= 17  total=    15.0
+  NumberHint(teammate=2, number=5, cards=[4]) avg=  0.88  sims= 17  total=    15.0
+  NumberHint(teammate=1, number=3, cards=[0, 1, 4]) avg=  0.82  sims= 17  total=    14.0
+  Play(card=2)                   avg=  0.76  sims= 17  total=    13.0
+  ColorHint(teammate=1, color=RED, cards=[4]) avg=  0.71  sims= 17  total=    12.0
+[MonteCarloPlayer 0] Selected: ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) (avg score: 1.41)
+[MonteCarloPlayer 1] Current game state:
+  Score: {}
+  Hint tokens: 7, Live tokens: 3
+  Own hand size: 5
+  Candidate moves: 24
+  Play moves: ['Play(0)', 'Play(1)', 'Play(2)', 'Play(3)', 'Play(4)']
+[MonteCarloPlayer 1] Starting evaluation of 24 candidate moves
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(WHITE, 4) from hand ['Card(WHITE, 4)', 'Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 3)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(BLUE, 2) from hand ['Card(WHITE, 4)', 'Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 3)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(BLUE, 5) from hand ['Card(WHITE, 4)', 'Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 3)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(WHITE, 4) from hand ['Card(WHITE, 4)', 'Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 3)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(BLUE, 3) from hand ['Card(WHITE, 4)', 'Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(WHITE, 4)', 'Card(BLUE, 3)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 0
+[MonteCarloPlayer 1] Discard(card=0) -> score: 2
+[MonteCarloPlayer 1] Discard(card=1) -> score: 0
+[MonteCarloPlayer 1] Discard(card=2) -> score: 0
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] Running 8 additional world batches...
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(BLUE, 2) from hand ['Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(GREEN, 4)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(BLUE, 5) from hand ['Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(GREEN, 4)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(GREEN, 4) from hand ['Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(GREEN, 4)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(BLUE, 3) from hand ['Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(GREEN, 4)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(YELLOW, 1) from hand ['Card(BLUE, 2)', 'Card(BLUE, 5)', 'Card(GREEN, 4)', 'Card(BLUE, 3)', 'Card(YELLOW, 1)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 1
+[MonteCarloPlayer 1] Discard(card=0) -> score: 1
+[MonteCarloPlayer 1] Discard(card=1) -> score: 1
+[MonteCarloPlayer 1] Discard(card=2) -> score: 1
+[MonteCarloPlayer 1] Discard(card=3) -> score: 0
+[MonteCarloPlayer 1] Discard(card=4) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 6
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 4
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(BLUE, 5) from hand ['Card(BLUE, 5)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(GREEN, 2)', 'Card(RED, 2)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(RED, 2) from hand ['Card(BLUE, 5)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(GREEN, 2)', 'Card(RED, 2)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(GREEN, 5) from hand ['Card(BLUE, 5)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(GREEN, 2)', 'Card(RED, 2)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(GREEN, 2) from hand ['Card(BLUE, 5)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(GREEN, 2)', 'Card(RED, 2)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 3
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(RED, 2) from hand ['Card(BLUE, 5)', 'Card(RED, 2)', 'Card(GREEN, 5)', 'Card(GREEN, 2)', 'Card(RED, 2)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 4
+[MonteCarloPlayer 1] Discard(card=0) -> score: 1
+[MonteCarloPlayer 1] Discard(card=1) -> score: 2
+[MonteCarloPlayer 1] Discard(card=2) -> score: 1
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(YELLOW, 3)', 'Card(GREEN, 2)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(YELLOW, 3)', 'Card(GREEN, 2)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(YELLOW, 3) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(YELLOW, 3)', 'Card(GREEN, 2)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(GREEN, 2) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(YELLOW, 3)', 'Card(GREEN, 2)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(WHITE, 3) from hand ['Card(RED, 4)', 'Card(RED, 4)', 'Card(YELLOW, 3)', 'Card(GREEN, 2)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 0
+[MonteCarloPlayer 1] Discard(card=0) -> score: 0
+[MonteCarloPlayer 1] Discard(card=1) -> score: 0
+[MonteCarloPlayer 1] Discard(card=2) -> score: 1
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 7
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 4
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 3
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(GREEN, 1) from hand ['Card(GREEN, 1)', 'Card(GREEN, 3)', 'Card(YELLOW, 3)', 'Card(RED, 3)', 'Card(BLUE, 2)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(GREEN, 3) from hand ['Card(GREEN, 1)', 'Card(GREEN, 3)', 'Card(YELLOW, 3)', 'Card(RED, 3)', 'Card(BLUE, 2)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(YELLOW, 3) from hand ['Card(GREEN, 1)', 'Card(GREEN, 3)', 'Card(YELLOW, 3)', 'Card(RED, 3)', 'Card(BLUE, 2)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(RED, 3) from hand ['Card(GREEN, 1)', 'Card(GREEN, 3)', 'Card(YELLOW, 3)', 'Card(RED, 3)', 'Card(BLUE, 2)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(BLUE, 2) from hand ['Card(GREEN, 1)', 'Card(GREEN, 3)', 'Card(YELLOW, 3)', 'Card(RED, 3)', 'Card(BLUE, 2)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 2
+[MonteCarloPlayer 1] Discard(card=0) -> score: 1
+[MonteCarloPlayer 1] Discard(card=1) -> score: 2
+[MonteCarloPlayer 1] Discard(card=2) -> score: 1
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 4
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 5
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(BLUE, 2) from hand ['Card(BLUE, 2)', 'Card(GREEN, 4)', 'Card(RED, 2)', 'Card(YELLOW, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(GREEN, 4) from hand ['Card(BLUE, 2)', 'Card(GREEN, 4)', 'Card(RED, 2)', 'Card(YELLOW, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(RED, 2) from hand ['Card(BLUE, 2)', 'Card(GREEN, 4)', 'Card(RED, 2)', 'Card(YELLOW, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(BLUE, 2)', 'Card(GREEN, 4)', 'Card(RED, 2)', 'Card(YELLOW, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(GREEN, 4) from hand ['Card(BLUE, 2)', 'Card(GREEN, 4)', 'Card(RED, 2)', 'Card(YELLOW, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 1
+[MonteCarloPlayer 1] Discard(card=0) -> score: 1
+[MonteCarloPlayer 1] Discard(card=1) -> score: 2
+[MonteCarloPlayer 1] Discard(card=2) -> score: 2
+[MonteCarloPlayer 1] Discard(card=3) -> score: 0
+[MonteCarloPlayer 1] Discard(card=4) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(WHITE, 3) from hand ['Card(WHITE, 3)', 'Card(RED, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 3
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(RED, 3) from hand ['Card(WHITE, 3)', 'Card(RED, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(WHITE, 1) from hand ['Card(WHITE, 3)', 'Card(RED, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(GREEN, 2) from hand ['Card(WHITE, 3)', 'Card(RED, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(GREEN, 2) from hand ['Card(WHITE, 3)', 'Card(RED, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 2)', 'Card(GREEN, 2)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 3
+[MonteCarloPlayer 1] Discard(card=0) -> score: 2
+[MonteCarloPlayer 1] Discard(card=1) -> score: 5
+[MonteCarloPlayer 1] Discard(card=2) -> score: 2
+[MonteCarloPlayer 1] Discard(card=3) -> score: 2
+[MonteCarloPlayer 1] Discard(card=4) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 4
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 4
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(BLUE, 1) from hand ['Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 1)', 'Card(BLUE, 5)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 5
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(RED, 3) from hand ['Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 1)', 'Card(BLUE, 5)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(BLUE, 1) from hand ['Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 1)', 'Card(BLUE, 5)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 4
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(BLUE, 5) from hand ['Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 1)', 'Card(BLUE, 5)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(YELLOW, 2) from hand ['Card(BLUE, 1)', 'Card(RED, 3)', 'Card(BLUE, 1)', 'Card(BLUE, 5)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 2
+[MonteCarloPlayer 1] Discard(card=0) -> score: 1
+[MonteCarloPlayer 1] Discard(card=1) -> score: 1
+[MonteCarloPlayer 1] Discard(card=2) -> score: 1
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 3
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 3
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 4
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=0): playing Card(BLUE, 2) from hand ['Card(BLUE, 2)', 'Card(WHITE, 4)', 'Card(BLUE, 5)', 'Card(BLUE, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 1] Play(card=0) -> score: 2
+[MonteCarloPlayer 1] Evaluating Play(card=1): playing Card(WHITE, 4) from hand ['Card(BLUE, 2)', 'Card(WHITE, 4)', 'Card(BLUE, 5)', 'Card(BLUE, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 1] Play(card=1) -> score: 0
+[MonteCarloPlayer 1] Evaluating Play(card=2): playing Card(BLUE, 5) from hand ['Card(BLUE, 2)', 'Card(WHITE, 4)', 'Card(BLUE, 5)', 'Card(BLUE, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 1] Play(card=2) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=3): playing Card(BLUE, 3) from hand ['Card(BLUE, 2)', 'Card(WHITE, 4)', 'Card(BLUE, 5)', 'Card(BLUE, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 1] Play(card=3) -> score: 1
+[MonteCarloPlayer 1] Evaluating Play(card=4): playing Card(WHITE, 4) from hand ['Card(BLUE, 2)', 'Card(WHITE, 4)', 'Card(BLUE, 5)', 'Card(BLUE, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 1] Play(card=4) -> score: 0
+[MonteCarloPlayer 1] Discard(card=0) -> score: 2
+[MonteCarloPlayer 1] Discard(card=1) -> score: 3
+[MonteCarloPlayer 1] Discard(card=2) -> score: 2
+[MonteCarloPlayer 1] Discard(card=3) -> score: 1
+[MonteCarloPlayer 1] Discard(card=4) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 1] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=3, cards=[0]) -> score: 4
+[MonteCarloPlayer 1] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=WHITE, cards=[3]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=RED, cards=[2]) -> score: 4
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) -> score: 1
+[MonteCarloPlayer 1] ColorHint(teammate=2, color=BLUE, cards=[1]) -> score: 4
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=1, cards=[0, 1, 2]) -> score: 2
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=2, cards=[3]) -> score: 0
+[MonteCarloPlayer 1] NumberHint(teammate=2, number=5, cards=[4]) -> score: 2
+[MonteCarloPlayer 1] Evaluated 24 candidate moves
+[MonteCarloPlayer 1] Total simulations: 216 (target: 0.75s, actual: 0.481s)
+[MonteCarloPlayer 1] Simulations per move: pilot=1, additional=8
+[MonteCarloPlayer 1] Move evaluation results:
+  ColorHint(teammate=0, color=BLUE, cards=[0, 1]) avg=  1.89  sims=  9  total=    17.0
+  NumberHint(teammate=0, number=3, cards=[0]) avg=  1.89  sims=  9  total=    17.0
+  NumberHint(teammate=0, number=5, cards=[2]) avg=  1.89  sims=  9  total=    17.0
+  Play(card=0)                   avg=  1.78  sims=  9  total=    16.0
+  Discard(card=1)                avg=  1.78  sims=  9  total=    16.0
+  ColorHint(teammate=0, color=WHITE, cards=[4]) avg=  1.67  sims=  9  total=    15.0
+  ColorHint(teammate=2, color=WHITE, cards=[3]) avg=  1.67  sims=  9  total=    15.0
+  Play(card=2)                   avg=  1.44  sims=  9  total=    13.0
+  Play(card=4)                   avg=  1.44  sims=  9  total=    13.0
+  ColorHint(teammate=2, color=RED, cards=[2]) avg=  1.44  sims=  9  total=    13.0
+  NumberHint(teammate=2, number=1, cards=[0, 1, 2]) avg=  1.44  sims=  9  total=    13.0
+  NumberHint(teammate=2, number=5, cards=[4]) avg=  1.44  sims=  9  total=    13.0
+  NumberHint(teammate=0, number=1, cards=[3]) avg=  1.33  sims=  9  total=    12.0
+  NumberHint(teammate=0, number=2, cards=[1, 4]) avg=  1.33  sims=  9  total=    12.0
+  Discard(card=0)                avg=  1.22  sims=  9  total=    11.0
+  Discard(card=2)                avg=  1.22  sims=  9  total=    11.0
+  Discard(card=4)                avg=  1.22  sims=  9  total=    11.0
+  NumberHint(teammate=2, number=2, cards=[3]) avg=  1.11  sims=  9  total=    10.0
+  ColorHint(teammate=2, color=YELLOW, cards=[0, 4]) avg=  1.00  sims=  9  total=     9.0
+  Play(card=3)                   avg=  0.89  sims=  9  total=     8.0
+  Discard(card=3)                avg=  0.89  sims=  9  total=     8.0
+  ColorHint(teammate=0, color=RED, cards=[2, 3]) avg=  0.89  sims=  9  total=     8.0
+  ColorHint(teammate=2, color=BLUE, cards=[1]) avg=  0.89  sims=  9  total=     8.0
+  Play(card=1)                   avg=  0.67  sims=  9  total=     6.0
+[MonteCarloPlayer 1] Selected: ColorHint(teammate=0, color=BLUE, cards=[0, 1]) (avg score: 1.89)
+[MonteCarloPlayer 2] Current game state:
+  Score: {}
+  Hint tokens: 6, Live tokens: 3
+  Own hand size: 5
+  Candidate moves: 23
+  Play moves: ['Play(0)', 'Play(1)', 'Play(2)', 'Play(3)', 'Play(4)']
+[MonteCarloPlayer 2] Starting evaluation of 23 candidate moves
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(GREEN, 1) from hand ['Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(WHITE, 2)', 'Card(RED, 2)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(YELLOW, 3) from hand ['Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(WHITE, 2)', 'Card(RED, 2)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(WHITE, 2) from hand ['Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(WHITE, 2)', 'Card(RED, 2)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(RED, 2) from hand ['Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(WHITE, 2)', 'Card(RED, 2)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 2
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(GREEN, 3) from hand ['Card(GREEN, 1)', 'Card(YELLOW, 3)', 'Card(WHITE, 2)', 'Card(RED, 2)', 'Card(GREEN, 3)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 1
+[MonteCarloPlayer 2] Discard(card=1) -> score: 1
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 4
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 3
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 3
+[MonteCarloPlayer 2] Running 36 additional world batches...
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(WHITE, 2) from hand ['Card(WHITE, 2)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(YELLOW, 2) from hand ['Card(WHITE, 2)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(YELLOW, 3) from hand ['Card(WHITE, 2)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(WHITE, 2)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(GREEN, 5) from hand ['Card(WHITE, 2)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 1
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(RED, 3) from hand ['Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(WHITE, 4)', 'Card(WHITE, 1)', 'Card(WHITE, 1)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(YELLOW, 5) from hand ['Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(WHITE, 4)', 'Card(WHITE, 1)', 'Card(WHITE, 1)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(WHITE, 4) from hand ['Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(WHITE, 4)', 'Card(WHITE, 1)', 'Card(WHITE, 1)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(WHITE, 1) from hand ['Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(WHITE, 4)', 'Card(WHITE, 1)', 'Card(WHITE, 1)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 4
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(WHITE, 1) from hand ['Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(WHITE, 4)', 'Card(WHITE, 1)', 'Card(WHITE, 1)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 2
+[MonteCarloPlayer 2] Discard(card=0) -> score: 1
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 5
+[MonteCarloPlayer 2] Discard(card=3) -> score: 2
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(RED, 1) from hand ['Card(RED, 1)', 'Card(WHITE, 4)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(WHITE, 4) from hand ['Card(RED, 1)', 'Card(WHITE, 4)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(YELLOW, 2) from hand ['Card(RED, 1)', 'Card(WHITE, 4)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(RED, 1)', 'Card(WHITE, 4)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(BLUE, 1) from hand ['Card(RED, 1)', 'Card(WHITE, 4)', 'Card(YELLOW, 2)', 'Card(YELLOW, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 1
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(BLUE, 1) from hand ['Card(BLUE, 1)', 'Card(GREEN, 5)', 'Card(BLUE, 4)', 'Card(YELLOW, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 2
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(GREEN, 5) from hand ['Card(BLUE, 1)', 'Card(GREEN, 5)', 'Card(BLUE, 4)', 'Card(YELLOW, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(BLUE, 4) from hand ['Card(BLUE, 1)', 'Card(GREEN, 5)', 'Card(BLUE, 4)', 'Card(YELLOW, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(BLUE, 1)', 'Card(GREEN, 5)', 'Card(BLUE, 4)', 'Card(YELLOW, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(WHITE, 4) from hand ['Card(BLUE, 1)', 'Card(GREEN, 5)', 'Card(BLUE, 4)', 'Card(YELLOW, 3)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 1
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 2
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(YELLOW, 1) from hand ['Card(YELLOW, 1)', 'Card(RED, 1)', 'Card(BLUE, 4)', 'Card(GREEN, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(RED, 1) from hand ['Card(YELLOW, 1)', 'Card(RED, 1)', 'Card(BLUE, 4)', 'Card(GREEN, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(BLUE, 4) from hand ['Card(YELLOW, 1)', 'Card(RED, 1)', 'Card(BLUE, 4)', 'Card(GREEN, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 3) from hand ['Card(YELLOW, 1)', 'Card(RED, 1)', 'Card(BLUE, 4)', 'Card(GREEN, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(GREEN, 4) from hand ['Card(YELLOW, 1)', 'Card(RED, 1)', 'Card(BLUE, 4)', 'Card(GREEN, 3)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 1
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(GREEN, 1)', 'Card(BLUE, 4)', 'Card(WHITE, 4)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(GREEN, 1) from hand ['Card(RED, 4)', 'Card(GREEN, 1)', 'Card(BLUE, 4)', 'Card(WHITE, 4)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(BLUE, 4) from hand ['Card(RED, 4)', 'Card(GREEN, 1)', 'Card(BLUE, 4)', 'Card(WHITE, 4)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(WHITE, 4) from hand ['Card(RED, 4)', 'Card(GREEN, 1)', 'Card(BLUE, 4)', 'Card(WHITE, 4)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(YELLOW, 5) from hand ['Card(RED, 4)', 'Card(GREEN, 1)', 'Card(BLUE, 4)', 'Card(WHITE, 4)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 2
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 1
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 3
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(GREEN, 5) from hand ['Card(GREEN, 5)', 'Card(GREEN, 3)', 'Card(BLUE, 2)', 'Card(GREEN, 1)', 'Card(RED, 2)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(GREEN, 3) from hand ['Card(GREEN, 5)', 'Card(GREEN, 3)', 'Card(BLUE, 2)', 'Card(GREEN, 1)', 'Card(RED, 2)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 2
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(BLUE, 2) from hand ['Card(GREEN, 5)', 'Card(GREEN, 3)', 'Card(BLUE, 2)', 'Card(GREEN, 1)', 'Card(RED, 2)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 1) from hand ['Card(GREEN, 5)', 'Card(GREEN, 3)', 'Card(BLUE, 2)', 'Card(GREEN, 1)', 'Card(RED, 2)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(RED, 2) from hand ['Card(GREEN, 5)', 'Card(GREEN, 3)', 'Card(BLUE, 2)', 'Card(GREEN, 1)', 'Card(RED, 2)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 1
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 5
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 6
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(RED, 4) from hand ['Card(RED, 4)', 'Card(YELLOW, 4)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(YELLOW, 4) from hand ['Card(RED, 4)', 'Card(YELLOW, 4)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(YELLOW, 5) from hand ['Card(RED, 4)', 'Card(YELLOW, 4)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 1) from hand ['Card(RED, 4)', 'Card(YELLOW, 4)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 2
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(GREEN, 5) from hand ['Card(RED, 4)', 'Card(YELLOW, 4)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(GREEN, 5)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 3
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(RED, 1) from hand ['Card(RED, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 3)', 'Card(WHITE, 4)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 8
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(BLUE, 1) from hand ['Card(RED, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 3)', 'Card(WHITE, 4)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(GREEN, 3) from hand ['Card(RED, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 3)', 'Card(WHITE, 4)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(WHITE, 4) from hand ['Card(RED, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 3)', 'Card(WHITE, 4)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(WHITE, 4) from hand ['Card(RED, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 3)', 'Card(WHITE, 4)', 'Card(WHITE, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 1
+[MonteCarloPlayer 2] Discard(card=2) -> score: 2
+[MonteCarloPlayer 2] Discard(card=3) -> score: 1
+[MonteCarloPlayer 2] Discard(card=4) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(WHITE, 2) from hand ['Card(WHITE, 2)', 'Card(RED, 3)', 'Card(GREEN, 3)', 'Card(BLUE, 4)', 'Card(YELLOW, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(RED, 3) from hand ['Card(WHITE, 2)', 'Card(RED, 3)', 'Card(GREEN, 3)', 'Card(BLUE, 4)', 'Card(YELLOW, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(GREEN, 3) from hand ['Card(WHITE, 2)', 'Card(RED, 3)', 'Card(GREEN, 3)', 'Card(BLUE, 4)', 'Card(YELLOW, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(BLUE, 4) from hand ['Card(WHITE, 2)', 'Card(RED, 3)', 'Card(GREEN, 3)', 'Card(BLUE, 4)', 'Card(YELLOW, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(YELLOW, 4) from hand ['Card(WHITE, 2)', 'Card(RED, 3)', 'Card(GREEN, 3)', 'Card(BLUE, 4)', 'Card(YELLOW, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(GREEN, 4)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(WHITE, 3) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(GREEN, 4)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(GREEN, 4) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(GREEN, 4)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(GREEN, 4)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(BLUE, 4) from hand ['Card(YELLOW, 2)', 'Card(WHITE, 3)', 'Card(GREEN, 4)', 'Card(YELLOW, 2)', 'Card(BLUE, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 2
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(WHITE, 2) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(GREEN, 4) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(GREEN, 2) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(YELLOW, 3) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(YELLOW, 5) from hand ['Card(WHITE, 2)', 'Card(GREEN, 4)', 'Card(GREEN, 2)', 'Card(YELLOW, 3)', 'Card(YELLOW, 5)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 2
+[MonteCarloPlayer 2] Discard(card=1) -> score: 2
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 1
+[MonteCarloPlayer 2] Discard(card=4) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(YELLOW, 5) from hand ['Card(YELLOW, 5)', 'Card(WHITE, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 1)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(WHITE, 1) from hand ['Card(YELLOW, 5)', 'Card(WHITE, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 1)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(BLUE, 1) from hand ['Card(YELLOW, 5)', 'Card(WHITE, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 1)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 3
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 1) from hand ['Card(YELLOW, 5)', 'Card(WHITE, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 1)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 5
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(WHITE, 3) from hand ['Card(YELLOW, 5)', 'Card(WHITE, 1)', 'Card(BLUE, 1)', 'Card(GREEN, 1)', 'Card(WHITE, 3)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 1
+[MonteCarloPlayer 2] Discard(card=1) -> score: 2
+[MonteCarloPlayer 2] Discard(card=2) -> score: 4
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(YELLOW, 3) from hand ['Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 5)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(YELLOW, 3) from hand ['Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 5)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(WHITE, 1) from hand ['Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 5)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 5) from hand ['Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 5)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(GREEN, 4) from hand ['Card(YELLOW, 3)', 'Card(YELLOW, 3)', 'Card(WHITE, 1)', 'Card(GREEN, 5)', 'Card(GREEN, 4)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 0
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 1
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 0
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=0): playing Card(GREEN, 2) from hand ['Card(GREEN, 2)', 'Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 2] Play(card=0) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=1): playing Card(RED, 3) from hand ['Card(GREEN, 2)', 'Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 2] Play(card=1) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=2): playing Card(YELLOW, 5) from hand ['Card(GREEN, 2)', 'Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 2] Play(card=2) -> score: 0
+[MonteCarloPlayer 2] Evaluating Play(card=3): playing Card(GREEN, 1) from hand ['Card(GREEN, 2)', 'Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 2] Play(card=3) -> score: 1
+[MonteCarloPlayer 2] Evaluating Play(card=4): playing Card(YELLOW, 2) from hand ['Card(GREEN, 2)', 'Card(RED, 3)', 'Card(YELLOW, 5)', 'Card(GREEN, 1)', 'Card(YELLOW, 2)']
+[MonteCarloPlayer 2] Play(card=4) -> score: 1
+[MonteCarloPlayer 2] Discard(card=0) -> score: 0
+[MonteCarloPlayer 2] Discard(card=1) -> score: 0
+[MonteCarloPlayer 2] Discard(card=2) -> score: 0
+[MonteCarloPlayer 2] Discard(card=3) -> score: 1
+[MonteCarloPlayer 2] Discard(card=4) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=WHITE, cards=[4]) -> score: 3
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=RED, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=0, color=BLUE, cards=[0, 1]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=1, cards=[3]) -> score: 2
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=2, cards=[1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=3, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] NumberHint(teammate=0, number=5, cards=[2]) -> score: 2
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=WHITE, cards=[2]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=RED, cards=[4]) -> score: 0
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=GREEN, cards=[0]) -> score: 1
+[MonteCarloPlayer 2] ColorHint(teammate=1, color=BLUE, cards=[1, 3]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=3, cards=[0, 1, 4]) -> score: 0
+[MonteCarloPlayer 2] NumberHint(teammate=1, number=5, cards=[2, 3]) -> score: 0
+[MonteCarloPlayer 2] Stopped early at world 15/36 (exceeded max time: 1.021s >= 1.000s)
+[MonteCarloPlayer 2] Evaluated 23 candidate moves
+[MonteCarloPlayer 2] Total simulations: 368 (target: 0.75s, actual: 1.021s)
+[MonteCarloPlayer 2] Simulations per move: pilot=1, additional=36
+[MonteCarloPlayer 2] Move evaluation results:
+  Play(card=3)                   avg=  1.06  sims= 16  total=    17.0
+  ColorHint(teammate=0, color=WHITE, cards=[4]) avg=  1.00  sims= 16  total=    16.0
+  Discard(card=2)                avg=  0.88  sims= 16  total=    14.0
+  ColorHint(teammate=0, color=RED, cards=[2, 3]) avg=  0.88  sims= 16  total=    14.0
+  Play(card=0)                   avg=  0.81  sims= 16  total=    13.0
+  Discard(card=4)                avg=  0.81  sims= 16  total=    13.0
+  NumberHint(teammate=0, number=1, cards=[3]) avg=  0.81  sims= 16  total=    13.0
+  NumberHint(teammate=0, number=3, cards=[0]) avg=  0.81  sims= 16  total=    13.0
+  Discard(card=3)                avg=  0.75  sims= 16  total=    12.0
+  NumberHint(teammate=1, number=3, cards=[0, 1, 4]) avg=  0.75  sims= 16  total=    12.0
+  ColorHint(teammate=1, color=RED, cards=[4]) avg=  0.69  sims= 16  total=    11.0
+  ColorHint(teammate=1, color=GREEN, cards=[0]) avg=  0.62  sims= 16  total=    10.0
+  ColorHint(teammate=1, color=BLUE, cards=[1, 3]) avg=  0.62  sims= 16  total=    10.0
+  Play(card=1)                   avg=  0.56  sims= 16  total=     9.0
+  NumberHint(teammate=0, number=2, cards=[1, 4]) avg=  0.56  sims= 16  total=     9.0
+  Play(card=4)                   avg=  0.50  sims= 16  total=     8.0
+  Discard(card=1)                avg=  0.44  sims= 16  total=     7.0
+  Discard(card=0)                avg=  0.38  sims= 16  total=     6.0
+  ColorHint(teammate=0, color=BLUE, cards=[0, 1]) avg=  0.38  sims= 16  total=     6.0
+  NumberHint(teammate=0, number=5, cards=[2]) avg=  0.38  sims= 16  total=     6.0
+  ColorHint(teammate=1, color=WHITE, cards=[2]) avg=  0.38  sims= 16  total=     6.0
+  NumberHint(teammate=1, number=5, cards=[2, 3]) avg=  0.38  sims= 16  total=     6.0
+  Play(card=2)                   avg=  0.31  sims= 16  total=     5.0
+[MonteCarloPlayer 2] Selected: Play(card=3) (avg score: 1.06)
+[MonteCarloPlayer 0] Current game state:
+  Score: {}
+  Hint tokens: 6, Live tokens: 2
+  Own hand size: 5
+  Candidate moves: 22
+  Play moves: ['Play(0)', 'Play(1)', 'Play(2)', 'Play(3)', 'Play(4)']
+[MonteCarloPlayer 0] Starting evaluation of 22 candidate moves
+[MonteCarloPlayer 0] Evaluating Play(card=0): playing Card(YELLOW, 2) from hand ['Card(YELLOW, 2)', 'Card(RED, 5)', 'Card(YELLOW, 1)', 'Card(WHITE, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 0] Play(card=0) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=1): playing Card(RED, 5) from hand ['Card(YELLOW, 2)', 'Card(RED, 5)', 'Card(YELLOW, 1)', 'Card(WHITE, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 0] Play(card=1) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=2): playing Card(YELLOW, 1) from hand ['Card(YELLOW, 2)', 'Card(RED, 5)', 'Card(YELLOW, 1)', 'Card(WHITE, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 0] Play(card=2) -> score: 1
+[MonteCarloPlayer 0] Evaluating Play(card=3): playing Card(WHITE, 3) from hand ['Card(YELLOW, 2)', 'Card(RED, 5)', 'Card(YELLOW, 1)', 'Card(WHITE, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 0] Play(card=3) -> score: 0
+[MonteCarloPlayer 0] Evaluating Play(card=4): playing Card(BLUE, 1) from hand ['Card(YELLOW, 2)', 'Card(RED, 5)', 'Card(YELLOW, 1)', 'Card(WHITE, 3)', 'Card(BLUE, 1)']
+[MonteCarloPlayer 0] Play(card=4) -> score: 2
+[MonteCarloPlayer 0] Discard(card=0) -> score: 1
+[MonteCarloPlayer 0] Discard(card=1) -> score: 1
+[MonteCarloPlayer 0] Discard(card=2) -> score: 2

@@ -17,7 +17,7 @@ from datetime import datetime
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
 from hanabi.core.game import Game
-from hanabi.core.moves import ColorHint, NumberHint
+from hanabi.core.moves import Move, ColorHint, NumberHint
 
 
 class GUIDisplay:
@@ -78,6 +78,10 @@ class GUIDisplay:
         self._live_turn_numbers: List[int] = []  # Track turn numbers for each move in live play
         self._history_listbox: Optional[tk.Listbox] = None
         self._history_scrollbar: Optional[ttk.Scrollbar] = None
+
+        # Hint tracking (independent of player implementations)
+        # Structure: player_index -> card_index -> {"color": Color or None, "number": Number or None}
+        self._hints: Dict[int, Dict[int, Dict[str, Optional[Color | Number]]]] = {}
 
         self._setup_ui()
 
@@ -1192,12 +1196,9 @@ class GUIDisplay:
                 card_x = start_x + card_idx * (card_width + spacing)
                 card_y = y
 
-                # Get hints for this card (for all players, including current player)
-                from hanabi.core.player import HintTrackingPlayer
-                player = self._game.team.players[i]
-                # In replay mode, still get hints to show dots even when showing all cards
-                hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
-                card_hints = hints.get(card_idx, {})
+                # Get hints for this card from GUI's independent hint tracking
+                player_hints = self._hints.get(i, {})
+                card_hints = player_hints.get(card_idx, {})
 
                 # Check if card actually has hints (color or number is not None)
                 has_hints = bool(card_hints and (card_hints.get("color") is not None or card_hints.get("number") is not None))
@@ -1663,3 +1664,59 @@ class GUIDisplay:
             self._history_text.config(state=tk.DISABLED)
         self._event_history.clear()
         self._live_turn_numbers.clear()
+        self._hints.clear()  # Clear hint tracking
+
+    def update_hints_from_move(self, player_index: int, move: Move) -> None:
+        """
+        Update hint tracking based on a move.
+        This is called independently of player implementations.
+
+        Args:
+            player_index: Index of the player who made the move
+            move: The move that was made
+        """
+        from hanabi.core.moves import ColorHint, NumberHint, CardMove
+
+        if isinstance(move, (ColorHint, NumberHint)):
+            # A hint was given to a teammate
+            teammate_idx = move.teammate
+
+            # Initialize hints dict for this player if needed
+            if teammate_idx not in self._hints:
+                self._hints[teammate_idx] = {}
+
+            # Update hints for each card in the hint
+            for card_idx in move.cards:
+                if card_idx not in self._hints[teammate_idx]:
+                    self._hints[teammate_idx][card_idx] = {"color": None, "number": None}
+
+                if isinstance(move, ColorHint):
+                    self._hints[teammate_idx][card_idx]["color"] = move.color
+                elif isinstance(move, NumberHint):
+                    self._hints[teammate_idx][card_idx]["number"] = move.number
+
+        elif isinstance(move, CardMove):
+            # A card was played or discarded - shift hint indices
+            card_index = move.card
+
+            # Remove hints for the card being played/discarded
+            if player_index in self._hints and card_index in self._hints[player_index]:
+                del self._hints[player_index][card_index]
+
+            # Shift remaining hints to new indices
+            # When a card is played/discarded:
+            # 1. The card at card_index is removed (cards after shift left by 1)
+            # 2. A new card is drawn and inserted at position 0 (all cards shift right by 1)
+            # Net effect:
+            # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
+            # - Cards at indices > card_index: no net change (left by 1 from removal, right by 1 from insertion)
+            if player_index in self._hints:
+                new_hints = {}
+                for old_idx, hint_data in self._hints[player_index].items():
+                    if old_idx < card_index:
+                        # Card shifted right by 1 due to new card insertion at position 0
+                        new_hints[old_idx + 1] = hint_data
+                    elif old_idx > card_index:
+                        # Card shifted left by 1 from removal, then right by 1 from insertion = no net change
+                        new_hints[old_idx] = hint_data
+                self._hints[player_index] = new_hints
