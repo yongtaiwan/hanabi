@@ -517,11 +517,18 @@ class MonteCarloPlayer(HintTrackingPlayer):
         if estimated_total_time > self._config.max_think_time_s and total_sims_per_move >= self._config.min_simulations:
             # We've met minimum simulations, so cap to max time
             time_available = self._config.max_think_time_s - current_elapsed
-            assert time_available > 0, f"Time available should be > 0, got {time_available}"
-            assert t_per_eval > 0, f"Time per evaluation should be > 0, got {t_per_eval}"
-            additional_worlds = max(0, int(time_available / (t_per_eval * num_moves)))
-            # But still ensure we meet minimum (may exceed max time if necessary)
-            additional_worlds = max(additional_worlds, min_worlds_needed)
+            # If we've already exceeded max time, set time_available to 0
+            if time_available <= 0:
+                # Already exceeded max time, but we've met min simulations
+                # Set additional_worlds to 0 (we'll still have the pilot simulation)
+                additional_worlds = 0
+            else:
+                assert t_per_eval > 0, f"Time per evaluation should be > 0, got {t_per_eval}"
+                additional_worlds = max(0, int(time_available / (t_per_eval * num_moves)))
+                # But still ensure we meet minimum (may exceed max time if necessary)
+                # However, if we've already exceeded max time, don't force more worlds
+                if current_elapsed < self._config.max_think_time_s:
+                    additional_worlds = max(additional_worlds, min_worlds_needed)
 
         # --- Additional worlds ---
         if additional_worlds > 0:
