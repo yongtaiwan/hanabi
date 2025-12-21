@@ -238,15 +238,15 @@ class GUIGame:
         from hanabi.ai import RandomPlayer, CommonSensePlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
-        # For interactive play, use reasonable config for MonteCarlo
-        # (slower than fast config but faster than default for better decisions)
-        # Use reasonable thinking time for interactive play
+        # For interactive GUI play, use faster config for responsive gameplay
+        # Use shorter thinking time (few seconds up to 5 seconds) for better UX
+        # Use very low min_simulations to ensure time limits are respected
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(
-                min_think_time_s=4.0,   # 4 seconds minimum
-                max_think_time_s=6.0,   # 6 seconds maximum
-                min_simulations=20,     # Minimum 20 simulations per move
-                max_simulations=200,    # Cap at 200 simulations
+                min_think_time_s=0.5,   # 0.5 second minimum (very short)
+                max_think_time_s=5.0,   # 5 seconds maximum (strict limit)
+                min_simulations=1,      # Minimum 1 simulation per move (very low to respect time limits)
+                max_simulations=30,     # Cap at 30 simulations (reduced for speed)
                 rollout_mc_steps=1,     # Use MC evaluation for first step in rollout
             )
             return MonteCarloPlayer(player_index, config=config)
@@ -387,6 +387,59 @@ class GUIGame:
             # The callback will call update_idletasks() to force immediate processing
             # This ensures the display refreshes after each move, not just after all AI players move
             self._display.root.after(0, update_display)
+
+            # Print move message and decision summary to terminal
+            # Format: "[HH:MM:SS T##] P1 plays red 1." (same as Game Events, with color coding)
+            from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
+            from hanabi.console.console_display import ConsoleDisplay, Colors
+            from datetime import datetime
+
+            # Create a temporary console display for colorization (or use simple colorization)
+            temp_display = ConsoleDisplay(use_colors=True)
+
+            # Get timestamp and turn number
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            turn_number = move_turn_number  # Already calculated above
+
+            # Format move message
+            if isinstance(move, Play):
+                state = old_state if old_state else self._game.state
+                if state and player_index < len(state.playerHands):
+                    card = state.playerHands[player_index].cards[move.card]
+                    move_msg = f"P{player_index + 1} plays {card.color.name.lower()} {card.number.value}."
+                else:
+                    move_msg = f"P{player_index + 1} plays card {move.card + 1}."
+            elif isinstance(move, Discard):
+                state = old_state if old_state else self._game.state
+                if state and player_index < len(state.playerHands):
+                    card = state.playerHands[player_index].cards[move.card]
+                    move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
+                else:
+                    move_msg = f"P{player_index + 1} discards card {move.card + 1}."
+            elif isinstance(move, ColorHint):
+                indices_str = ", ".join(str(c + 1) for c in move.cards)
+                move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
+            elif isinstance(move, NumberHint):
+                indices_str = ", ".join(str(c + 1) for c in move.cards)
+                move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.number.value} at {indices_str}"
+            else:
+                move_msg = f"P{player_index + 1} makes move: {move}"
+
+            # Format with timestamp and turn number: "[HH:MM:SS T##] message"
+            formatted_msg = f"[{timestamp} T{turn_number:02d}] {move_msg}"
+
+            # Colorize and print the message
+            colored_msg = temp_display._colorize_message(formatted_msg)
+            print(colored_msg)
+
+            # Print decision summary
+            player = self._game.team.players[player_index]
+            if hasattr(player, 'get_decision_summary'):
+                summary = player.get_decision_summary()
+                if summary:
+                    # Get player class name for display
+                    player_class_name = player.__class__.__name__
+                    print(f"{player_class_name}: {summary}")
 
         self._game = Game.create(team, settings, on_move=on_move_callback)
 

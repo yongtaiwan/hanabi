@@ -227,6 +227,15 @@ class HumanPlayer(HintTrackingPlayer):
         """
         pass
 
+    def get_decision_summary(self) -> Optional[str]:
+        """
+        Get a summary of the last decision made.
+
+        Returns:
+            "human decision" for human players
+        """
+        return "human decision"
+
 class StrategyAlphaPlayer(BasePlayer):
     """Strategy player implementing Alpha strategy."""
 

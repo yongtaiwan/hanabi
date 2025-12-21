@@ -36,13 +36,13 @@ class MonteCarloConfig:
 
     def __init__(
         self,
-        min_think_time_s: float = 4.0,
-        max_think_time_s: float = 6.0,
+        min_think_time_s: float = 1.0,
+        max_think_time_s: float = 5.0,
         min_simulations: int = 10,
         max_simulations: int = 300,
         rollout_mc_steps: int = 1,
         rng_seed: Optional[int] = None,
-        verbose: bool = True,
+        verbose: bool = False,
     ):
         """
         Initialize Monte Carlo configuration.
@@ -54,7 +54,7 @@ class MonteCarloConfig:
             max_simulations: Maximum number of simulations per move
             rollout_mc_steps: Number of steps in rollout to use MC evaluation (0 = pure random)
             rng_seed: Random seed for reproducibility (None for random)
-            verbose: Whether to print debug output to stderr (default: True)
+            verbose: Whether to print debug output to stderr (default: False)
         """
         self.min_think_time_s = min_think_time_s
         self.max_think_time_s = max_think_time_s
@@ -385,6 +385,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
         self._config = config or MonteCarloConfig()
         self._rng = random.Random(self._config.rng_seed)
         self._verbose = self._config.verbose
+        self._last_decision_summary: Optional[str] = None
 
     def play(self, player_view: PlayerView) -> Move:
         """
@@ -548,27 +549,49 @@ class MonteCarloPlayer(HintTrackingPlayer):
             if self._verbose:
                 print(debug_msg, file=sys.stderr)
         for world_num in range(additional_worlds):
-            self._run_one_world_batch(player_view, moves, scores_sum, counts)
-
-            # Check if we've exceeded max time during execution
-            # BUT: if we haven't met min_simulations yet, continue even if we exceed max time
+            # Check time before starting each batch - don't start if we're already at or near max time
             current_elapsed = time.perf_counter() - start
-            current_sims_per_move = 1 + (world_num + 1)  # pilot + completed additional worlds
-            if current_elapsed >= self._config.max_think_time_s and current_sims_per_move >= self._config.min_simulations:
-                debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped early at world {world_num + 1}/{additional_worlds} "
-                            f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
-                            f"but met min_simulations: {current_sims_per_move} >= {self._config.min_simulations})")
+            if current_elapsed >= self._config.max_think_time_s * 0.9:  # Stop if we're at 90% of max time
+                debug_msg = (f"[MonteCarloPlayer {self._player_index}] Skipping remaining batches "
+                            f"(already at {current_elapsed:.3f}s, approaching max time {self._config.max_think_time_s:.3f}s)")
                 logger.debug(debug_msg)
                 if self._verbose:
                     print(debug_msg, file=sys.stderr)
                 break
-            elif current_elapsed >= self._config.max_think_time_s:
-                # Exceeded max time but haven't met minimum - continue anyway
-                debug_msg = (f"[MonteCarloPlayer {self._player_index}] Exceeded max time ({current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s) "
-                            f"but continuing to meet min_simulations ({current_sims_per_move} < {self._config.min_simulations})")
-                logger.debug(debug_msg)
-                if self._verbose:
-                    print(debug_msg, file=sys.stderr)
+
+            self._run_one_world_batch(player_view, moves, scores_sum, counts)
+
+            # Check if we've exceeded max time during execution
+            # For GUI mode with low min_simulations, strictly enforce max time
+            current_elapsed = time.perf_counter() - start
+            current_sims_per_move = 1 + (world_num + 1)  # pilot + completed additional worlds
+
+            # Strictly enforce max time - stop immediately if exceeded
+            if current_elapsed >= self._config.max_think_time_s:
+                if current_sims_per_move >= self._config.min_simulations:
+                    # Met minimum and exceeded max time - stop
+                    debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped early at world {world_num + 1}/{additional_worlds} "
+                                f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
+                                f"met min_simulations: {current_sims_per_move} >= {self._config.min_simulations})")
+                    logger.debug(debug_msg)
+                    if self._verbose:
+                        print(debug_msg, file=sys.stderr)
+                    break
+                else:
+                    # Haven't met minimum but exceeded max time
+                    # Only continue if min_simulations is very low (1-2) and we're close
+                    if self._config.min_simulations <= 2 and current_sims_per_move >= self._config.min_simulations - 1:
+                        # Very close to minimum, allow one more iteration
+                        continue
+                    else:
+                        # Stop even if we haven't met minimum - time limit is strict
+                        debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped at world {world_num + 1}/{additional_worlds} "
+                                    f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
+                                    f"simulations: {current_sims_per_move} < {self._config.min_simulations})")
+                        logger.debug(debug_msg)
+                        if self._verbose:
+                            print(debug_msg, file=sys.stderr)
+                        break
 
         # --- Choose move with best average score ---
         # Pure Monte Carlo: select move with highest average score from simulations
@@ -623,7 +646,47 @@ class MonteCarloPlayer(HintTrackingPlayer):
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
+        # Store decision summary: top 3 moves with their avg scores
+        top_3 = sorted(move_stats, key=lambda x: x[1], reverse=True)[:3]
+        summary_parts = []
+        for move, avg_score, sim_count, total_score in top_3:
+            move_str = self._format_move_concise(move)
+            summary_parts.append(f"{move_str} (avg: {avg_score:.2f})")
+        self._last_decision_summary = ", ".join(summary_parts)
+
         return selected_move
+
+    def _format_move_concise(self, move: Move) -> str:
+        """
+        Format a move in concise format for decision summary.
+
+        Args:
+            move: The move to format
+
+        Returns:
+            Concise string representation (e.g., "play 0", "discard 1", "hint P2 1", "hint P3 blue")
+        """
+        from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
+
+        if isinstance(move, Play):
+            return f"play {move.card}"
+        elif isinstance(move, Discard):
+            return f"discard {move.card}"
+        elif isinstance(move, ColorHint):
+            return f"hint P{move.teammate + 1} {move.color.name.lower()}"
+        elif isinstance(move, NumberHint):
+            return f"hint P{move.teammate + 1} {move.number.value}"
+        else:
+            return str(move)
+
+    def get_decision_summary(self) -> Optional[str]:
+        """
+        Get a summary of the last decision made (top 3 actions and their avg scores).
+
+        Returns:
+            Summary string describing top 3 moves with scores, or None if no decision made yet
+        """
+        return self._last_decision_summary
 
     def _run_one_world_batch(
         self,

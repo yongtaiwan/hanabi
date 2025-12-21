@@ -55,6 +55,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         super().__init__(player_index)
         self._seen_cards: Set[Card] = set()
         self._all_possible_cards: List[Card] = []
+        self._last_decision_summary: Optional[str] = None
         # Track hints we received to infer negative information
         self._received_hints: List[Move] = []
         # Track hints given to teammates: teammate_idx -> list of hints they've received
@@ -141,8 +142,18 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Start with all cards, then filter
         possible = all_cards.copy()
 
-        # Remove seen cards
-        possible -= self._seen_cards
+        # Count how many of each card we've seen
+        from collections import Counter
+        seen_card_counts = Counter(self._seen_cards)
+        all_card_counts = Counter(self._get_all_possible_cards())
+
+        # Remove cards only if we've seen ALL copies of that card
+        # (e.g., if there are 3 white 1s and we've seen 3, we can't have any more)
+        for card in list(possible):
+            if card in seen_card_counts:
+                if seen_card_counts[card] >= all_card_counts[card]:
+                    # We've seen all copies of this card, remove it
+                    possible.discard(card)
 
         # Apply positive hints (what we know this card IS)
         if card_hints.get("color") is not None:
@@ -515,10 +526,14 @@ class CommonSensePlayer(HintTrackingPlayer):
             return Play(0) if hand_size > 0 else Play(0)
 
         # Rule 1: Never play a card that could lose a life
+        # EXCEPTION: If a card is definitely playable, it's always safe (all possible cards are playable)
         safe_play_moves = []
         for move in valid_moves:
             if isinstance(move, Play):
-                if not self._could_lose_life(move.card, player_view):
+                # If definitely playable, it's always safe (all possible cards are playable)
+                if self._is_card_definitely_playable(move.card, player_view):
+                    safe_play_moves.append(move)
+                elif not self._could_lose_life(move.card, player_view):
                     safe_play_moves.append(move)
 
         # Rule 2: Play a 5 to finish a suit (highest priority)
@@ -528,6 +543,7 @@ class CommonSensePlayer(HintTrackingPlayer):
                 finishing_five_moves.append(move)
 
         if finishing_five_moves:
+            self._last_decision_summary = "Play 5 to finish suit (highest priority)"
             return finishing_five_moves[0]  # Pick first one
 
         # Rule 3: Play a playable card
@@ -544,9 +560,11 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         # Prioritize hinted cards
         if hinted_playable_moves:
+            self._last_decision_summary = "Play hinted playable card"
             return hinted_playable_moves[0]  # Pick first one
 
         if playable_moves:
+            self._last_decision_summary = "Play safe playable card"
             return playable_moves[0]  # Pick first one
 
         # Rule 4: Hint that identifies most new playable cards, tiebreak by player playing soon
@@ -582,6 +600,11 @@ class CommonSensePlayer(HintTrackingPlayer):
                         best_hint = hint
 
             if best_hint:
+                playable_count = self._count_new_playable_cards_from_hint(best_hint, player_view)
+                if isinstance(best_hint, ColorHint):
+                    self._last_decision_summary = f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} (identifies {playable_count} new playable cards)"
+                else:
+                    self._last_decision_summary = f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (identifies {playable_count} new playable cards)"
                 return best_hint
 
         # Rule 5: Discard least risky card, tiebreak by oldest
@@ -619,6 +642,7 @@ class CommonSensePlayer(HintTrackingPlayer):
                         best_discard = discard
 
                 if best_discard:
+                    self._last_decision_summary = f"Discard card at position {best_discard.card + 1} (least risky, oldest)"
                     return best_discard
 
         # Rule 6: Give hint that covers most cards, tiebreak by player playing soon
@@ -651,9 +675,15 @@ class CommonSensePlayer(HintTrackingPlayer):
                         best_hint = hint
 
             if best_hint:
+                card_count = self._get_hint_card_count(best_hint, player_view)
+                if isinstance(best_hint, ColorHint):
+                    self._last_decision_summary = f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} (covers {card_count} cards)"
+                else:
+                    self._last_decision_summary = f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (covers {card_count} cards)"
                 return best_hint
 
         # Fallback: return first valid move
+        self._last_decision_summary = "Fallback: first valid move"
         return valid_moves[0]
 
     def _is_move_valid(self, move: Move, player_view: PlayerView) -> bool:
@@ -731,4 +761,13 @@ class CommonSensePlayer(HintTrackingPlayer):
             return True
 
         return False
+
+    def get_decision_summary(self) -> Optional[str]:
+        """
+        Get a summary of the last decision made.
+
+        Returns:
+            Summary string describing the reasoning, or None if no decision made yet
+        """
+        return self._last_decision_summary
 

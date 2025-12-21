@@ -142,12 +142,54 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             result_msg = f"Player {player_index} made move: {move}"
             history.record_move(player_index, move, result_msg, game)
 
-        # Check if this is an AI player (in 1-player mode, player 0 is human, rest are AI)
-        is_ai_player = one_player_mode and player_index > 0
+        # Format and print move message (same format as Game Events, with color coding)
+        # Format: "[HH:MM:SS T##] P1 plays red 1." or "[HH:MM:SS T##] P1 hints P2: white at 2, 4, 5"
+        from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
+        from datetime import datetime
 
-        if is_ai_player:
-            # Show AI move
-            print(f"\n{Colors.BRIGHT_MAGENTA}Player {player_index} (AI) made move: {move}{Colors.RESET}")
+        # Get timestamp and turn number
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        turn_number = move_turn_number  # Already calculated above
+
+        # Get the move message in the same format as Game Events
+        if isinstance(move, Play):
+            state = old_state if old_state else game.state
+            if state and player_index < len(state.playerHands):
+                card = state.playerHands[player_index].cards[move.card]
+                move_msg = f"P{player_index + 1} plays {card.color.name.lower()} {card.number.value}."
+            else:
+                move_msg = f"P{player_index + 1} plays card {move.card + 1}."
+        elif isinstance(move, Discard):
+            state = old_state if old_state else game.state
+            if state and player_index < len(state.playerHands):
+                card = state.playerHands[player_index].cards[move.card]
+                move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
+            else:
+                move_msg = f"P{player_index + 1} discards card {move.card + 1}."
+        elif isinstance(move, ColorHint):
+            indices_str = ", ".join(str(c + 1) for c in move.cards)
+            move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
+        elif isinstance(move, NumberHint):
+            indices_str = ", ".join(str(c + 1) for c in move.cards)
+            move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.number.value} at {indices_str}"
+        else:
+            move_msg = f"P{player_index + 1} makes move: {move}"
+
+        # Format with timestamp and turn number: "[HH:MM:SS T##] message"
+        formatted_msg = f"[{timestamp} T{turn_number:02d}] {move_msg}"
+
+        # Colorize the message using console display's colorize method
+        colored_msg = display._colorize_message(formatted_msg)
+        print(colored_msg)
+
+        # Print decision summary
+        player = game.team.players[player_index]
+        if hasattr(player, 'get_decision_summary'):
+            summary = player.get_decision_summary()
+            if summary:
+                # Get player class name for display
+                player_class_name = player.__class__.__name__
+                print(f"{player_class_name}: {summary}")
 
         # Only update display if it's not the current player's turn (to avoid double display)
         # The display will be shown in play() when it's the player's turn
