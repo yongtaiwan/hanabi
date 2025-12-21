@@ -20,12 +20,15 @@ class TestPlayableCardPreference(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.settings = create_standard_game_settings(3)
-        # Use fast config for testing
+        # Use config with enough simulations to reliably distinguish playable cards
+        # Need many simulations to reduce variance and ensure playable cards score higher
+        # A known playable '1' should score at least 1 point immediately, which should
+        # be higher than discarding (which scores 0) or most hints (which score 0-1 on average)
         self.config = MonteCarloConfig(
-            min_think_time_s=0.5,
-            max_think_time_s=1.0,
-            min_simulations=10,
-            max_simulations=30,
+            min_think_time_s=2.0,
+            max_think_time_s=4.0,
+            min_simulations=50,
+            max_simulations=100,
             rollout_mc_steps=1,
         )
 

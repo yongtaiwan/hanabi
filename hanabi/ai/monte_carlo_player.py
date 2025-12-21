@@ -619,6 +619,14 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
             # Apply the move to the cloned state
             sim_state.apply_move(self._player_index, move)
+
+            # Debug: log score immediately after applying move (before rollout)
+            score_after_move = sim_state.score()
+            if isinstance(move, Play):
+                debug_msg = f"[MonteCarloPlayer {self._player_index}] After {move}, score BEFORE rollout: {score_after_move}"
+                logger.debug(debug_msg)
+                print(debug_msg, file=sys.stderr)
+
             sim_state.advance_player()  # Advance to next player before rollout
 
             # Rollout to terminal and get final score

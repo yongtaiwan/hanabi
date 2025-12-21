@@ -240,12 +240,13 @@ class GUIGame:
 
         # For interactive play, use reasonable config for MonteCarlo
         # (slower than fast config but faster than default for better decisions)
+        # Need enough simulations to reliably distinguish playable cards from other moves
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(
                 min_think_time_s=1.0,   # 1 second minimum
                 max_think_time_s=2.0,   # 2 seconds maximum
-                min_simulations=5,      # Minimum 5 simulations per move
-                max_simulations=200,   # Cap at 200 simulations
+                min_simulations=20,     # Minimum 20 simulations per move (reduced variance)
+                max_simulations=200,    # Cap at 200 simulations
             )
             return MonteCarloPlayer(player_index, config=config)
 
@@ -261,7 +262,7 @@ class GUIGame:
                 text=name,
                 command=lambda ac=ai_class: self._select_ai_type(dialog, result, ac),
                 bg="#3498DB",
-                fg="white",
+                fg="black",
                 font=("Arial", 11, "bold"),
                 width=15,
                 padx=10,
@@ -600,7 +601,7 @@ class GUIGame:
                 text=f"{num_players} Players",
                 command=lambda n=num_players: self._select_players(dialog, result, n),
                 bg="#3498DB",
-                fg="white",
+                fg="black",
                 font=("Arial", 11, "bold"),
                 width=12,
                 padx=10,
