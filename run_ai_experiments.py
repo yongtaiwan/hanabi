@@ -1,8 +1,8 @@
 """
 Run AI comparison experiments for different player counts.
 
-This script compares RandomPlayer and CommonSensePlayer on the same decks
-for 2/3/4/5-player games.
+This script compares RandomPlayer, CommonSensePlayer, and MonteCarloPlayer
+on the same decks for 2/3/4/5-player games.
 
 Folder layout:
 
@@ -20,6 +20,7 @@ Folder layout:
             ai/
               RandomPlayer/
               CommonSensePlayer/
+              MonteCarloPlayer/
           3p/
           4p/
           5p/
@@ -31,7 +32,7 @@ from typing import Dict
 
 from hanabi.core.game import create_standard_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
-from hanabi.ai import RandomPlayer, CommonSensePlayer
+from hanabi.ai import RandomPlayer, CommonSensePlayer, MonteCarloPlayer, MonteCarloConfig
 
 try:
     import yaml
@@ -47,6 +48,18 @@ def create_random_player(player_index: int) -> RandomPlayer:
 def create_common_sense_player(player_index: int) -> CommonSensePlayer:
     """Factory for CommonSensePlayer."""
     return CommonSensePlayer(player_index)
+
+
+def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
+    """Factory for MonteCarloPlayer with reasonable config for comparison."""
+    # Use a balanced config: not too slow, but still effective
+    config = MonteCarloConfig(
+        min_think_time_s=0.5,   # 500ms
+        max_think_time_s=1.0,   # 1 second
+        min_simulations=5,
+        max_simulations=50,
+    )
+    return MonteCarloPlayer(player_index, config=config)
 
 
 def run_experiments(
@@ -86,6 +99,7 @@ def run_experiments(
         ai_factories = {
             "RandomPlayer": create_random_player,
             "CommonSensePlayer": create_common_sense_player,
+            "MonteCarloPlayer": create_monte_carlo_player,
         }
 
         # Use an experiment id that encodes timestamp and player count so we
@@ -156,6 +170,28 @@ def run_experiments(
     lines.append(f"- Player counts: {', '.join(str(p) + 'p' for p in player_counts)}")
     lines.append(f"- Runs per configuration: {num_runs}")
     lines.append(f"- Base seed: {base_seed}")
+    lines.append(f"- AIs compared: RandomPlayer, CommonSensePlayer, MonteCarloPlayer")
+    lines.append("")
+
+    # Add comparison table across all player counts
+    lines.append("## Comparison Table\n")
+    lines.append("")
+    lines.append("| Player Count | AI | Avg Score | Best | Worst | Win Rate | Avg Moves | Avg Duration (s) |")
+    lines.append("|--------------|----|-----------|------|-------|----------|-----------|------------------|")
+
+    for num_players in player_counts:
+        results = all_results.get(num_players)
+        if not results:
+            continue
+        for ai_name, stats in results.summary.items():
+            lines.append(
+                f"| {num_players}p | {ai_name} | {stats.average_score:.2f} | "
+                f"{stats.best_score} | {stats.worst_score} | "
+                f"{stats.win_rate * 100:.1f}% | {stats.average_moves:.1f} | "
+                f"{stats.average_duration:.3f} |"
+            )
+
+    lines.append("")
     lines.append("")
 
     for num_players in player_counts:
@@ -163,6 +199,19 @@ def run_experiments(
         if not results:
             continue
         lines.append(f"## {num_players}-player games\n")
+
+        # Add ranking for this player count
+        sorted_ais = sorted(
+            results.summary.items(),
+            key=lambda x: x[1].average_score,
+            reverse=True
+        )
+        lines.append("### Ranking by Average Score")
+        lines.append("")
+        for rank, (ai_name, stats) in enumerate(sorted_ais, 1):
+            lines.append(f"{rank}. **{ai_name}**: {stats.average_score:.2f}")
+        lines.append("")
+
         for ai_name, stats in results.summary.items():
             lines.append(f"### {ai_name}")
             lines.append(f"- Games played: {stats.games_played}")
@@ -189,7 +238,12 @@ def run_experiments(
 
 def main() -> None:
     """Entry point for running AI comparison experiments."""
-    run_experiments()
+    # Run with 10 games for each player count (2, 3, 4, 5 players)
+    run_experiments(
+        player_counts=(2, 3, 4, 5),  # All player counts
+        num_runs=10,  # 10 games per configuration
+        base_seed=42,
+    )
 
 
 if __name__ == "__main__":
