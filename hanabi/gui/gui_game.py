@@ -77,6 +77,9 @@ class GUIGame:
         self._player_buttons = []
         self._replay_btn = None
         self._back_to_start_btn = None
+        self._single_player_column = None
+        self._ai_type_frame = None
+        self._selected_num_players = None
 
         # Show start screen buttons
         self._show_start_screen()
@@ -162,11 +165,16 @@ class GUIGame:
                 font=("Arial", 14, "bold")
             ).pack(pady=(0, 10))
 
+            # Store reference to single player column for AI type selection
+            self._single_player_column = single_player_column
+            self._ai_type_frame = None  # Will hold AI type selection buttons
+            self._selected_num_players = None  # Track which button was clicked
+
             for num_ai in range(1, 5):  # 1-4 AIs
                 btn = tk.Button(
                     single_player_column,
                     text=f"{num_ai} AI{'s' if num_ai > 1 else ''}",
-                    command=lambda n=num_ai + 1: self._select_ai_type_and_start(n),
+                    command=lambda n=num_ai + 1: self._show_ai_type_selection(n),
                     bg="#95A5A6",
                     fg="black",
                     font=("Arial", 14, "bold"),
@@ -208,32 +216,30 @@ class GUIGame:
         """Start a new game with specified number of players."""
         self._new_game_with_players(num_players, one_player_mode)
 
-    def _select_ai_type_and_start(self, num_players: int):
-        """Show dialog to select AI player type, then start game."""
-        if self._suppress_dialogs:
-            # In test mode, use default
-            self._new_game_with_players(num_players, one_player_mode=True, ai_player_type=None)
-            return
+    def _show_ai_type_selection(self, num_players: int):
+        """Show AI type selection buttons below the clicked button."""
+        # Hide any existing AI type selection frame
+        if self._ai_type_frame:
+            self._ai_type_frame.destroy()
+            self._ai_type_frame = None
 
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Select AI Player Type")
-        dialog.geometry("350x250")
-        dialog.transient(self.root)
-        dialog.grab_set()
-        dialog.configure(bg="#34495E")
+        # Store the selected number of players
+        self._selected_num_players = num_players
 
-        result = [None]
+        # Create frame for AI type selection buttons
+        self._ai_type_frame = tk.Frame(self._single_player_column, bg="#2C3E50")
+        self._ai_type_frame.pack(pady=(5, 0), fill=tk.X)
 
         tk.Label(
-            dialog,
-            text="Select AI player type:",
-            font=("Arial", 12, "bold"),
-            bg="#34495E",
-            fg="white"
-        ).pack(pady=20)
+            self._ai_type_frame,
+            text="Select AI type:",
+            bg="#2C3E50",
+            fg="white",
+            font=("Arial", 11, "bold")
+        ).pack(pady=(0, 5))
 
-        button_frame = tk.Frame(dialog, bg="#34495E")
-        button_frame.pack(pady=10)
+        button_frame = tk.Frame(self._ai_type_frame, bg="#2C3E50")
+        button_frame.pack(fill=tk.X)
 
         from hanabi.ai import RandomPlayer, CommonSensePlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
@@ -261,25 +267,26 @@ class GUIGame:
             btn = tk.Button(
                 button_frame,
                 text=name,
-                command=lambda ac=ai_class: self._select_ai_type(dialog, result, ac),
+                command=lambda ac=ai_class: self._start_with_ai_type(ac),
                 bg="#3498DB",
                 fg="black",
-                font=("Arial", 11, "bold"),
+                font=("Arial", 10, "bold"),
                 width=15,
-                padx=10,
-                pady=8
+                padx=5,
+                pady=5
             )
-            btn.pack(pady=5, fill=tk.X)
+            btn.pack(pady=2, fill=tk.X)
 
-        dialog.wait_window()
-
-        if result[0]:
-            self._new_game_with_players(num_players, one_player_mode=True, ai_player_type=result[0])
-
-    def _select_ai_type(self, dialog, result, ai_class):
-        """Handle AI type selection."""
-        result[0] = ai_class
-        dialog.destroy()
+    def _start_with_ai_type(self, ai_class):
+        """Start game with selected AI type."""
+        if self._selected_num_players:
+            # Hide AI type selection frame
+            if self._ai_type_frame:
+                self._ai_type_frame.destroy()
+                self._ai_type_frame = None
+            # Start game
+            self._new_game_with_players(self._selected_num_players, one_player_mode=True, ai_player_type=ai_class)
+            self._selected_num_players = None
 
     def _new_game(self):
         """Start a new game (legacy method - now uses _start_new_game)."""
@@ -383,10 +390,109 @@ class GUIGame:
                     # Ignore errors (e.g., if window was closed)
                     pass
 
-            # Schedule update immediately (0 = highest priority, runs as soon as possible)
-            # The callback will call update_idletasks() to force immediate processing
-            # This ensures the display refreshes after each move, not just after all AI players move
-            self._display.root.after(0, update_display)
+            # Check if we should animate this move
+            from hanabi.core.moves import Play, Discard
+            should_animate = False
+            card = None
+            destination = None
+            firework_color = None
+            is_invalid_play = False
+            is_play_of_five = False
+            is_critical_discard = False
+
+            if isinstance(move, (Play, Discard)) and old_state:
+                # Get card from old_state (before it was removed)
+                if player_index < len(old_state.playerHands) and move.card < len(old_state.playerHands[player_index].cards):
+                    card = old_state.playerHands[player_index].cards[move.card]
+                    should_animate = True
+
+                    if isinstance(move, Play):
+                        # Check if it was a valid play (didn't lose a life)
+                        old_lives = old_state.commonView.liveTokens
+                        new_lives = new_state.commonView.liveTokens
+                        lost_life = new_lives < old_lives
+
+                        if not lost_life:
+                            # Valid play - goes to firework
+                            destination = "firework"
+                            firework_color = card.color
+                            is_invalid_play = False
+                            is_play_of_five = (card.number.value == 5)
+                        else:
+                            # Invalid play - goes to discard
+                            destination = "discard"
+                            is_invalid_play = True
+                            is_play_of_five = False
+                    else:
+                        # Discard - goes to discard pile
+                        destination = "discard"
+                        is_invalid_play = False
+                        is_play_of_five = False
+                        # Check if discard is critical (reduces max achievable score)
+                        is_critical_discard = self._is_critical_discard(card, old_state)
+
+            if should_animate and card:
+                # CRITICAL: Freeze old state and mark as animating IMMEDIATELY
+                # This must happen before any display updates to prevent race conditions
+                # Set animating flag and freeze old state BEFORE scheduling animation
+                self._display._is_animating = True
+                if old_state is not None:
+                    self._display._frozen_state = old_state
+                    # Also keep game object reference for settings access
+                    if self._display._game:
+                        self._display._frozen_game_state = self._display._game
+
+                # Determine edge color based on move type
+                # Use clearly distinct colors that don't match card colors:
+                # Card colors: White (#F5F5F5), Red (#DC143C), Yellow (#FFD700), Green (#228B22), Blue (#4169E1), Multi (#9370DB)
+                if is_invalid_play:
+                    edge_color = "#FF1493"  # Deep Pink/Magenta: invalid play (distinct from red cards #DC143C)
+                elif isinstance(move, Play) and not is_invalid_play:
+                    if is_play_of_five:
+                        edge_color = "#FF8C00"  # Dark Orange: valid play of 5 (distinct from yellow #FFD700)
+                    else:
+                        edge_color = "#90EE90"  # Light Green: valid play (distinct from all card colors)
+                elif isinstance(move, Discard):
+                    if is_critical_discard:
+                        edge_color = "#8B00FF"  # Dark Violet: critical discard (distinct from multi purple #9370DB)
+                    else:
+                        edge_color = "#00FFFF"  # Cyan: safe discard (distinct from all card colors)
+                else:
+                    edge_color = "#FF1493"  # Default to deep pink
+
+                # Animate the card movement, then update display
+                def animation_complete():
+                    # If invalid play, show explosion effect
+                    if is_invalid_play:
+                        # Get discard position for explosion
+                        dest_pos = self._display._get_discard_position()
+                        if dest_pos:
+                            self._display.show_explosion(dest_pos[0], dest_pos[1])
+                    # Update event history (this doesn't trigger game state display update)
+                    is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
+                    self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
+                    # The actual game state display update will happen automatically
+                    # after the animation is removed from _active_animations in _animate_frame
+
+                # Schedule animation on GUI thread
+                # Card positions should already be stored from the last display update
+                # Pass old_state so display can freeze it during animation (already frozen above, but pass for consistency)
+                self._display.root.after(0, lambda: self._display.animate_card_move(
+                    player_index,
+                    move.card,
+                    card,
+                    destination,
+                    color=firework_color,
+                    edge_color=edge_color,
+                    callback=animation_complete,
+                    old_state=old_state  # Pass old state to freeze during animation
+                ))
+            else:
+                # No animation needed - update display immediately
+                # Schedule update immediately (0 = highest priority, runs as soon as possible)
+                # The callback will call update_idletasks() to force immediate processing
+                # This ensures the display refreshes after each move, not just after all AI players move
+                self._display.root.after(0, update_display)
 
             # Print move message and decision summary to terminal
             # Format: "[HH:MM:SS T##] P1 plays red 1." (same as Game Events, with color coding)
@@ -523,6 +629,12 @@ class GUIGame:
             self._control_frame.place_forget()
             self._control_frame.destroy()
             self._control_frame = None
+
+        # Clear AI type selection frame if visible
+        if self._ai_type_frame:
+            self._ai_type_frame.destroy()
+            self._ai_type_frame = None
+        self._selected_num_players = None
 
         # Ensure game display is visible
         if self._display:
@@ -670,6 +782,146 @@ class GUIGame:
         """Handle player count selection."""
         result[0] = num_players
         dialog.destroy()
+
+    def _is_critical_discard(self, card, state) -> bool:
+        """
+        Determine if discarding this card is critical (reduces max achievable score).
+
+        A discard is critical if it reduces the maximum achievable score for that color.
+
+        Examples:
+        - If suit is already unfinishable (all 5s discarded) but 1,2,3 are played,
+          discarding a 1/2/3 is safe (max score already capped). Only discarding
+          the last 4 would be critical (reduces max from 3 to 2).
+        - If all 5s are discarded, discarding the last 4 is critical (reduces max from 4 to 3).
+        """
+        from hanabi.core.enums import Number
+
+        # Get total count of this card in the deck (standard deck distribution)
+        card_counts = {
+            Number.ONE: 3,
+            Number.TWO: 2,
+            Number.THREE: 2,
+            Number.FOUR: 2,
+            Number.FIVE: 1
+        }
+        total_in_deck = card_counts.get(card.number, 0)
+
+        # Count how many of this card are already discarded (before this discard)
+        discarded_count = 0
+        if card.color in state.commonView.cardsDiscarded:
+            suit = state.commonView.cardsDiscarded[card.color]
+            if card.number in suit.cards:
+                discarded_count = suit.cards[card.number]
+
+        # Count how many of this card are in players' hands (visible)
+        in_hands_count = 0
+        for hand in state.playerHands:
+            for hand_card in hand.cards:
+                if hand_card.color == card.color and hand_card.number == card.number:
+                    in_hands_count += 1
+
+        # Count how many have been played (if this number has been played, we used one)
+        played_count = 0
+        if card.color in state.commonView.cardsPlayed:
+            played_number = state.commonView.cardsPlayed[card.color]
+            # If we've played this exact number or higher, we used one copy
+            if played_number.value >= card.number.value:
+                if played_number.value > card.number.value:
+                    played_count = 1
+                elif played_number.value == card.number.value:
+                    played_count = 1
+
+        # Calculate remaining copies after this discard
+        remaining_after_discard = total_in_deck - (discarded_count + 1) - played_count - in_hands_count
+
+        # Calculate maximum achievable score BEFORE this discard
+        max_score_before = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count)
+
+        # Calculate maximum achievable score AFTER this discard
+        max_score_after = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count + 1)
+
+        # A discard is critical if it reduces the max achievable score
+        return max_score_after < max_score_before
+
+    def _calculate_max_achievable_score(self, color, state, card_number, discarded_count_for_card) -> int:
+        """
+        Calculate the maximum achievable score for a color given current state.
+
+        The max score is the highest number we can still play, considering:
+        - What's already played
+        - What's discarded (including the card being discarded)
+        - What's in hands
+        - What's remaining in deck
+
+        Args:
+            color: The color to check
+            state: Current game state
+            card_number: The number of the card being discarded
+            discarded_count_for_card: How many of this card number are discarded (including the one being discarded)
+
+        Returns:
+            Maximum achievable score (0-5) for this color
+        """
+        from hanabi.core.enums import Number
+
+        card_counts = {
+            Number.ONE: 3,
+            Number.TWO: 2,
+            Number.THREE: 2,
+            Number.FOUR: 2,
+            Number.FIVE: 1
+        }
+
+        # Check what's currently played
+        cards_played = state.commonView.cardsPlayed
+        current_played = cards_played.get(color)
+        current_played_value = current_played.value if current_played else 0
+
+        # Find the highest number we can still play
+        # We need to check each number in sequence (1, 2, 3, 4, 5)
+        # and see if we have at least one copy remaining
+        max_achievable = current_played_value  # Start with what's already played
+
+        # Check each number from (current_played + 1) to 5
+        for num_value in range(current_played_value + 1, 6):
+            num = Number(num_value)
+            total_in_deck = card_counts.get(num, 0)
+
+            # Count discarded (use the provided count for the card being discarded, otherwise count from state)
+            if num == card_number:
+                discarded = discarded_count_for_card
+            else:
+                discarded = 0
+                if color in state.commonView.cardsDiscarded:
+                    suit = state.commonView.cardsDiscarded[color]
+                    if num in suit.cards:
+                        discarded = suit.cards[num]
+
+            # Count in hands
+            in_hands = 0
+            for hand in state.playerHands:
+                for hand_card in hand.cards:
+                    if hand_card.color == color and hand_card.number == num:
+                        in_hands += 1
+
+            # Count played (if we've played this number, we used one)
+            played = 0
+            if current_played and current_played.value >= num_value:
+                # If we've played this number or higher, we used one copy of this number
+                played = 1
+
+            # Calculate remaining
+            remaining = total_in_deck - discarded - played - in_hands
+
+            # If we have at least one copy remaining, we can potentially play this number
+            if remaining > 0:
+                max_achievable = num_value
+            else:
+                # No copies remaining, so we can't play this number or any higher
+                break
+
+        return max_achievable
 
     def _format_move_message(self, player_index: int, move: Move, old_state=None, new_state=None) -> str:
         """
@@ -879,8 +1131,33 @@ class GUIGame:
             # Update display to show player 0's view (human player)
             self._display.display_game_state(self._game, 0)
 
-        # Display game end message (game state is already displayed from last move)
-        self._display.display_game_end(self._game)
+        # Wait for all animations and display updates to complete before showing game over
+        # This ensures the game over message appears after all moves are displayed
+        self._wait_for_animations_then_show_game_over()
+
+    def _wait_for_animations_then_show_game_over(self):
+        """Wait for all animations to complete, then show game over message."""
+        # Check if there are any pending animations
+        if self._display and self._display.has_pending_animations():
+            # Still have animations - check again after a short delay
+            # Use a longer delay to ensure we catch all animations
+            self._display.root.after(100, self._wait_for_animations_then_show_game_over)
+            return
+
+        # All animations complete - process any pending GUI updates
+        # This ensures all scheduled display updates (from root.after(0, ...)) are processed
+        if self._display:
+            # Process all pending GUI events to ensure all moves are displayed
+            self._display.root.update_idletasks()
+            # Small additional delay to ensure all display updates are fully rendered
+            # This gives time for any final display updates to complete
+            self._display.root.after(100, lambda: self._display_game_over_final())
+
+    def _display_game_over_final(self):
+        """Display the game over message after all animations complete."""
+        if self._game:
+            # Display game end message (game state is already displayed from last move)
+            self._display.display_game_end(self._game)
 
         # Home button already serves as back to start button
         self._add_back_to_start_button()

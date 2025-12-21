@@ -55,8 +55,13 @@ class GUIPlayer(HumanPlayer):
             The move to make
         """
         # Update display to show current state (schedule on GUI thread)
+        # But only if not animating (to prevent premature updates during card animations)
         if self._game:
-            self._display.root.after(0, lambda: self._display.display_game_state(self._game, self.playerIndex))
+            def safe_display_update():
+                # Check if animating before updating
+                if not (self._display._is_animating or self._display._active_animations):
+                    self._display.display_game_state(self._game, self.playerIndex)
+            self._display.root.after(0, safe_display_update)
 
         # Wait for move to be set from GUI
         self._move_event.wait()

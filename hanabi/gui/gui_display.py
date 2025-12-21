@@ -13,10 +13,11 @@ except ImportError:
     )
 from typing import Dict, Optional, List, Tuple, Callable
 from math import cos, sin, pi, radians
+import math
 from datetime import datetime
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
-from hanabi.core.game import Game
+from hanabi.core.game import Game, GameState
 from hanabi.core.moves import Move, ColorHint, NumberHint
 
 
@@ -82,6 +83,19 @@ class GUIDisplay:
         # Hint tracking (independent of player implementations)
         # Structure: player_index -> card_index -> {"color": Color or None, "number": Number or None}
         self._hints: Dict[int, Dict[int, Dict[str, Optional[Color | Number]]]] = {}
+
+        # Animation state
+        self._animations_enabled: bool = True  # Can be disabled for faster gameplay
+        self._active_animations: List[Dict] = []  # List of active animation objects
+        self._animation_queue: List[Dict] = []  # Queue of pending animations
+        self._animation_duration_ms: int = 100  # Animation duration in milliseconds (0.1 seconds, 5x faster)
+        self._animation_fps: int = 60  # Frames per second for animation
+        self._is_animating: bool = False  # Track if an animation is currently playing
+        self._active_explosions: List[Dict] = []  # List of active explosion effects
+        self._pending_game_state: Optional[Game] = None  # Store game state to apply after animation
+        self._pending_player_index: Optional[int] = None  # Store player index to apply after animation
+        self._frozen_game_state: Optional[Game] = None  # Store old state to use during animation
+        self._frozen_state: Optional[GameState] = None  # Store old GameState directly during animation
 
         self._setup_ui()
 
@@ -495,11 +509,55 @@ class GUIDisplay:
 
     def display_game_state(self, game: Game, player_index: int) -> None:
         """Display the game state from a player's perspective."""
+        # If we're currently animating (actively moving a card), skip display update
+        # to prevent showing cards in their destination before animation completes
+        # Check both the flag and active animations to be safe
+        if self._is_animating or self._active_animations:
+            # Don't update display while animation is actively in progress
+            # Store the pending state to apply after animation completes
+            self._pending_game_state = game
+            self._pending_player_index = player_index
+            # CRITICAL: Do NOT update self._game here - keep using frozen old state
+            # The frozen state (_frozen_state) is used by all drawing methods
+            # This ensures fireworks show the old state during animation
+            return
+
+        # Not animating - safe to update to new state
+        # Clear frozen state first (in case it was set)
+        self._frozen_game_state = None
+        self._frozen_state = None
+        # Now update to new state
         self._game = game
         self._current_player = player_index
 
-        # Clear canvas
-        self._canvas.delete("all")
+        # Clear canvas, but preserve animated cards and explosions
+        # Delete all items except animated cards and explosions
+        all_items = self._canvas.find_all()
+        for item in all_items:
+            tags = self._canvas.gettags(item)
+            if "animated_card" not in tags and "explosion" not in tags:
+                self._canvas.delete(item)
+
+        # After redrawing, ensure animated cards and explosions are still on top
+        if self._active_animations:
+            for animation in self._active_animations:
+                if animation.get('widget_ids'):
+                    for widget_id in animation['widget_ids']:
+                        try:
+                            self._canvas.lift(widget_id)
+                        except:
+                            pass
+
+        # Ensure explosions are on top
+        if self._active_explosions:
+            for explosion in self._active_explosions:
+                if explosion.get('widget_ids'):
+                    for widget_id in explosion['widget_ids']:
+                        try:
+                            self._canvas.lift(widget_id)
+                        except:
+                            pass
+
         self._card_widgets.clear()
         self._card_positions.clear()
         self._firework_widgets.clear()
@@ -567,7 +625,13 @@ class GUIDisplay:
 
         # Draw deck cards with fixed grid layout: cards maintain positions as they're drawn
         # Show all remaining cards (with "?" during play, actual cards in replay)
-        state = self._game.state
+        # Use frozen OLD state during animation, otherwise use current state
+        if self._frozen_state is not None:
+            state = self._frozen_state
+        elif self._game:
+            state = self._game.state
+        else:
+            return
         deck_count = state.commonView.cardsToDraw
         draw_deck_index = state.drawDeckIndex
 
@@ -575,6 +639,7 @@ class GUIDisplay:
         deck_y = center_y + 180
 
         # Show cards in grid layout (both play and replay modes)
+        # Always use current game for startPosition (doesn't change)
         if self._game:
             # Get the total initial deck size to create fixed grid
             initial_deck = self._game.state.startPosition.drawDeck.cards
@@ -603,6 +668,7 @@ class GUIDisplay:
                 # Calculate row distribution based on initial remaining cards (after dealing to players)
                 # This determines the grid layout that will be maintained throughout the game
                 # Calculate how many cards were in the deck at the start (after initial dealing)
+                # Always use current game for settings (settings don't change)
                 num_players = self._game.settings.numPlayers
                 cards_per_player = self._game.settings.maxCardsInHand
                 initial_remaining = total_deck_size - (num_players * cards_per_player)
@@ -789,7 +855,16 @@ class GUIDisplay:
 
     def _draw_tokens(self, center_x: int, y: int):
         """Draw hint and life tokens on top of table."""
-        state = self._game.state
+        # Use frozen OLD state during animation, otherwise use current state
+        if self._frozen_state is not None:
+            state = self._frozen_state
+        elif self._game:
+            state = self._game.state
+        else:
+            return
+        # Always use current game for settings (settings don't change)
+        if not self._game:
+            return
         settings = self._game.settings
 
         hint_tokens = state.commonView.hintTokens
@@ -859,7 +934,15 @@ class GUIDisplay:
 
     def _draw_fireworks_row(self, center_x: int, y: int):
         """Draw fireworks (played cards) in a horizontal row, centered."""
-        state = self._game.state
+        # Use frozen OLD state during animation, otherwise use current state
+        # This ensures fireworks don't update until animation completes
+        if self._frozen_state is not None:
+            # Use the frozen old state directly
+            state = self._frozen_state
+        elif self._game:
+            state = self._game.state
+        else:
+            return
         cards_played = state.commonView.cardsPlayed
 
         colors = [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
@@ -921,7 +1004,13 @@ class GUIDisplay:
         label_x = table_left_edge + label_padding
 
         # Reconstruct discard pile from common view
-        state = self._game.state
+        # Use frozen OLD state during animation, otherwise use current state
+        if self._frozen_state is not None:
+            state = self._frozen_state
+        elif self._game:
+            state = self._game.state
+        else:
+            return
         discard_pile = []
         for color, suit in state.commonView.cardsDiscarded.items():
             for number, count in suit.cards.items():
@@ -1077,7 +1166,12 @@ class GUIDisplay:
 
     def _draw_player_hands(self):
         """Draw all player hands in a circle with current player at bottom (270°)."""
-        if not self._game:
+        # Use frozen OLD state during animation, otherwise use current state
+        if self._frozen_state is not None:
+            state = self._frozen_state
+        elif self._game:
+            state = self._game.state
+        else:
             return
 
         width = self._canvas.winfo_width() or 1200
@@ -1087,7 +1181,6 @@ class GUIDisplay:
         center_y = height // 2
         # Make table smaller (was // 3, now // 4)
         table_radius = min(width, height) // 4
-        state = self._game.state
         num_players = len(state.playerHands)
 
         # Calculate card dimensions
@@ -1292,21 +1385,14 @@ class GUIDisplay:
                         tags=("card",)
                     )
 
-                # Draw number hint box (right box)
+                # Draw number hint (right side, no box - just white text on dark background)
                 if number_hint is not None:
                     number_box_x = x + (box_width + box_spacing) // 2
-                    self._canvas.create_rectangle(
-                        number_box_x - box_width // 2, bottom_y,
-                        number_box_x + box_width // 2, bottom_y + box_height,
-                        fill="#F5DEB3",  # Wheat color - unique for number hints
-                        outline="#000000",
-                        width=1,
-                        tags=("card",)
-                    )
+                    # No box - just white text on the dark background
                     self._canvas.create_text(
                         number_box_x, bottom_y + box_height // 2,
                         text=str(number_hint.value),
-                        fill="#000000",
+                        fill="white",
                         font=("Arial", 12, "bold"),
                         tags=("card",)
                     )
@@ -1416,21 +1502,14 @@ class GUIDisplay:
                         tags=("card",)
                     )
 
-                # Draw number hint box (right box)
+                # Draw number hint (right side, no box - just white text on dark background)
                 if number_hint is not None:
                     number_box_x = x + (box_width + box_spacing) // 2
-                    self._canvas.create_rectangle(
-                        number_box_x - box_width // 2, bottom_y,
-                        number_box_x + box_width // 2, bottom_y + box_height,
-                        fill="#F5DEB3",  # Wheat color - unique for number hints
-                        outline="#000000",
-                        width=1,
-                        tags=("card",)
-                    )
+                    # No box - just white text on the dark background
                     self._canvas.create_text(
                         number_box_x, bottom_y + box_height // 2,
                         text=str(number_hint.value),
-                        fill="#000000",
+                        fill="white",
                         font=("Arial", 12, "bold"),
                         tags=("card",)
                     )
@@ -1736,11 +1815,15 @@ class GUIDisplay:
         """Handle canvas resize - redraw game state."""
         if self._game and event.width > 1 and event.height > 1:
             # Only redraw if game is not finished (to preserve hints when game ends)
-            if not self._game.isFinished:
+            # Also skip if animating (display_game_state will handle this, but be explicit)
+            if not self._game.isFinished and not (self._is_animating or self._active_animations):
                 self.display_game_state(self._game, self._current_player)
 
     def clear(self) -> None:
         """Clear the display."""
+        # Cancel any active animations
+        self._cancel_all_animations()
+
         if self._canvas:
             self._canvas.delete("all")
         self._card_widgets.clear()
@@ -1754,6 +1837,533 @@ class GUIDisplay:
         self._event_history.clear()
         self._live_turn_numbers.clear()
         self._hints.clear()  # Clear hint tracking
+
+    def set_animations_enabled(self, enabled: bool) -> None:
+        """Enable or disable card animations."""
+        self._animations_enabled = enabled
+
+    def _cancel_all_animations(self) -> None:
+        """Cancel all active animations."""
+        for anim in self._active_animations[:]:
+            if anim.get('after_id'):
+                self.root.after_cancel(anim['after_id'])
+            # Remove animated widgets from canvas
+            if anim.get('widget_ids') and self._canvas:
+                for widget_id in anim['widget_ids']:
+                    try:
+                        self._canvas.delete(widget_id)
+                    except:
+                        pass
+        self._active_animations.clear()
+        self._animation_queue.clear()
+        self._is_animating = False
+
+        # Cancel all explosions
+        for explosion in self._active_explosions[:]:
+            if explosion.get('after_id'):
+                self.root.after_cancel(explosion['after_id'])
+            if explosion.get('widget_ids') and self._canvas:
+                for widget_id in explosion['widget_ids']:
+                    try:
+                        self._canvas.delete(widget_id)
+                    except:
+                        pass
+        self._active_explosions.clear()
+
+    def has_pending_animations(self) -> bool:
+        """Check if there are any pending animations (queued or active)."""
+        return len(self._animation_queue) > 0 or len(self._active_animations) > 0 or len(self._active_explosions) > 0 or self._is_animating
+
+    def _get_firework_position(self, color: Color) -> Optional[Tuple[int, int]]:
+        """Get the center position of a firework stack for a given color."""
+        if not self._game or not self._canvas:
+            return None
+
+        width = self._canvas.winfo_width() or 1200
+        height = self._canvas.winfo_height() or 800
+        center_x = width // 2
+        center_y = height // 2
+
+        # Calculate fireworks row position (same as _draw_fireworks_row)
+        colors = [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
+        card_width = 50
+        spacing = 15
+        total_width = len(colors) * (card_width + spacing) - spacing
+        start_x = center_x - total_width // 2
+
+        # Find the index of this color
+        if color not in colors:
+            return None
+
+        color_index = colors.index(color)
+        x = start_x + color_index * (card_width + spacing) + card_width // 2
+        y = center_y - 30  # Same y as in _draw_fireworks_row
+
+        return (x, y)
+
+    def _get_discard_position(self) -> Optional[Tuple[int, int]]:
+        """Get a position in the discard pile area (public method for explosion positioning)."""
+        """Get a position in the discard pile area."""
+        if not self._game or not self._canvas:
+            return None
+
+        width = self._canvas.winfo_width() or 1200
+        height = self._canvas.winfo_height() or 800
+        center_x = width // 2
+        center_y = height // 2
+
+        # Discard pile is drawn at center_y + 70 (from _draw_discard_row)
+        discard_y = center_y + 70
+
+        # Position near the center of the discard area
+        discard_x = center_x
+
+        return (discard_x, discard_y)
+
+    def show_explosion(self, x: int, y: int) -> None:
+        """
+        Show an explosion effect at the given position (for invalid plays).
+
+        Args:
+            x, y: Center position for the explosion
+        """
+        if not self._canvas or not self._animations_enabled:
+            return
+
+        # Create explosion effect: expanding circles that fade out
+        explosion_duration_ms = 600  # 0.6 seconds
+        total_frames = int((explosion_duration_ms / 1000.0) * self._animation_fps)
+
+        # Create multiple expanding circles for explosion effect
+        num_circles = 3
+        explosion_widgets = []
+
+        for i in range(num_circles):
+            # Different sizes and colors for layered effect
+            base_radius = 20 + i * 15
+            colors = ["#FF0000", "#FF4500", "#FFA500"]  # Red, Orange, Yellow
+            circle = self._canvas.create_oval(
+                x - base_radius, y - base_radius,
+                x + base_radius, y + base_radius,
+                fill=colors[i % len(colors)],
+                outline=colors[i % len(colors)],
+                width=2,
+                tags=("explosion",)
+            )
+            explosion_widgets.append(circle)
+
+        # Add some particle-like lines radiating outward
+        num_particles = 8
+        for i in range(num_particles):
+            angle = (360 / num_particles) * i
+            rad = math.radians(angle)
+            start_radius = 15
+            end_radius = 40
+            x1 = x + start_radius * math.cos(rad)
+            y1 = y + start_radius * math.sin(rad)
+            x2 = x + end_radius * math.cos(rad)
+            y2 = y + end_radius * math.sin(rad)
+            particle = self._canvas.create_line(
+                x1, y1, x2, y2,
+                fill="#FF0000",
+                width=3,
+                tags=("explosion",)
+            )
+            explosion_widgets.append(particle)
+
+        # Raise explosion above everything
+        self._canvas.tag_raise("explosion")
+
+        # Create explosion animation
+        explosion = {
+            'widget_ids': explosion_widgets,
+            'current_frame': 0,
+            'total_frames': total_frames,
+            'center_x': x,
+            'center_y': y,
+            'base_radius': 20,
+            'after_id': None
+        }
+
+        self._active_explosions.append(explosion)
+        self._animate_explosion(explosion)
+
+    def _animate_explosion(self, explosion: Dict) -> None:
+        """Animate one frame of an explosion effect."""
+        if explosion not in self._active_explosions:
+            return  # Explosion was cancelled
+
+        current_frame = explosion['current_frame']
+        total_frames = explosion['total_frames']
+
+        if current_frame >= total_frames:
+            # Explosion complete - remove widgets
+            if explosion.get('widget_ids') and self._canvas:
+                for widget_id in explosion['widget_ids']:
+                    try:
+                        self._canvas.delete(widget_id)
+                    except:
+                        pass
+
+            # Remove from active explosions
+            if explosion in self._active_explosions:
+                self._active_explosions.remove(explosion)
+            return
+
+        # Animate explosion: expand circles and fade out
+        progress = current_frame / total_frames
+        expansion_factor = 1.0 + progress * 2.0  # Expand to 3x size
+        opacity = 1.0 - progress  # Fade out
+
+        if explosion.get('widget_ids') and self._canvas:
+            center_x = explosion['center_x']
+            center_y = explosion['center_y']
+            base_radius = explosion['base_radius']
+
+            # Update circles (first 3 widgets)
+            for i, widget_id in enumerate(explosion['widget_ids'][:3]):
+                try:
+                    radius = (base_radius + i * 15) * expansion_factor
+                    # Update circle size
+                    self._canvas.coords(
+                        widget_id,
+                        center_x - radius, center_y - radius,
+                        center_x + radius, center_y + radius
+                    )
+                    # Fade out by changing opacity (tkinter doesn't support alpha directly,
+                    # so we'll use stipple pattern or just delete when fully faded)
+                    if opacity < 0.3:
+                        # Too faded, make it more transparent by using stipple
+                        pass
+                except:
+                    pass
+
+            # Update particle lines (remaining widgets)
+            num_particles = len(explosion['widget_ids']) - 3
+            for i, widget_id in enumerate(explosion['widget_ids'][3:]):
+                try:
+                    angle = (360 / num_particles) * i
+                    rad = math.radians(angle)
+                    start_radius = 15 * expansion_factor
+                    end_radius = 40 * expansion_factor
+                    x1 = center_x + start_radius * math.cos(rad)
+                    y1 = center_y + start_radius * math.sin(rad)
+                    x2 = center_x + end_radius * math.cos(rad)
+                    y2 = center_y + end_radius * math.sin(rad)
+                    self._canvas.coords(widget_id, x1, y1, x2, y2)
+                except:
+                    pass
+
+        # Schedule next frame
+        explosion['current_frame'] += 1
+        frame_delay_ms = int(1000 / self._animation_fps)
+        explosion['after_id'] = self.root.after(
+            frame_delay_ms,
+            lambda: self._animate_explosion(explosion)
+        )
+
+    def animate_card_move(
+        self,
+        player_index: int,
+        card_index: int,
+        card: Card,
+        destination: str,  # "firework" or "discard"
+        color: Optional[Color] = None,  # Required if destination is "firework"
+        edge_color: str = "#FF0000",  # Edge color for the animated card
+        callback: Optional[Callable] = None,
+        old_state: Optional[GameState] = None  # Old state to freeze during animation
+    ) -> None:
+        """
+        Animate a card moving from its current position to a destination.
+        Animations are queued and played sequentially.
+
+        Args:
+            player_index: Index of the player whose card is being moved
+            card_index: Index of the card in the player's hand
+            card: The card being moved
+            destination: "firework" or "discard"
+            color: Color of the firework (required if destination is "firework")
+            callback: Optional callback to call when animation completes
+        """
+        if not self._animations_enabled or not self._canvas:
+            # Animations disabled or canvas not ready - call callback immediately
+            if callback:
+                callback()
+            return
+
+        # Get source position from stored card positions
+        source_key = (player_index, card_index)
+        if source_key not in self._card_positions:
+            # Card position not found - try to update display first to get positions
+            # This can happen if display hasn't been updated yet
+            # But only if not already animating (to prevent recursive updates)
+            if self._game and not (self._is_animating or self._active_animations):
+                # Use current player for display update
+                self.display_game_state(self._game, self._current_player)
+                # Force canvas update to ensure positions are calculated
+                self._canvas.update_idletasks()
+
+            # Try again after updating
+            if source_key not in self._card_positions:
+                # Still not found - skip animation but log for debugging
+                print(f"[ANIMATION DEBUG] Card position not found for player {player_index}, card {card_index}")
+                print(f"[ANIMATION DEBUG] Available positions: {list(self._card_positions.keys())}")
+                if callback:
+                    callback()
+                return
+
+        x1, y1, x2, y2 = self._card_positions[source_key]
+        source_x = (x1 + x2) // 2
+        source_y = (y1 + y2) // 2
+
+        # Get destination position
+        if destination == "firework":
+            if color is None:
+                if callback:
+                    callback()
+                return
+            dest_pos = self._get_firework_position(color)
+        elif destination == "discard":
+            dest_pos = self._get_discard_position()
+        else:
+            if callback:
+                callback()
+            return
+
+        if dest_pos is None:
+            if callback:
+                callback()
+            return
+
+        dest_x, dest_y = dest_pos
+
+        # Create animation request object
+        animation_request = {
+            'player_index': player_index,
+            'card_index': card_index,
+            'card': card,
+            'source_x': source_x,
+            'source_y': source_y,
+            'dest_x': dest_x,
+            'dest_y': dest_y,
+            'destination': destination,
+            'color': color,
+            'edge_color': edge_color,
+            'callback': callback
+        }
+
+        # Add to queue
+        self._animation_queue.append(animation_request)
+        print(f"[ANIMATION DEBUG] Animation queued: player {player_index}, card {card_index}, destination {destination} (queue size: {len(self._animation_queue)})")
+
+        # Mark as animating immediately when we queue an animation
+        # This prevents display updates from happening before animation completes
+        # NOTE: This may already be set by the caller (gui_game.py) to prevent race conditions
+        # But we set it here too to be safe
+        self._is_animating = True
+
+        # Freeze the OLD state to use during animation
+        # This ensures fireworks show the old state (before card is played) during animation
+        # We need to freeze old_state, not self._game (which is already the new state)
+        # NOTE: This may already be set by the caller (gui_game.py) to prevent race conditions
+        # But we set it here too to be safe
+        if old_state is not None:
+            # Store the old state directly - we'll use it in drawing methods
+            self._frozen_state = old_state
+            # Also keep game object reference for settings access
+            if self._game:
+                self._frozen_game_state = self._game
+        elif self._game:
+            # Fallback: freeze current state if old_state not provided
+            self._frozen_game_state = self._game
+            self._frozen_state = self._game.state
+
+        # Start processing queue if not already processing
+        if len(self._active_animations) == 0:
+            self._process_animation_queue()
+
+    def _process_animation_queue(self):
+        """Process the next animation in the queue."""
+        if not self._animation_queue:
+            # No more animations in queue - mark as not animating
+            self._is_animating = False
+            return
+
+        # Already marked as animating when queued, but ensure it's set
+        self._is_animating = True
+
+        # Get next animation request
+        request = self._animation_queue.pop(0)
+
+        print(f"[ANIMATION DEBUG] Processing animation: player {request['player_index']}, card {request['card_index']}")
+
+        # Create animated card widget (temporary, will be deleted after animation)
+        # Make it slightly larger and more visible
+        card_width = 55
+        card_height = 77
+        bg_color = self.COLOR_COLORS.get(request['card'].color, "#FFFFFF")
+
+        # Get edge color from request (default to red if not specified)
+        edge_color = request.get('edge_color', "#FF0000")
+
+        widget_ids = []
+
+        # For gold (play of 5), make it shiny with a gradient-like effect
+        if edge_color == "#FFD700":  # Gold
+            # Create a slightly larger outer rectangle for glow effect
+            glow_rect = self._canvas.create_rectangle(
+                request['source_x'] - card_width // 2 - 2, request['source_y'] - card_height // 2 - 2,
+                request['source_x'] + card_width // 2 + 2, request['source_y'] + card_height // 2 + 2,
+                fill="",
+                outline="#FFA500",  # Orange glow
+                width=2,
+                tags=("animated_card",)
+            )
+            widget_ids.append(glow_rect)
+
+        # Create card rectangle with colored outline based on move type
+        card_rect = self._canvas.create_rectangle(
+            request['source_x'] - card_width // 2, request['source_y'] - card_height // 2,
+            request['source_x'] + card_width // 2, request['source_y'] + card_height // 2,
+            fill=bg_color,
+            outline=edge_color,
+            width=4,  # Thicker outline for visibility
+            tags=("animated_card",)
+        )
+        widget_ids.append(card_rect)
+
+        # Create card number text (slightly larger)
+        card_text = self._canvas.create_text(
+            request['source_x'], request['source_y'],
+            text=str(request['card'].number.value),
+            fill="#000000",
+            font=("Arial", 26, "bold"),
+            tags=("animated_card",)
+        )
+        widget_ids.append(card_text)
+
+        # Raise animated card to top layer so it's visible above everything
+        # Use lift to move to top of stacking order
+        self._canvas.tag_raise("animated_card")
+        # Also lift each widget individually to ensure they're on top
+        for widget_id in widget_ids:
+            self._canvas.lift(widget_id)
+
+        # Calculate animation parameters
+        total_frames = int((self._animation_duration_ms / 1000.0) * self._animation_fps)
+        frame_delay_ms = int(1000 / self._animation_fps)
+
+        dx = (request['dest_x'] - request['source_x']) / total_frames
+        dy = (request['dest_y'] - request['source_y']) / total_frames
+
+        # Create animation object with callback to process next in queue
+        def animation_complete():
+            # The animation is still in _active_animations at this point
+            # Call original callback if provided (this updates event history, doesn't update game state)
+            if request.get('callback'):
+                request['callback']()
+
+            # Mark as not animating AFTER callback
+            self._is_animating = False
+
+            # Force canvas update to ensure display is refreshed
+            if self._canvas:
+                self._canvas.update_idletasks()
+            # Process next animation after a small delay to ensure display update is visible
+            # This allows the display to update after each animation completes
+            self.root.after(50, self._process_animation_queue)
+
+        animation = {
+            'widget_ids': widget_ids,
+            'current_frame': 0,
+            'total_frames': total_frames,
+            'dx': dx,
+            'dy': dy,
+            'callback': animation_complete,
+            'after_id': None
+        }
+
+        self._active_animations.append(animation)
+
+        print(f"[ANIMATION DEBUG] Animation started: {len(self._active_animations)} active animations")
+        print(f"[ANIMATION DEBUG] Source: ({request['source_x']}, {request['source_y']}), Dest: ({request['dest_x']}, {request['dest_y']})")
+        print(f"[ANIMATION DEBUG] Total frames: {total_frames}, dx: {dx:.2f}, dy: {dy:.2f}")
+
+        # Start animation
+        self._animate_frame(animation)
+
+    def _animate_frame(self, animation: Dict) -> None:
+        """Animate one frame of a card movement."""
+        if animation not in self._active_animations:
+            return  # Animation was cancelled
+
+        current_frame = animation['current_frame']
+        total_frames = animation['total_frames']
+
+        # Debug output every 30 frames
+        if current_frame % 30 == 0:
+            print(f"[ANIMATION DEBUG] Frame {current_frame}/{total_frames}")
+
+        if current_frame >= total_frames:
+            # Animation complete
+            print(f"[ANIMATION DEBUG] Animation complete!")
+            # Remove widgets
+            if animation.get('widget_ids') and self._canvas:
+                for widget_id in animation['widget_ids']:
+                    try:
+                        self._canvas.delete(widget_id)
+                    except:
+                        pass
+
+            # Call callback BEFORE removing from active animations
+            # This ensures the check in display_game_state still sees the animation as active
+            if animation.get('callback'):
+                animation['callback']()
+
+            # Remove from active animations AFTER callback completes
+            # This ensures display_game_state won't update until animation is fully done
+            if animation in self._active_animations:
+                self._active_animations.remove(animation)
+
+            # Now that animation is removed, clear frozen state and apply pending game state
+            # Order: 1. Clear frozen state, 2. Update to new state, 3. Update display
+            self._frozen_game_state = None
+            self._frozen_state = None
+
+            if self._pending_game_state is not None:
+                self._game = self._pending_game_state
+                self._current_player = self._pending_player_index
+                # Clear pending state before updating display
+                pending_state = self._pending_game_state
+                pending_player = self._pending_player_index
+                self._pending_game_state = None
+                self._pending_player_index = None
+                # Now update the display with the new state (animation is gone, so it will proceed)
+                # This will show the card in its final position (fireworks updated)
+                self.display_game_state(pending_state, pending_player)
+            elif self._game is not None:
+                # Even if there's no pending state, we should refresh the display
+                # to ensure everything is up to date after animation
+                self.display_game_state(self._game, self._current_player)
+            return
+
+        # Move widgets
+        if animation.get('widget_ids') and self._canvas:
+            for widget_id in animation['widget_ids']:
+                try:
+                    self._canvas.move(widget_id, animation['dx'], animation['dy'])
+                    # Keep animated card on top after each move
+                    self._canvas.lift(widget_id)
+                except:
+                    pass
+
+        # Schedule next frame
+        animation['current_frame'] += 1
+        frame_delay_ms = int(1000 / self._animation_fps)
+        animation['after_id'] = self.root.after(
+            frame_delay_ms,
+            lambda: self._animate_frame(animation)
+        )
 
     def update_hints_from_move(self, player_index: int, move: Move) -> None:
         """
