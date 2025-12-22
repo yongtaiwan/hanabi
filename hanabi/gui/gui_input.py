@@ -9,6 +9,7 @@ from hanabi.core.enums import Color, Number
 from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.game import Game
 from .gui_display import GUIDisplay
+from .gui_player import GUIPlayer
 
 
 class GUIInput:
@@ -54,6 +55,10 @@ class GUIInput:
             elif self._game.isFinished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
                 return
+
+        # Don't show menu if it's not the GUI player's turn
+        if not self._is_gui_player_turn():
+            return
 
         # Check if there's an open menu
         menu_open = hasattr(self._display, '_action_menu') and self._display._action_menu
@@ -131,6 +136,23 @@ class GUIInput:
     def set_move_callback(self, callback: Callable[[Move], None]):
         """Set callback for when a move is made."""
         self._move_callback = callback
+
+    def _is_gui_player_turn(self) -> bool:
+        """
+        Check if it's currently a GUI player's turn.
+
+        Returns:
+            True if current player is a GUI player, False otherwise
+        """
+        if not self._game:
+            return False
+
+        current_player_idx = self._game.currentPlayer
+        if current_player_idx >= len(self._game.team.players):
+            return False
+
+        current_player = self._game.team.players[current_player_idx]
+        return isinstance(current_player, GUIPlayer)
 
     def get_move(self, player_index: int) -> Optional[Move]:
         """

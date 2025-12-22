@@ -507,6 +507,24 @@ class GUIDisplay:
         """Set the game instance."""
         self._game = game
 
+    def _is_gui_player_turn(self) -> bool:
+        """
+        Check if it's currently a GUI player's turn.
+
+        Returns:
+            True if current player is a GUI player, False otherwise
+        """
+        if not self._game:
+            return False
+
+        current_player_idx = self._game.currentPlayer
+        if current_player_idx >= len(self._game.team.players):
+            return False
+
+        from .gui_player import GUIPlayer
+        current_player = self._game.team.players[current_player_idx]
+        return isinstance(current_player, GUIPlayer)
+
     def set_show_all_cards(self, show_all: bool):
         """Set whether to show all cards (for replay mode)."""
         self._show_all_cards = show_all
@@ -1532,6 +1550,10 @@ class GUIDisplay:
             card_idx: Index of card that was clicked
             x, y: Screen coordinates for menu position
         """
+        # Don't show menu if it's not the GUI player's turn
+        if not self._is_gui_player_turn():
+            return
+
         # Close any existing menu
         self._close_action_menu()
 

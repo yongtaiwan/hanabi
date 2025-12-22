@@ -385,6 +385,19 @@ class GUIGame:
                 display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
                 self._display.display_game_state(self._game, display_player)
 
+                # Close action menu if it's not the GUI player's turn (AI player's turn)
+                # Check the current player after the turn has advanced
+                # Note: The turn advances after the callback, so we check the next player
+                # Calculate next player: (player_index + 1) % num_players
+                num_players = len(self._game.team.players)
+                next_player_idx = (player_index + 1) % num_players
+                next_player = self._game.team.players[next_player_idx]
+                from .gui_player import GUIPlayer
+                if not isinstance(next_player, GUIPlayer):
+                    # Next player is AI - close any open menu
+                    if hasattr(self._display, '_close_action_menu'):
+                        self._display._close_action_menu()
+
                 # Display move result in event history with correct turn number
                 # Check if this is an AI player for display purposes
                 is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
