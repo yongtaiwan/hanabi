@@ -353,9 +353,13 @@ class GUIGame:
             self._display.update_hints_from_move(player_index, move, old_state, new_state)
 
             # Format move message
-            logger.debug(f"[on_move_callback] player={player_index}, move={move}, old_state={old_state is not None}, new_state={new_state is not None}")
             move_message = self._format_move_message(player_index, move, old_state, new_state)
-            logger.debug(f"[on_move_callback] formatted message: {move_message}")
+
+            # Add delay for AI players to slow down simulation
+            is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
+            if is_ai_player:
+                import time
+                time.sleep(0.5)  # 0.5 second delay between AI moves
 
             # Record move in history
             if self._history and self._game:
@@ -978,8 +982,6 @@ class GUIGame:
                 new_score = new_state.score()
                 perfect_score = new_score == 25
 
-                logger.debug(f"[_format_move_message] Play move: old_lives={old_lives}, new_lives={new_lives}, lost_life={lost_life}")
-
                 # Check if firework was completed by comparing cards played
                 firework_completed = False
                 if not lost_life and move.card < len(player_hand.cards):
@@ -990,11 +992,6 @@ class GUIGame:
                     old_value = old_cards_played.get(card.color)
                     new_value = new_cards_played.get(card.color)
 
-                    # Debug logging
-                    logger.debug(f"[_format_move_message] Play move: card={card}, card.number={card.number}, card.number==FIVE={card.number == Number.FIVE}")
-                    logger.debug(f"[_format_move_message] old_cards_played={old_cards_played}, new_cards_played={new_cards_played}")
-                    logger.debug(f"[_format_move_message] old_value={old_value} (type: {type(old_value)}), new_value={new_value} (type: {type(new_value)})")
-
                     # Firework is completed when:
                     # 1. Card played is a 5
                     # 2. Previous value for that color was 4
@@ -1003,9 +1000,6 @@ class GUIGame:
                         # Check if we're completing a firework (going from 4 to 5)
                         if old_value is not None and old_value == Number.FOUR and new_value == Number.FIVE:
                             firework_completed = True
-                            logger.debug(f"[_format_move_message] ✓ Firework completed detected! card={card}, old_value={old_value}, new_value={new_value}")
-                        else:
-                            logger.debug(f"[_format_move_message] ✗ Not a firework completion: card.number={card.number}, old_value={old_value}, new_value={new_value}")
 
                 # Build additional message parts
                 additional_parts = []
@@ -1017,7 +1011,6 @@ class GUIGame:
                         message = message[:-1] + " (invalid, loses a life)."
                     else:
                         message += " (invalid, loses a life)."
-                    logger.debug(f"[_format_move_message] Invalid play detected, message: {message}")
                 else:
                     # Valid play - check for firework completion
                     if firework_completed:
@@ -1026,21 +1019,17 @@ class GUIGame:
                         max_hints = new_state.startPosition.settings.maxHintTokens
                         hint_count = new_state.commonView.hintTokens
                         additional_parts.append(f"bonus hint token returned. ({hint_count}/{max_hints})")
-                        logger.debug(f"[_format_move_message] Added firework completion to additional_parts: {additional_parts}")
 
                 # Check for perfect score
                 if perfect_score:
                     additional_parts.append("Perfect score! 5 bonus points!")
-                    logger.debug(f"[_format_move_message] Added perfect score to additional_parts")
 
                 # Append additional parts to message (only if not invalid play)
-                logger.debug(f"[_format_move_message] additional_parts={additional_parts}, lost_life={lost_life}")
                 if additional_parts and not lost_life:
                     # Remove the trailing period from the base message if we're adding more info
                     if message.endswith("."):
                         message = message[:-1]
                     message += " " + " ".join(additional_parts) + "."
-                    logger.debug(f"[_format_move_message] Final message after appending parts: {message}")
 
             return message
         elif isinstance(move, Discard):

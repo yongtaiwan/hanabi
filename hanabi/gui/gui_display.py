@@ -2227,9 +2227,7 @@ class GUIDisplay:
 
             # Try again after updating
             if source_key not in self._card_positions:
-                # Still not found - skip animation but log for debugging
-                print(f"[ANIMATION DEBUG] Card position not found for player {player_index}, card {card_index}")
-                print(f"[ANIMATION DEBUG] Available positions: {list(self._card_positions.keys())}")
+                # Still not found - skip animation
                 if callback:
                     callback()
                 return
@@ -2276,7 +2274,6 @@ class GUIDisplay:
 
         # Add to queue
         self._animation_queue.append(animation_request)
-        print(f"[ANIMATION DEBUG] Animation queued: player {player_index}, card {card_index}, destination {destination} (queue size: {len(self._animation_queue)})")
 
         # Mark as animating immediately when we queue an animation
         # This prevents display updates from happening before animation completes
@@ -2375,7 +2372,6 @@ class GUIDisplay:
 
         # Add to queue (will play after current animation completes)
         self._animation_queue.append(animation_request)
-        print(f"[ANIMATION DEBUG] Draw animation queued: player {player_index}, card {card} (queue size: {len(self._animation_queue)})")
 
         # Keep frozen state for the draw animation
         if old_state is not None:
@@ -2397,8 +2393,6 @@ class GUIDisplay:
 
         # Get next animation request
         request = self._animation_queue.pop(0)
-
-        print(f"[ANIMATION DEBUG] Processing animation: player {request['player_index']}, card {request['card_index']}")
 
         # Create animated card widget (temporary, will be deleted after animation)
         # Make it slightly larger and more visible
@@ -2499,10 +2493,6 @@ class GUIDisplay:
 
         self._active_animations.append(animation)
 
-        print(f"[ANIMATION DEBUG] Animation started: {len(self._active_animations)} active animations")
-        print(f"[ANIMATION DEBUG] Source: ({request['source_x']}, {request['source_y']}), Dest: ({request['dest_x']}, {request['dest_y']})")
-        print(f"[ANIMATION DEBUG] Total frames: {total_frames}, dx: {dx:.2f}, dy: {dy:.2f}")
-
         # Start animation
         self._animate_frame(animation)
 
@@ -2514,13 +2504,8 @@ class GUIDisplay:
         current_frame = animation['current_frame']
         total_frames = animation['total_frames']
 
-        # Debug output every 30 frames
-        if current_frame % 30 == 0:
-            print(f"[ANIMATION DEBUG] Frame {current_frame}/{total_frames}")
-
         if current_frame >= total_frames:
             # Animation complete
-            print(f"[ANIMATION DEBUG] Animation complete!")
             # Remove widgets
             if animation.get('widget_ids') and self._canvas:
                 for widget_id in animation['widget_ids']:
