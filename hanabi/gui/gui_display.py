@@ -175,7 +175,7 @@ class GUIDisplay:
         self._canvas.bind("<Button-1>", self._on_canvas_click)
 
         # Event history panel (right side) - wider to show full events
-        self._history_frame = tk.Frame(content_frame, bg="#34495E", width=400)
+        self._history_frame = tk.Frame(content_frame, bg="#34495E", width=550)
         self._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
         self._history_frame.pack_propagate(False)
 
@@ -197,7 +197,7 @@ class GUIDisplay:
             listbox_frame,
             bg="#2C3E50",
             fg="white",
-            font=("Arial", 9),
+            font=("Arial", 11),
             wrap=tk.WORD,
             state=tk.DISABLED,  # Make read-only
             selectbackground="#3498DB",
