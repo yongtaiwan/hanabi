@@ -828,18 +828,6 @@ class GUIGame:
           the last 4 would be critical (reduces max from 3 to 2).
         - If all 5s are discarded, discarding the last 4 is critical (reduces max from 4 to 3).
         """
-        from hanabi.core.enums import Number
-
-        # Get total count of this card in the deck (standard deck distribution)
-        card_counts = {
-            Number.ONE: 3,
-            Number.TWO: 2,
-            Number.THREE: 2,
-            Number.FOUR: 2,
-            Number.FIVE: 1
-        }
-        total_in_deck = card_counts.get(card.number, 0)
-
         # Count how many of this card are already discarded (before this discard)
         discarded_count = 0
         if card.color in state.commonView.cardsDiscarded:
@@ -847,44 +835,24 @@ class GUIGame:
             if card.number in suit.cards:
                 discarded_count = suit.cards[card.number]
 
-        # Count how many of this card are in players' hands (visible)
-        in_hands_count = 0
-        for hand in state.playerHands:
-            for hand_card in hand.cards:
-                if hand_card.color == card.color and hand_card.number == card.number:
-                    in_hands_count += 1
-
-        # Count how many have been played (if this number has been played, we used one)
-        played_count = 0
-        if card.color in state.commonView.cardsPlayed:
-            played_number = state.commonView.cardsPlayed[card.color]
-            # If we've played this exact number or higher, we used one copy
-            if played_number.value >= card.number.value:
-                if played_number.value > card.number.value:
-                    played_count = 1
-                elif played_number.value == card.number.value:
-                    played_count = 1
-
-        # Calculate remaining copies after this discard
-        remaining_after_discard = total_in_deck - (discarded_count + 1) - played_count - in_hands_count
-
         # Calculate maximum achievable score BEFORE this discard
-        max_score_before = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count)
+        max_score_before = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count, exclude_card_from_hands=None)
 
         # Calculate maximum achievable score AFTER this discard
-        max_score_after = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count + 1)
+        # Exclude the card being discarded from the in_hands count
+        max_score_after = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count + 1, exclude_card_from_hands=card)
 
         # A discard is critical if it reduces the max achievable score
         return max_score_after < max_score_before
 
-    def _calculate_max_achievable_score(self, color, state, card_number, discarded_count_for_card) -> int:
+    def _calculate_max_achievable_score(self, color, state, card_number, discarded_count_for_card, exclude_card_from_hands=None) -> int:
         """
         Calculate the maximum achievable score for a color given current state.
 
         The max score is the highest number we can still play, considering:
         - What's already played
         - What's discarded (including the card being discarded)
-        - What's in hands
+        - What's in hands (excluding the card being discarded if specified)
         - What's remaining in deck
 
         Args:
@@ -892,6 +860,7 @@ class GUIGame:
             state: Current game state
             card_number: The number of the card being discarded
             discarded_count_for_card: How many of this card number are discarded (including the one being discarded)
+            exclude_card_from_hands: If provided, exclude this card from the in_hands count (used when calculating "after discard")
 
         Returns:
             Maximum achievable score (0-5) for this color
@@ -931,24 +900,31 @@ class GUIGame:
                     if num in suit.cards:
                         discarded = suit.cards[num]
 
-            # Count in hands
+            # Count in hands (for reference, but cards in hands are still playable)
+            # Exclude the card being discarded if specified (only one instance)
             in_hands = 0
+            excluded_count = 0
             for hand in state.playerHands:
                 for hand_card in hand.cards:
                     if hand_card.color == color and hand_card.number == num:
+                        # Exclude exactly one instance of the card being discarded
+                        if exclude_card_from_hands is not None and \
+                           exclude_card_from_hands.color == color and \
+                           exclude_card_from_hands.number == num and \
+                           excluded_count == 0:
+                            # This is the card being discarded, skip it (only once)
+                            excluded_count += 1
+                            continue
                         in_hands += 1
 
-            # Count played (if we've played this number, we used one)
-            played = 0
-            if current_played and current_played.value >= num_value:
-                # If we've played this number or higher, we used one copy of this number
-                played = 1
+            # Calculate available copies
+            # Cards in hands are still available to be played, so we only subtract discarded cards.
+            # Since cards in hands came from the deck, the total available is: total - discarded
+            # This correctly accounts for cards both in deck and in hands (they're all available to play).
+            available = total_in_deck - discarded
 
-            # Calculate remaining
-            remaining = total_in_deck - discarded - played - in_hands
-
-            # If we have at least one copy remaining, we can potentially play this number
-            if remaining > 0:
+            # If we have at least one copy available (in deck or hands), we can potentially play this number
+            if available > 0:
                 max_achievable = num_value
             else:
                 # No copies remaining, so we can't play this number or any higher
