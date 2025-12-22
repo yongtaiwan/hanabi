@@ -367,13 +367,12 @@ class GUIGame:
             move_turn_number = new_state.turnNumber
 
             def update_display():
-                # Only update game state display if game is not finished
-                # (when game ends, display is already correct and we want to preserve hints)
-                if not self._game.isFinished:
-                    # In single player mode, always show human player's view (player 0)
-                    # In multi-player mode, show current player's view
-                    display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
-                    self._display.display_game_state(self._game, display_player)
+                # Always update game state display, including when game ends
+                # This ensures the final state is shown after the last move
+                # In single player mode, always show human player's view (player 0)
+                # In multi-player mode, show current player's view
+                display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+                self._display.display_game_state(self._game, display_player)
 
                 # Display move result in event history with correct turn number
                 # Check if this is an AI player for display purposes
@@ -1159,10 +1158,13 @@ class GUIGame:
         if self._display and hasattr(self._display, '_close_action_menu'):
             self._display._close_action_menu()
 
-        # If playing with AI (one-player mode), show human player's view (player 0) at bottom
-        if getattr(self, '_one_player_mode', False) and self._game:
-            # Update display to show player 0's view (human player)
-            self._display.display_game_state(self._game, 0)
+        # If playing with AI (one-player mode), ensure we're showing human player's view (player 0)
+        # The display should already be correct from the last move update, so we just update
+        # the current player reference without redrawing the entire table
+        if getattr(self, '_one_player_mode', False) and self._display and self._game:
+            # Update current player reference without full table refresh
+            # The display is already showing the correct final state from the last move
+            self._display._current_player = 0
 
         # Wait for all animations and display updates to complete before showing game over
         # This ensures the game over message appears after all moves are displayed
