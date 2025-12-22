@@ -44,8 +44,16 @@ class GUIInput:
     def _on_canvas_click(self, event):
         """Handle canvas click events - detect card clicks and show action menu."""
         # If game is finished, ignore all clicks
-        if self._game and self._game.isFinished:
-            return
+        # But allow clicks when turns_left > 0 (current player still has their final turn)
+        if self._game:
+            state = self._game.state
+            if state.turnsLeft is not None:
+                # Deck is exhausted - only ignore if turns_left == 0
+                if state.turnsLeft == 0 and self._game.isFinished:
+                    return
+            elif self._game.isFinished:
+                # Game finished for other reasons (lives lost, perfect score, etc.)
+                return
 
         # Check if there's an open menu
         menu_open = hasattr(self._display, '_action_menu') and self._display._action_menu

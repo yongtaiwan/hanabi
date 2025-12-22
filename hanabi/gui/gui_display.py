@@ -221,16 +221,24 @@ class GUIDisplay:
         self._history_text.tag_config("color_green", foreground="#228B22")  # Green
         self._history_text.tag_config("color_blue", foreground="#4169E1")  # Blue
         self._history_text.tag_config("color_multi", foreground="#9370DB")  # Purple
-        self._history_text.tag_config("number", foreground="#FFFFFF", font=("Arial", 9, "bold"))
+        self._history_text.tag_config("number", foreground="#FFFFFF", font=("Arial", 11, "bold"))
         self._history_text.tag_config("error", foreground="#FF6B6B")  # Light red
         self._history_text.tag_config("timestamp", foreground="#888888")  # Grey
-        self._history_text.tag_config("game_end", foreground="#FFD700", font=("Arial", 9, "bold"))  # Gold for game end
+        self._history_text.tag_config("game_end", foreground="#FFD700", font=("Arial", 11, "bold"))  # Gold for game end
 
     def _on_canvas_click(self, event):
         """Handle canvas click - delegate to input handler or close menu."""
         # If game is finished, ignore all clicks
-        if self._game and self._game.isFinished:
-            return
+        # But allow clicks when turns_left > 0 (current player still has their final turn)
+        if self._game:
+            state = self._game.state
+            if state.turnsLeft is not None:
+                # Deck is exhausted - only ignore if turns_left == 0
+                if state.turnsLeft == 0 and self._game.isFinished:
+                    return
+            elif self._game.isFinished:
+                # Game finished for other reasons (lives lost, perfect score, etc.)
+                return
 
         # Delegate to input handler if available
         if self._input_handler and hasattr(self._input_handler, '_on_canvas_click'):
@@ -296,8 +304,8 @@ class GUIDisplay:
         # Add player prefix if message doesn't start with P\d+
         # Messages from engine are like "plays red 1" or "hints player 2: ..."
         # We need to add "P1 " prefix (or "P1 (AI) " for AI players)
-        # BUT: Don't add prefix for "Game Over" messages
-        if not re.match(r'^P\d+', concise_message) and not concise_message.lower().startswith("game over"):
+        # BUT: Don't add prefix for "Game Over" or "The deck is empty" messages
+        if not re.match(r'^P\d+', concise_message) and not concise_message.lower().startswith("game over") and not concise_message.lower().startswith("the deck is empty"):
             if player_index is not None:
                 player_num = player_index + 1
                 ai_suffix = " (AI)" if is_ai else ""
@@ -1671,8 +1679,20 @@ class GUIDisplay:
         if not self._game:
             return
 
-        if self._game.isFinished:
-            # Game is finished - close menu and return
+        # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
+        state = self._game.state
+        # If deck is exhausted, check turns_left - game should only end when turns_left == 0
+        # (meaning all players have taken their final turn)
+        if state.turnsLeft is not None:
+            # Deck is exhausted - game ends only when turns_left == 0
+            if state.turnsLeft == 0:
+                # All players have taken their final turn - game is finished
+                if self._game.isFinished:
+                    self._close_action_menu()
+                    return
+            # If turns_left > 0, allow the move (current player still has their final turn)
+        elif self._game.isFinished:
+            # Game finished for other reasons (lives lost, perfect score, etc.)
             self._close_action_menu()
             return
 

@@ -355,6 +355,12 @@ class GUIGame:
             # Format move message
             move_message = self._format_move_message(player_index, move, old_state, new_state)
 
+            # Check if deck just became empty (old_state had cards, new_state has 0)
+            old_deck_size = old_state.commonView.cardsToDraw if old_state else None
+            new_deck_size = new_state.commonView.cardsToDraw if new_state else None
+            deck_just_emptied = (old_deck_size is not None and old_deck_size > 0 and
+                                new_deck_size is not None and new_deck_size == 0)
+
             # Add delay for AI players to slow down simulation
             is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
             if is_ai_player:
@@ -383,6 +389,12 @@ class GUIGame:
                 # Check if this is an AI player for display purposes
                 is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
                 self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
+
+                # If deck just became empty, add a separate message with yellow text (like game over)
+                if deck_just_emptied:
+                    deck_empty_msg = "The deck is empty. Each player gets one more turn."
+                    # Use game_end event type for yellow color, and start with "Deck Empty" to prevent player prefix
+                    self._display._add_event_to_history(deck_empty_msg, "game_end", player_index=None, is_ai=False, turn_number=move_turn_number)
 
                 # Force immediate GUI update to ensure display refreshes right away
                 # This ensures the display updates immediately after each move, even for fast AI players
@@ -1062,8 +1074,19 @@ class GUIGame:
         # Check if game is valid and not finished
         assert self._game is not None, "No game is active."
 
-        if self._game.isFinished:
-            # Game is finished - show end screen if not already shown
+        # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
+        state = self._game.state
+        if state.turnsLeft is not None:
+            # Deck is exhausted - game ends only when turns_left == 0
+            if state.turnsLeft == 0:
+                # All players have taken their final turn - game is finished
+                if self._game.isFinished:
+                    if not hasattr(self, '_game_ended') or not self._game_ended:
+                        self._on_game_end()
+                    return
+            # If turns_left > 0, allow the move (current player still has their final turn)
+        elif self._game.isFinished:
+            # Game finished for other reasons (lives lost, perfect score, etc.)
             if not hasattr(self, '_game_ended') or not self._game_ended:
                 self._on_game_end()
             return
@@ -1072,7 +1095,12 @@ class GUIGame:
 
         # Set the move on the current player (this will unblock player.play())
         # Display updates are now handled by the global callback in Game
-        self._players[current_player].set_move(move)
+        # Only call set_move on players that have it (GUIPlayer instances)
+        player = self._players[current_player]
+        assert hasattr(player, 'set_move'), \
+            f"Attempted to call set_move on {type(player).__name__} (player {current_player}), which doesn't have this method. " \
+            f"This should only be called for GUIPlayer instances."
+        player.set_move(move)
 
     def _process_gui_updates(self):
         """Periodically process GUI updates to ensure display refreshes immediately."""
