@@ -1920,6 +1920,129 @@ class GUIDisplay:
 
         return (discard_x, discard_y)
 
+    def _get_deck_position(self, state: GameState) -> Optional[Tuple[int, int]]:
+        """Get the position of the next card to be drawn from the deck."""
+        if not self._game or not self._canvas:
+            return None
+
+        width = self._canvas.winfo_width() or 1200
+        height = self._canvas.winfo_height() or 800
+        center_x = width // 2
+        center_y = height // 2
+
+        draw_deck_index = state.drawDeckIndex
+        initial_deck = self._game.state.startPosition.drawDeck.cards
+        total_deck_size = len(initial_deck)
+
+        if total_deck_size == 0 or draw_deck_index >= total_deck_size:
+            return None
+
+        deck_y = center_y + 180
+        num_players = self._game.settings.numPlayers
+        cards_per_player = self._game.settings.maxCardsInHand
+        initial_remaining = total_deck_size - (num_players * cards_per_player)
+
+        if initial_remaining == 0:
+            return None
+
+        if initial_remaining == 1:
+            num_rows = 1
+            bottom_row_cards = 1
+            top_row_cards = 0
+        else:
+            num_rows = 2
+            bottom_row_cards = initial_remaining // 2
+            top_row_cards = initial_remaining - bottom_row_cards
+
+        card_width = 35
+        card_height = 50
+        horizontal_overlap = 15
+        row_height = card_height + 5
+
+        bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+        top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
+        max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
+
+        table_radius = min(width, height) // 4
+        max_width = table_radius * 1.6
+
+        if max_row_width > max_width:
+            scale = max_width / max_row_width
+            horizontal_overlap = max(5, int(horizontal_overlap * scale))
+            card_width = max(25, int(card_width * scale))
+            bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+            top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
+            max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
+
+        start_x = center_x + max_row_width // 2 - card_width
+        start_y = deck_y + (num_rows - 1) * row_height
+
+        initial_deck_start_index = num_players * cards_per_player
+        position_in_initial_deck = draw_deck_index - initial_deck_start_index
+
+        if position_in_initial_deck < 0:
+            return None
+
+        if position_in_initial_deck < bottom_row_cards:
+            row = 0
+            col_from_right = position_in_initial_deck
+        else:
+            row = 1
+            col_from_right = position_in_initial_deck - bottom_row_cards
+
+        card_x = start_x - (col_from_right * horizontal_overlap)
+        card_y = start_y - (row * row_height)
+
+        return (card_x + card_width // 2, card_y)
+
+    def _get_card_position_in_hand(self, player_index: int, card_index: int, state: GameState) -> Optional[Tuple[int, int]]:
+        """Calculate the position of a card in a player's hand based on the game state."""
+        if not self._canvas or player_index >= len(state.playerHands):
+            return None
+
+        hand = state.playerHands[player_index]
+        if card_index >= len(hand.cards):
+            return None
+
+        width = self._canvas.winfo_width() or 1200
+        height = self._canvas.winfo_height() or 800
+        center_x = width // 2
+        center_y = height // 2
+        table_radius = min(width, height) // 4
+        num_players = len(state.playerHands)
+
+        card_width = 50
+        card_height = 70
+        spacing = 10
+
+        max_cards = max(len(h.cards) for h in state.playerHands) if state.playerHands else 5
+        max_hand_width = max_cards * (card_width + spacing) - spacing
+        max_half_width = max_hand_width // 2
+        padding = 80
+        hand_radius = table_radius + max_half_width + padding
+        vertical_margin = 120
+        max_vertical_distance = min(
+            center_y - vertical_margin - card_height // 2,
+            height - center_y - vertical_margin - card_height // 2
+        )
+        hand_radius = min(hand_radius, max_vertical_distance)
+
+        base_angle = 90
+        angle_step = 360 / num_players
+        relative_pos = (player_index - self._current_player) % num_players
+        angle_deg = (base_angle + angle_step * relative_pos) % 360
+        angle_rad = radians(angle_deg)
+
+        x = center_x + hand_radius * cos(angle_rad)
+        y = center_y + hand_radius * sin(angle_rad)
+
+        total_width = len(hand.cards) * (card_width + spacing) - spacing
+        start_x = x - total_width // 2
+        card_x = start_x + card_index * (card_width + spacing)
+        card_y = y
+
+        return (card_x, card_y)
+
     def show_explosion(self, x: int, y: int) -> None:
         """
         Show an explosion effect at the given position (for invalid plays).
@@ -2182,6 +2305,87 @@ class GUIDisplay:
         if len(self._active_animations) == 0:
             self._process_animation_queue()
 
+    def animate_card_draw(
+        self,
+        player_index: int,
+        card: Card,
+        edge_color: str = "#00FF00",  # Green for drawing
+        callback: Optional[Callable] = None,
+        old_state: Optional[GameState] = None,  # Old state to get deck position
+        new_state: Optional[GameState] = None  # New state to get hand position
+    ) -> None:
+        """
+        Animate a card being drawn from the deck to a player's hand.
+        Uses the same animation queue system as animate_card_move.
+
+        Args:
+            player_index: Index of the player drawing the card
+            card: The card being drawn
+            edge_color: Edge color for the animated card (default: green)
+            callback: Optional callback to call when animation completes
+            old_state: Old state to get deck position (before card was drawn)
+            new_state: New state to get hand position (after card was drawn)
+        """
+        if not self._animations_enabled or not self._canvas:
+            if callback:
+                callback()
+            return
+
+        # Get source position from deck using old_state
+        if old_state is None:
+            if callback:
+                callback()
+            return
+
+        source_pos = self._get_deck_position(old_state)
+        if source_pos is None:
+            if callback:
+                callback()
+            return
+
+        source_x, source_y = source_pos
+
+        # Get destination position (position 0 in player's hand) using new_state
+        if new_state is None or player_index >= len(new_state.playerHands):
+            if callback:
+                callback()
+            return
+
+        dest_pos = self._get_card_position_in_hand(player_index, 0, new_state)
+        if dest_pos is None:
+            if callback:
+                callback()
+            return
+
+        dest_x, dest_y = dest_pos
+
+        # Create animation request object
+        animation_request = {
+            'player_index': player_index,
+            'card_index': 0,  # New card always goes to position 0
+            'card': card,
+            'source_x': source_x,
+            'source_y': source_y,
+            'dest_x': dest_x,
+            'dest_y': dest_y,
+            'destination': 'hand',
+            'color': None,
+            'edge_color': edge_color,
+            'callback': callback
+        }
+
+        # Add to queue (will play after current animation completes)
+        self._animation_queue.append(animation_request)
+        print(f"[ANIMATION DEBUG] Draw animation queued: player {player_index}, card {card} (queue size: {len(self._animation_queue)})")
+
+        # Keep frozen state for the draw animation
+        if old_state is not None:
+            self._frozen_state = old_state
+            if self._game:
+                self._frozen_game_state = self._game
+
+        # Queue is already being processed, so this will play after current animation
+
     def _process_animation_queue(self):
         """Process the next animation in the queue."""
         if not self._animation_queue:
@@ -2221,11 +2425,22 @@ class GUIDisplay:
             )
             widget_ids.append(glow_rect)
 
+        # For draw animations (destination='hand'), show "?" instead of actual card
+        is_draw_animation = request.get('destination') == 'hand'
+
+        # Use gray background for draw animations (unknown card)
+        if is_draw_animation:
+            display_bg_color = "#808080"  # Gray
+            display_text = "?"
+        else:
+            display_bg_color = bg_color
+            display_text = str(request['card'].number.value)
+
         # Create card rectangle with colored outline based on move type
         card_rect = self._canvas.create_rectangle(
             request['source_x'] - card_width // 2, request['source_y'] - card_height // 2,
             request['source_x'] + card_width // 2, request['source_y'] + card_height // 2,
-            fill=bg_color,
+            fill=display_bg_color,
             outline=edge_color,
             width=4,  # Thicker outline for visibility
             tags=("animated_card",)
@@ -2235,7 +2450,7 @@ class GUIDisplay:
         # Create card number text (slightly larger)
         card_text = self._canvas.create_text(
             request['source_x'], request['source_y'],
-            text=str(request['card'].number.value),
+            text=display_text,
             fill="#000000",
             font=("Arial", 26, "bold"),
             tags=("animated_card",)

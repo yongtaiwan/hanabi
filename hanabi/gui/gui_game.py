@@ -460,33 +460,66 @@ class GUIGame:
                 else:
                     edge_color = "#FF1493"  # Default to deep pink
 
-                # Animate the card movement, then update display
-                def animation_complete():
+                # Check if a card was drawn
+                old_deck_size = old_state.commonView.cardsToDraw if old_state else 0
+                new_deck_size = new_state.commonView.cardsToDraw if new_state else 0
+                card_was_drawn = old_deck_size > new_deck_size
+                drawn_card = None
+
+                if card_was_drawn and player_index < len(new_state.playerHands):
+                    new_hand = new_state.playerHands[player_index]
+                    if len(new_hand.cards) > 0:
+                        drawn_card = new_hand.cards[0]
+
+                # Use a variable to track when all animations are complete (blocking)
+                import tkinter as tk
+                animation_done = tk.BooleanVar(value=False)
+
+                # Animate the card movement, then draw animation (if needed), then update display
+                def play_discard_animation_complete():
                     # If invalid play, show explosion effect
                     if is_invalid_play:
-                        # Get discard position for explosion
                         dest_pos = self._display._get_discard_position()
                         if dest_pos:
                             self._display.show_explosion(dest_pos[0], dest_pos[1])
-                    # Update event history (this doesn't trigger game state display update)
-                    is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
-                    self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
-                    # The actual game state display update will happen automatically
-                    # after the animation is removed from _active_animations in _animate_frame
 
-                # Schedule animation on GUI thread
-                # Card positions should already be stored from the last display update
-                # Pass old_state so display can freeze it during animation (already frozen above, but pass for consistency)
-                self._display.root.after(0, lambda: self._display.animate_card_move(
+                    # If card was drawn, animate the draw
+                    if card_was_drawn and drawn_card:
+                        def draw_animation_complete():
+                            # After draw animation, update display
+                            update_display()
+                            # Signal completion - all animations done
+                            animation_done.set(True)
+
+                        # Animate card draw (queued - will play after play/discard animation)
+                        self._display.animate_card_draw(
+                            player_index,
+                            drawn_card,
+                            edge_color="#00FF00",  # Green for drawing
+                            callback=draw_animation_complete,
+                            old_state=old_state,
+                            new_state=new_state
+                        )
+                    else:
+                        # No card drawn - update display and signal completion
+                        update_display()
+                        animation_done.set(True)
+
+                # Start play/discard animation (queued - callback will queue draw if needed)
+                self._display.animate_card_move(
                     player_index,
                     move.card,
                     card,
                     destination,
                     color=firework_color,
                     edge_color=edge_color,
-                    callback=animation_complete,
-                    old_state=old_state  # Pass old state to freeze during animation
-                ))
+                    callback=play_discard_animation_complete,
+                    old_state=old_state
+                )
+
+                # BLOCK until all animations are complete
+                # wait_variable processes events internally, allowing animations to play
+                self._display.root.wait_variable(animation_done)
             else:
                 # No animation needed - update display immediately
                 # Schedule update immediately (0 = highest priority, runs as soon as possible)
