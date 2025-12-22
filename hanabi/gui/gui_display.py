@@ -1290,25 +1290,25 @@ class GUIDisplay:
                 card_y = y
 
                 # Get hints for this card from GUI's independent hint tracking
+                # Card and hints are always drawn together as a unit
                 player_hints = self._hints.get(i, {})
                 card_hints = player_hints.get(card_idx, {})
-
-                # Check if card actually has hints (color or number is not None)
-                has_hints = bool(card_hints and (card_hints.get("color") is not None or card_hints.get("number") is not None))
 
                 # Show card front if: replay mode OR not current player
                 # Current player's cards always show back (?) with hint boxes outside
                 show_front = self._show_all_cards or not is_current_player
 
+                # Always pass hints - they will be used when drawing the card
+                # For front-facing cards (other players), hints are shown on the card
+                # For back-facing cards (current player), hints are shown in boxes outside
                 widget = self._create_card_widget(
                     card_x, card_y,
                     card.color, card.number,
                     show_front=show_front,
-                    hints=card_hints if not show_front else {},
+                    hints=card_hints,  # Always pass hints - card and hints are a unit
                     clickable=True,  # All cards clickable for action menu
                     player_idx=i,
-                    card_idx=card_idx,
-                    has_hints=has_hints  # Show hint indicator dot for all players in replay mode
+                    card_idx=card_idx
                 )
                 self._card_widgets[(i, card_idx)] = widget
                 # Store card position for click detection
@@ -1328,8 +1328,7 @@ class GUIDisplay:
         clickable: bool = False,
         player_idx: int = None,
         card_idx: int = None,
-        selected: bool = False,
-        has_hints: bool = False
+        selected: bool = False
     ) -> int:
         """Create a card widget on the canvas."""
         hints = hints or {}
@@ -1358,12 +1357,12 @@ class GUIDisplay:
             )
 
             # Add hint indicator boxes outside bottom of card if card has hints
-            if has_hints and player_idx is not None and card_idx is not None:
-                # Get actual hints from hint tracking
-                player_hints = self._hints.get(player_idx, {})
-                card_hints = player_hints.get(card_idx, {})
-                color_hint = card_hints.get("color")
-                number_hint = card_hints.get("number")
+            # Use hints passed as parameter - card and hints are always drawn together as a unit
+            color_hint = hints.get("color")
+            number_hint = hints.get("number")
+            has_any_hints = color_hint is not None or number_hint is not None
+
+            if has_any_hints:
 
                 # Calculate position for boxes outside bottom of card
                 box_height = 18
@@ -2580,7 +2579,7 @@ class GUIDisplay:
             lambda: self._animate_frame(animation)
         )
 
-    def update_hints_from_move(self, player_index: int, move: Move) -> None:
+    def update_hints_from_move(self, player_index: int, move: Move, old_state=None, new_state=None) -> None:
         """
         Update hint tracking based on a move.
         This is called independently of player implementations.
@@ -2588,6 +2587,8 @@ class GUIDisplay:
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
+            old_state: Previous game state (optional, used to detect if card was drawn)
+            new_state: New game state (optional, used to detect if card was drawn)
         """
         from hanabi.core.moves import ColorHint, NumberHint, CardMove
 
@@ -2613,24 +2614,47 @@ class GUIDisplay:
             # A card was played or discarded - shift hint indices
             card_index = move.card
 
+            # Determine if a new card was drawn
+            # If old_state and new_state are provided, check hand size change
+            # If hand size decreased, no card was drawn (deck exhausted)
+            # If hand size stayed the same, a card was drawn
+            card_was_drawn = True  # Default assumption
+            if old_state is not None and new_state is not None:
+                old_hand_size = len(old_state.playerHands[player_index].cards) if player_index < len(old_state.playerHands) else 0
+                new_hand_size = len(new_state.playerHands[player_index].cards) if player_index < len(new_state.playerHands) else 0
+                # If hand size decreased, no card was drawn
+                card_was_drawn = (new_hand_size == old_hand_size)
+
             # Remove hints for the card being played/discarded
             if player_index in self._hints and card_index in self._hints[player_index]:
                 del self._hints[player_index][card_index]
 
             # Shift remaining hints to new indices
-            # When a card is played/discarded:
-            # 1. The card at card_index is removed (cards after shift left by 1)
-            # 2. A new card is drawn and inserted at position 0 (all cards shift right by 1)
-            # Net effect:
-            # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
-            # - Cards at indices > card_index: no net change (left by 1 from removal, right by 1 from insertion)
             if player_index in self._hints:
                 new_hints = {}
                 for old_idx, hint_data in self._hints[player_index].items():
-                    if old_idx < card_index:
-                        # Card shifted right by 1 due to new card insertion at position 0
-                        new_hints[old_idx + 1] = hint_data
-                    elif old_idx > card_index:
-                        # Card shifted left by 1 from removal, then right by 1 from insertion = no net change
-                        new_hints[old_idx] = hint_data
+                    if card_was_drawn:
+                        # A new card was drawn and inserted at position 0
+                        # 1. The card at card_index is removed (cards after shift left by 1)
+                        # 2. A new card is inserted at position 0 (all cards shift right by 1)
+                        # Net effect:
+                        # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
+                        # - Cards at indices > card_index: no net change (left by 1 from removal, right by 1 from insertion)
+                        if old_idx < card_index:
+                            # Card shifted right by 1 due to new card insertion at position 0
+                            new_hints[old_idx + 1] = hint_data
+                        elif old_idx > card_index:
+                            # Card shifted left by 1 from removal, then right by 1 from insertion = no net change
+                            new_hints[old_idx] = hint_data
+                    else:
+                        # No card was drawn (deck exhausted)
+                        # The card at card_index is removed, all cards after shift left by 1
+                        # - Cards at indices < card_index: no change
+                        # - Cards at indices > card_index: shift left by 1
+                        if old_idx < card_index:
+                            # No change - card position unchanged
+                            new_hints[old_idx] = hint_data
+                        elif old_idx > card_index:
+                            # Card shifted left by 1 due to removal
+                            new_hints[old_idx - 1] = hint_data
                 self._hints[player_index] = new_hints

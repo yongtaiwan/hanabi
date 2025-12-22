@@ -349,7 +349,8 @@ class GUIGame:
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
             """Callback to update display when a move is made."""
             # Update hint tracking in display (independent of player implementations)
-            self._display.update_hints_from_move(player_index, move)
+            # Pass old_state and new_state to detect if a card was drawn
+            self._display.update_hints_from_move(player_index, move, old_state, new_state)
 
             # Format move message
             logger.debug(f"[on_move_callback] player={player_index}, move={move}, old_state={old_state is not None}, new_state={new_state is not None}")
@@ -1537,7 +1538,8 @@ class GUIGame:
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
             """Callback to track moves for event history."""
             # Update hint tracking in display (independent of player implementations)
-            self._display.update_hints_from_move(player_index, move)
+            # Pass old_state and new_state to detect if a card was drawn
+            self._display.update_hints_from_move(player_index, move, old_state, new_state)
             # Store move info for later display in event history
             moves_applied.append((player_index, move, old_state, new_state))
 
@@ -1575,7 +1577,8 @@ class GUIGame:
             new_state = self._game.state
 
             # Update hint tracking (callback may have done this, but ensure it's done)
-            self._display.update_hints_from_move(current_player, move)
+            # Pass old_state and new_state to detect if a card was drawn
+            self._display.update_hints_from_move(current_player, move, old_state, new_state)
 
             # Add move to event history
             move_message = self._format_move_message(current_player, move, old_state, new_state)
