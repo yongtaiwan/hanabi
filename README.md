@@ -107,6 +107,8 @@ This project follows the class diagram design with:
 
 ## TODO
 
+- Implement indirect hinting convention
+
 - **Document game record format**: Create comprehensive documentation for the concise YAML/JSON game record format, including:
   - Field name mappings (short names and their meanings)
   - Card notation format (e.g., G5 for GREEN 5)
