@@ -137,6 +137,9 @@ game_records/
 
 # Test output
 test_history
+*_results.txt
+test_*.txt
+*.test_output
 
 # macOS
 .DS_Store
