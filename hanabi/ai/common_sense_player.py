@@ -62,7 +62,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Each hint is stored as (hint_type, value) where hint_type is 'color' or 'number'
         self._teammate_hints: Dict[int, List[tuple]] = {}
 
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe moves to track seen cards, received hints, and hints given to teammates.
 
@@ -70,7 +70,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             player_index: Index of the player who made the move
             move: The move that was made
         """
-        super().observe(player_index, move)
+        super().observe(player_index, move, **kwargs)
 
         # Track hints we received (for negative hint inference)
         if isinstance(move, (ColorHint, NumberHint)) and move.teammate == self._player_index:

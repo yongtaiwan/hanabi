@@ -48,7 +48,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Get AI player type if in 1-player mode
     ai_player_type = None
     if one_player_mode:
-        from hanabi.ai import RandomPlayer, CommonSensePlayer
+        from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
         # For interactive play, use fast config for MonteCarlo
@@ -64,7 +64,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         ai_types = {
             '1': ('Random', RandomPlayer),
             '2': ('CommonSense', CommonSensePlayer),
-            '3': ('MonteCarlo', create_monte_carlo_player),
+            '3': ('Recommendation', RecommendationPlayer),
+            '4': ('MonteCarlo', create_monte_carlo_player),
         }
 
         print("\nSelect AI player type:")
@@ -72,13 +73,13 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             print(f"  {key}. {name}")
 
         while True:
-            choice = input("Enter choice (1-3): ").strip()
+            choice = input("Enter choice (1-4): ").strip()
             if choice in ai_types:
                 ai_player_type = ai_types[choice][1]
                 print(f"Selected: {ai_types[choice][0]}")
                 break
             else:
-                print("Please enter 1, 2, or 3.")
+                print("Please enter 1, 2, 3, or 4.")
 
     # Get number of players
     if num_players is None:

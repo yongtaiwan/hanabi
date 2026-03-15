@@ -78,13 +78,14 @@ class BasePlayer(Observer, Player):
         """Set the common view (all players share the same reference)."""
         self._common_view = common_view
 
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe a move made by a player.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
+            **kwargs: Optional context (e.g. game= for strategies that need hint-time state)
         """
         # Base implementation - can be overridden by subclasses
         pass
@@ -116,7 +117,7 @@ class HintTrackingPlayer(BasePlayer):
         super().__init__(player_index)
         self._hints: Dict[int, Dict[str, Optional[Union[Color, Number]]]] = {}
 
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe a move and update hint tracking if it affects this player.
 
@@ -124,7 +125,7 @@ class HintTrackingPlayer(BasePlayer):
             player_index: Index of the player who made the move
             move: The move that was made
         """
-        super().observe(player_index, move)
+        super().observe(player_index, move, **kwargs)
 
         # If this player received a hint
         if isinstance(move, Hint) and move.teammate == self._player_index:

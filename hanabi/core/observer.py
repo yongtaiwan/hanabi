@@ -16,13 +16,14 @@ class Observer(ABC):
     """Observer interface for observing game state."""
 
     @abstractmethod
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe a move made by a player.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
+            **kwargs: Optional context (e.g. game= for RecommendationPlayer to decode hints at hint-time state)
         """
         pass
 

@@ -48,7 +48,7 @@ class GUIObserver(Observer):
         """Set the GUIDisplay instance."""
         self._display = display
 
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe a move made by a player and update the display.
 

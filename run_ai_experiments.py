@@ -1,8 +1,8 @@
 """
 Run AI comparison experiments for different player counts.
 
-This script compares RandomPlayer, CommonSensePlayer, and MonteCarloPlayer
-on the same decks for 2/3/4/5-player games.
+This script compares RandomPlayer, CommonSensePlayer, RecommendationPlayer,
+and MonteCarloPlayer on the same decks for 2/3/4/5-player games.
 
 Folder layout:
 
@@ -20,6 +20,7 @@ Folder layout:
             ai/
               RandomPlayer/
               CommonSensePlayer/
+              RecommendationPlayer/
               MonteCarloPlayer/
           3p/
           4p/
@@ -32,7 +33,7 @@ from typing import Dict
 
 from hanabi.core.game import create_standard_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
-from hanabi.ai import RandomPlayer, CommonSensePlayer, MonteCarloPlayer, MonteCarloConfig
+from hanabi.ai import RandomPlayer, CommonSensePlayer, MonteCarloPlayer, MonteCarloConfig, RecommendationPlayer
 
 try:
     import yaml
@@ -62,6 +63,11 @@ def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
         verbose=False,  # Disable terminal output for faster experiments
     )
     return MonteCarloPlayer(player_index, config=config)
+
+
+def create_recommendation_player(player_index: int) -> RecommendationPlayer:
+    """Factory for RecommendationPlayer (Cox et al. strategy; best with 4–5 players)."""
+    return RecommendationPlayer(player_index)
 
 
 def run_experiments(
@@ -101,6 +107,7 @@ def run_experiments(
         ai_factories = {
             "RandomPlayer": create_random_player,
             "CommonSensePlayer": create_common_sense_player,
+            "RecommendationPlayer": create_recommendation_player,
             "MonteCarloPlayer": create_monte_carlo_player,
         }
 
@@ -172,7 +179,7 @@ def run_experiments(
     lines.append(f"- Player counts: {', '.join(str(p) + 'p' for p in player_counts)}")
     lines.append(f"- Runs per configuration: {num_runs}")
     lines.append(f"- Base seed: {base_seed}")
-    lines.append(f"- AIs compared: RandomPlayer, CommonSensePlayer, MonteCarloPlayer")
+    lines.append(f"- AIs compared: RandomPlayer, CommonSensePlayer, RecommendationPlayer, MonteCarloPlayer")
     lines.append("")
 
     # Add comparison table across all player counts
@@ -240,11 +247,26 @@ def run_experiments(
 
 def main() -> None:
     """Entry point for running AI comparison experiments."""
-    # Run with 10 games for each player count (2, 3, 4, 5 players)
+    import argparse
+    parser = argparse.ArgumentParser(description="Run AI comparison experiments (Random, CommonSense, Recommendation, MonteCarlo).")
+    parser.add_argument(
+        "--players",
+        type=int,
+        nargs="+",
+        default=[2, 3, 4, 5],
+        metavar="N",
+        help="Player counts to run (default: 2 3 4 5). e.g. --players 5 for 5-player only.",
+    )
+    parser.add_argument("--runs", type=int, default=10, help="Number of runs per configuration (default: 10).")
+    parser.add_argument("--seed", type=int, default=42, help="Base random seed (default: 42).")
+    args = parser.parse_args()
+    player_counts = tuple(args.players)
+    if not all(2 <= p <= 5 for p in player_counts):
+        parser.error("Each player count must be between 2 and 5.")
     run_experiments(
-        player_counts=(2, 3, 4, 5),  # All player counts
-        num_runs=10,  # 10 games per configuration
-        base_seed=42,
+        player_counts=player_counts,
+        num_runs=args.runs,
+        base_seed=args.seed,
     )
 
 

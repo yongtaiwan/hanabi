@@ -82,7 +82,7 @@ class ConsolePlayer(HumanPlayer):
 
             return move
 
-    def observe(self, player_index: int, move: Move) -> None:
+    def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
         Observe a move (for player's internal state tracking only).
 
@@ -92,5 +92,5 @@ class ConsolePlayer(HumanPlayer):
             player_index: Index of the player who made the move
             move: The move that was made
         """
-        super().observe(player_index, move)
+        super().observe(player_index, move, **kwargs)
 

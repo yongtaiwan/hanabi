@@ -241,7 +241,7 @@ class GUIGame:
         button_frame = tk.Frame(self._ai_type_frame, bg="#2C3E50")
         button_frame.pack(fill=tk.X)
 
-        from hanabi.ai import RandomPlayer, CommonSensePlayer
+        from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
         # For interactive GUI play, use faster config for responsive gameplay
@@ -260,6 +260,7 @@ class GUIGame:
         ai_types = [
             ("Random", RandomPlayer),
             ("CommonSense", CommonSensePlayer),
+            ("Recommendation", RecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player),
         ]
 

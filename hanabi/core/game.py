@@ -1082,7 +1082,7 @@ class Game:
     def _notify_players(self, player_index: int, move: Move) -> None:
         """Notify all players about a move (all players observe all moves)."""
         for player in self._team.players:
-            player.observe(player_index, move)
+            player.observe(player_index, move, game=self)
 
     def _getPlayerView(self, player_index: int) -> PlayerView:
         """
