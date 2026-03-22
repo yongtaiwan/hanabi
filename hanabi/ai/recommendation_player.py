@@ -185,78 +185,90 @@ class RecommendationPlayer(BasePlayer):
             return 4 + ((hand_size - 1) - idx)
         return 4 + (hand_size - 1)
 
-    def play(self, player_view: PlayerView) -> Move:
-        hand_size = player_view.own_hand_size
-        assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
-        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
+    def _paper_try_follow_play_recommendation(
+        self,
+        my_rec: Optional[int],
+        hand_size: int,
+        valid_moves: List[Move],
+        *,
+        plays_since_hint: int,
+        errors: int,
+    ) -> Optional[Move]:
+        """
+        Paper rules 1–2: if recommendation is play (0–3), follow it when
+        (1) no play since last hint, or (2) one play since hint and errors < 2.
+        """
+        if my_rec is None or not (0 <= my_rec <= 3):
+            return None
+        play_idx = rec_to_play_index(my_rec, hand_size)
+        if play_idx is None:
+            return None
+        if not any(isinstance(m, Play) and m.card == play_idx for m in valid_moves):
+            return None
 
-        # Get my decoded recommendation
-        my_rec = self._get_my_recommendation(player_view)
-        valid_moves = generate_all_valid_moves(
-            player_view, self.common_view, self.game_settings, self._player_index
+        if plays_since_hint == 0:
+            slot = _slot_name(play_idx, hand_size)
+            self._last_decision_summary = (
+                f"Play {slot}: decoded recommendation={my_rec} (play), "
+                "no card played since last hint → follow recommendation"
+            )
+            return Play(play_idx)
+        if plays_since_hint == 1 and errors < 2:
+            slot = _slot_name(play_idx, hand_size)
+            self._last_decision_summary = (
+                f"Play {slot}: decoded recommendation={my_rec} (play), "
+                "one card played since hint and <2 errors → follow recommendation"
+            )
+            return Play(play_idx)
+        return None
+
+    def _paper_try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
+        """
+        Paper rule 3: if a hint token can be spent, give the encoding hint.
+
+        The mod-8 value fixes rank vs color and which clockwise partner to hint; with
+        non-empty hands (game invariant), :meth:`_compute_hint` always produces a move.
+        """
+        if self.common_view.hint_tokens <= 0:
+            return None
+        hint_move = self._compute_hint(player_view)
+        self._my_decoded_recommendation = None
+        if isinstance(hint_move, ColorHint):
+            self._last_decision_summary = (
+                f"Hint: give color {hint_move.color.name.lower()} to P{hint_move.teammate + 1} "
+                "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
+            )
+            return hint_move
+        if isinstance(hint_move, NumberHint):
+            self._last_decision_summary = (
+                f"Hint: give number {hint_move.number.value} to P{hint_move.teammate + 1} "
+                "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
+            )
+            return hint_move
+        assert False, f"unexpected hint type from _compute_hint: {type(hint_move)}"
+
+    def _paper_try_follow_discard_recommendation(
+        self,
+        my_rec: Optional[int],
+        hand_size: int,
+        valid_moves: List[Move],
+    ) -> Optional[Move]:
+        """Paper rule 4: if recommendation is discard (4–7), discard that card."""
+        if my_rec is None or not (4 <= my_rec <= 7):
+            return None
+        discard_idx = rec_to_discard_index(my_rec, hand_size)
+        if discard_idx is None:
+            return None
+        if not any(isinstance(m, Discard) and m.card == discard_idx for m in valid_moves):
+            return None
+        slot = _slot_name(discard_idx, hand_size)
+        self._last_decision_summary = (
+            f"Discard {slot}: decoded recommendation={my_rec} (discard) → follow recommendation"
         )
-        valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
+        return Discard(discard_idx)
 
-        if not valid_moves:
-            self._last_decision_summary = "No valid moves; play or discard index 0"
-            return Play(0) if hand_size > 0 else Discard(0)
-
-        # Action algorithm (paper order)
-        # 1) If most recent recommendation was play and no card played since last hint -> play recommended
-        if my_rec is not None and 0 <= my_rec <= 3:
-            play_idx = rec_to_play_index(my_rec, hand_size)
-            if play_idx is not None and self._plays_since_hint == 0:
-                if any(isinstance(m, Play) and m.card == play_idx for m in valid_moves):
-                    slot = _slot_name(play_idx, hand_size)
-                    self._last_decision_summary = (
-                        f"Play {slot}: decoded recommendation={my_rec} (play), "
-                        "no card played since last hint → follow recommendation"
-                    )
-                    return Play(play_idx)
-
-        # 2) If most recent recommendation was play, one card played since hint, and <2 errors -> play recommended
-        if my_rec is not None and 0 <= my_rec <= 3 and errors < 2 and self._plays_since_hint == 1:
-            play_idx = rec_to_play_index(my_rec, hand_size)
-            if play_idx is not None:
-                if any(isinstance(m, Play) and m.card == play_idx for m in valid_moves):
-                    slot = _slot_name(play_idx, hand_size)
-                    self._last_decision_summary = (
-                        f"Play {slot}: decoded recommendation={my_rec} (play), "
-                        "one card played since hint and <2 errors → follow recommendation"
-                    )
-                    return Play(play_idx)
-
-        # 3) If hint token available, give hint
-        if self.common_view.hint_tokens > 0:
-            hint_move = self._compute_hint(player_view)
-            if hint_move is not None:
-                self._my_decoded_recommendation = None  # we are giving the hint; no recommendation for us from it
-                if isinstance(hint_move, ColorHint):
-                    self._last_decision_summary = (
-                        f"Hint: give color {hint_move.color.name.lower()} to P{hint_move.teammate + 1} "
-                        "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
-                    )
-                    return hint_move
-                if isinstance(hint_move, NumberHint):
-                    self._last_decision_summary = (
-                        f"Hint: give number {hint_move.number.value} to P{hint_move.teammate + 1} "
-                        "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
-                    )
-                    return hint_move
-                assert False, f"unexpected hint type from _compute_hint: {type(hint_move)}"
-
-        # 4) If most recent recommendation was discard -> discard that card
-        if my_rec is not None and 4 <= my_rec <= 7:
-            discard_idx = rec_to_discard_index(my_rec, hand_size)
-            if discard_idx is not None:
-                if any(isinstance(m, Discard) and m.card == discard_idx for m in valid_moves):
-                    slot = _slot_name(discard_idx, hand_size)
-                    self._last_decision_summary = (
-                        f"Discard {slot}: decoded recommendation={my_rec} (discard) → follow recommendation"
-                    )
-                    return Discard(discard_idx)
-
-        # 5) Discard C1
+    def _paper_try_discard_c1(self, valid_moves: List[Move], hand_size: int) -> Optional[Move]:
+        """Paper rule 5: discard C1 (oldest)."""
         c1_idx = hand_size - 1
         for m in valid_moves:
             if isinstance(m, Discard) and m.card == c1_idx:
@@ -264,22 +276,51 @@ class RecommendationPlayer(BasePlayer):
                     "Discard C1 (oldest): no hint tokens or action algorithm rule 5 (default discard C1)"
                 )
                 return m
+        return None
 
-        # Fallback: first valid move
-        m = valid_moves[0]
-        if isinstance(m, Play):
-            self._last_decision_summary = f"Fallback: play card at index {m.card}"
-            return m
-        if isinstance(m, Discard):
-            self._last_decision_summary = f"Fallback: discard card at index {m.card}"
-            return m
-        if isinstance(m, (ColorHint, NumberHint)):
-            self._last_decision_summary = "Fallback: first valid move (hint)"
-            return m
-        assert False, f"unexpected move type in fallback: {type(m)}"
+    def _emergency_move_when_no_valid_moves(self, hand_size: int) -> Move:
+        self._last_decision_summary = "No valid moves; play or discard index 0"
+        return Play(0) if hand_size > 0 else Discard(0)
 
-    def _compute_hint(self, player_view: PlayerView) -> Optional[Move]:
-        """Compute hint that encodes sum of recommendations mod 8."""
+    def play(self, player_view: PlayerView) -> Move:
+        hand_size = player_view.own_hand_size
+        assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
+        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
+
+        my_rec = self._get_my_recommendation(player_view)
+        valid_moves = generate_all_valid_moves(
+            player_view, self.common_view, self.game_settings, self._player_index
+        )
+        valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
+
+        if not valid_moves:
+            return self._emergency_move_when_no_valid_moves(hand_size)
+
+        move = (
+            self._paper_try_follow_play_recommendation(
+                my_rec,
+                hand_size,
+                valid_moves,
+                plays_since_hint=self._plays_since_hint,
+                errors=errors,
+            )
+            or self._paper_try_give_encoded_hint(player_view)
+            or self._paper_try_follow_discard_recommendation(my_rec, hand_size, valid_moves)
+            or self._paper_try_discard_c1(valid_moves, hand_size)
+        )
+        assert move is not None, (
+            "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"
+        )
+        return move
+
+    def _compute_hint(self, player_view: PlayerView) -> Move:
+        """
+        Build the rank or color hint that encodes (sum of others' recommendations) mod 8.
+
+        For 5 players the encoded target is always another player in ``teammates``.
+        Hands are never empty in supported games; a legal rank or color hint always exists
+        on a standard deck.
+        """
         total = 0
         for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
             if p == self._player_index:
@@ -294,17 +335,17 @@ class RecommendationPlayer(BasePlayer):
         value = total % 8
         pos_0, is_number = (value, True) if value < 4 else (value - 4, False)
         target = (self._player_index + 1 + pos_0) % NUM_PLAYERS_FOR_RECOMMENDATION
-        if target not in player_view.teammates:
-            return None
+        assert target in player_view.teammates, (
+            "5p view should list every other player; encoding target must be a teammate"
+        )
         hand = player_view.teammates[target]
-        if not hand.cards:
-            return None
+        assert hand.cards, "encoding hint requires the target player to have at least one card"
         if is_number:
             for num in Number:
                 indices = [i for i, c in enumerate(hand.cards) if c.number == num]
                 if indices:
                     return NumberHint(target, indices, num)
-            return None
+            assert False, "non-empty hand has a rank; encoding rank hint should exist"
 
         for color in Color:
             if color == Color.MULTI:
@@ -312,7 +353,7 @@ class RecommendationPlayer(BasePlayer):
             indices = [i for i, c in enumerate(hand.cards) if c.color == color]
             if indices:
                 return ColorHint(target, indices, color)
-        return None
+        assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
 
     def get_decision_summary(self) -> Optional[str]:
         """Return a short explanation of the last move for console/GUI display."""
