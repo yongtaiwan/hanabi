@@ -22,6 +22,7 @@ from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card, Suit
 from hanabi.core.move_generation import generate_all_valid_moves
+from hanabi.core.hint_rules import is_legal_hint_against_hand_cards
 
 # Set up logger for debug output
 # Use full module path to ensure it matches the logger name set in GUI
@@ -407,7 +408,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # Filter to actually valid moves
         candidate_moves = [
-            m for m in candidate_moves if self._is_move_valid(m, player_view)
+            m for m in candidate_moves if self.is_move_legal(player_view, m)
         ]
 
         # In Hanabi, there should always be multiple valid moves
@@ -1101,118 +1102,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
                 return False
 
             teammate_hand = state.hands[move.teammate]
-
-            if isinstance(move, ColorHint):
-                matching_indices = [
-                    idx
-                    for idx, card in enumerate(teammate_hand)
-                    if card.color == move.color
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand):
-                        return False
-                    if teammate_hand[card_idx].color != move.color:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            elif isinstance(move, NumberHint):
-                matching_indices = [
-                    idx
-                    for idx, card in enumerate(teammate_hand)
-                    if card.number == move.number
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand):
-                        return False
-                    if teammate_hand[card_idx].number != move.number:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            return True
-
-        return False
-
-    def _is_move_valid(self, move: Move, player_view: PlayerView) -> bool:
-        """
-        Check if a move is valid (similar to RandomPlayer).
-
-        Args:
-            move: Move to validate
-            player_view: Current player view
-
-        Returns:
-            True if move is valid
-        """
-        common_view = self.commonView
-        hand_size = player_view.ownHandSize
-
-        if isinstance(move, Play):
-            if move.card < 0 or move.card >= hand_size:
-                return False
-            return True
-
-        if isinstance(move, Discard):
-            if move.card < 0 or move.card >= hand_size:
-                return False
-            if common_view.hintTokens >= self.gameSettings.maxHintTokens:
-                return False
-            return True
-
-        if isinstance(move, (ColorHint, NumberHint)):
-            hint_tokens = common_view.hintTokens
-            if hint_tokens <= 0:
-                return False
-
-            if move.teammate not in player_view.teammates:
-                return False
-
-            if move.teammate == self._player_index:
-                return False
-
-            if not move.cards:
-                return False
-
-            teammate_hand = player_view.teammates[move.teammate]
-
-            if isinstance(move, ColorHint):
-                matching_indices = [
-                    idx
-                    for idx, card in enumerate(teammate_hand.cards)
-                    if card.color == move.color
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                        return False
-                    if teammate_hand.cards[card_idx].color != move.color:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            elif isinstance(move, NumberHint):
-                matching_indices = [
-                    idx
-                    for idx, card in enumerate(teammate_hand.cards)
-                    if card.number == move.number
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                        return False
-                    if teammate_hand.cards[card_idx].number != move.number:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            return True
+            return is_legal_hint_against_hand_cards(move, teammate_hand)
 
         return False
 

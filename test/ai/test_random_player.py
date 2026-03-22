@@ -115,7 +115,7 @@ class TestRandomPlayer(unittest.TestCase):
 
             # If tokens are at max, the move should be invalid
             if state.commonView.hintTokens >= max_tokens:
-                is_valid = player._is_move_valid(discard_move, player_view)
+                is_valid = player.is_move_legal(player_view, discard_move)
                 self.assertFalse(is_valid, "Discard should be invalid when hint tokens are at max")
 
 

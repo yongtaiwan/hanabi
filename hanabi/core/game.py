@@ -6,7 +6,10 @@ from __future__ import annotations
 
 import copy
 import logging
+from collections import Counter
 from typing import Dict, List, Optional, TYPE_CHECKING, Any, Callable
+
+from .hint_rules import is_legal_hint_against_hand_cards
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -17,7 +20,7 @@ if TYPE_CHECKING:
 else:
     from .moves import Move, Play, Discard, ColorHint, NumberHint, CardMove, Hint
 
-from .enums import Color, Number
+from .enums import Color, Number, CardKind
 from .card import Card, Suit
 
 
@@ -303,6 +306,73 @@ class CommonView:
         """Get the played cards mapping (Color -> Number)."""
         return self._cards_played.copy()
 
+    def cardKind(self, card: Card, settings: GameSettings) -> CardKind:
+        """
+        Classify ``card`` for full-information discard / play heuristics.
+
+        Exactly one of USELESS, PLAYABLE, CRITICAL, or DISPENSABLE (priority order).
+        USELESS includes duplicates under the pile top and ranks that can never be
+        reached because some lower rank has no copies left.
+        """
+        if self._card_dead_on_pile(card):
+            return CardKind.USELESS
+        if self._color_rank_unreachable(card.color, card.number, settings):
+            return CardKind.USELESS
+        if self._card_playable_now(card):
+            return CardKind.PLAYABLE
+        if (
+            self._rank_copies_remaining_for_fireworks(
+                card.color, card.number, settings
+            )
+            == 1
+        ):
+            return CardKind.CRITICAL
+        return CardKind.DISPENSABLE
+
+    def _card_dead_on_pile(self, card: Card) -> bool:
+        """Pile for this color is already at or past this card's rank."""
+        if card.color not in self._cards_played:
+            return False
+        return card.number.value <= self._cards_played[card.color].value
+
+    def _card_playable_now(self, card: Card) -> bool:
+        """This card could be played on the fireworks this turn."""
+        if card.color not in self._cards_played:
+            return card.number == Number.ONE
+        return card.number.value == self._cards_played[card.color].value + 1
+
+    def _played_top_value(self, color: Color) -> int:
+        p = self._cards_played.get(color)
+        return p.value if p else 0
+
+    def _rank_copies_remaining_for_fireworks(
+        self, color: Color, rank: Number, settings: GameSettings
+    ) -> int:
+        """Copies of (color, rank) not yet discarded and not already on the pile."""
+        suit = settings.cards.get(color)
+        if suit is None:
+            return 0
+        total = suit.cards.get(rank, 0)
+        disc = self._cards_discarded.get(color)
+        discarded = disc.cards.get(rank, 0) if disc else 0
+        played_top = self._played_top_value(color)
+        on_pile = 1 if played_top >= rank.value else 0
+        return total - discarded - on_pile
+
+    def _color_rank_unreachable(
+        self, color: Color, rank: Number, settings: GameSettings
+    ) -> bool:
+        """True if some rank on the path from pile top to ``rank`` has no copies left."""
+        played_top = self._played_top_value(color)
+        rv = rank.value
+        if rv <= played_top:
+            return False
+        for m in range(played_top + 1, rv + 1):
+            n = Number(m)
+            if self._rank_copies_remaining_for_fireworks(color, n, settings) <= 0:
+                return True
+        return False
+
     def __repr__(self) -> str:
         return (f"CommonView(live={self._live_tokens}, "
                 f"hint={self._hint_tokens}, "
@@ -332,6 +402,14 @@ class PlayerView:
     def ownHandSize(self) -> int:
         """Get the size of the player's own hand (cards are hidden)."""
         return self._own_hand_size
+
+    def visibleHandCardCounts(self) -> Counter:
+        """Multiset of cards visible in teammates' hands (excludes own hidden hand)."""
+        c: Counter = Counter()
+        for hand in self._teammates.values():
+            for card in hand.cards:
+                c[card] += 1
+        return c
 
     def __repr__(self) -> str:
         return f"PlayerView(teammates={list(self._teammates.keys())}, own_hand_size={self._own_hand_size})"
@@ -489,36 +567,11 @@ class GameState:
         if not move.cards:
             return False
 
-        # Validate that the hint actually matches cards in the hand
         teammate_hand = self._player_hands[move.teammate]
-
         if isinstance(move, ColorHint):
-            matching_indices = [
-                idx for idx, card in enumerate(teammate_hand.cards)
-                if card.color == move.color
-            ]
-            for card_idx in move.cards:
-                if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                    return False
-                if teammate_hand.cards[card_idx].color != move.color:
-                    return False
-            if set(move.cards) != set(matching_indices):
-                return False
-            return True
-
+            return is_legal_hint_against_hand_cards(move, teammate_hand.cards)
         if isinstance(move, NumberHint):
-            matching_indices = [
-                idx for idx, card in enumerate(teammate_hand.cards)
-                if card.number == move.number
-            ]
-            for card_idx in move.cards:
-                if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                    return False
-                if teammate_hand.cards[card_idx].number != move.number:
-                    return False
-            if set(move.cards) != set(matching_indices):
-                return False
-            return True
+            return is_legal_hint_against_hand_cards(move, teammate_hand.cards)
 
         assert False, f"unexpected hint type in _validateHint: {type(move)}"
 

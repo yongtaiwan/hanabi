@@ -236,7 +236,7 @@ class TestMonteCarloEvaluation(unittest.TestCase):
         )
 
         # Filter to valid moves
-        candidate_moves = [m for m in candidate_moves if player._is_move_valid(m, player_view)]
+        candidate_moves = [m for m in candidate_moves if player.is_move_legal(player_view, m)]
 
         # Find play and discard moves for card 0
         play_move = None

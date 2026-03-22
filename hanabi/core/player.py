@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 from .observer import Observer
 from .game import PlayerView, GameSettings
+from .move_validation import is_move_legal_from_view
 from .moves import (
     Move,
     Play,
@@ -84,6 +85,16 @@ class BasePlayer(Observer, Player):
     def set_common_view(self, common_view: CommonView) -> None:
         """Set the common view (all players share the same reference)."""
         self._common_view = common_view
+
+    def is_move_legal(self, player_view: PlayerView, move: Move) -> bool:
+        """Whether ``move`` is legal from this player's view (tokens, indices, hint rules)."""
+        return is_move_legal_from_view(
+            move,
+            player_view=player_view,
+            common_view=self.commonView,
+            game_settings=self.gameSettings,
+            player_index=self._player_index,
+        )
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:

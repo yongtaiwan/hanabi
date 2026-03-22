@@ -3,7 +3,7 @@ Core game engine for Hanabi.
 Contains all game logic without UI dependencies.
 """
 
-from .enums import Color, Number
+from .enums import Color, Number, CardKind
 from .card import Card, Suit
 from .moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
 from .game import (
@@ -19,11 +19,18 @@ from .player import (
 from .observer import Observer
 from .game_history import GameHistory
 from .move_generation import generate_all_valid_moves
+from .move_validation import is_move_legal_from_view
+from .hint_rules import (
+    indices_matching_color,
+    indices_matching_number,
+    is_legal_hint_against_hand_cards,
+)
 
 __all__ = [
     # Enums
     'Color',
     'Number',
+    'CardKind',
     # Cards
     'Card',
     'Suit',
@@ -60,5 +67,9 @@ __all__ = [
     'GameHistory',
     # Move generation utilities
     'generate_all_valid_moves',
+    'is_move_legal_from_view',
+    'indices_matching_color',
+    'indices_matching_number',
+    'is_legal_hint_against_hand_cards',
 ]
 

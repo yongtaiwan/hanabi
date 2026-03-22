@@ -515,7 +515,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         )
 
         # Filter to actually valid moves
-        valid_moves = [m for m in valid_moves if self._is_move_valid(m, player_view)]
+        valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
 
         if not valid_moves:
             # Fallback: return a play move
@@ -682,82 +682,6 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Fallback: return first valid move
         self._last_decision_summary = "Fallback: first valid move"
         return valid_moves[0]
-
-    def _is_move_valid(self, move: Move, player_view: PlayerView) -> bool:
-        """
-        Check if a move is valid (same logic as RandomPlayer).
-
-        Args:
-            move: The move to validate
-            player_view: The current player view
-
-        Returns:
-            True if the move is valid
-        """
-        common_view = self.commonView
-        hand_size = player_view.ownHandSize
-
-        if isinstance(move, Play):
-            if move.card < 0 or move.card >= hand_size:
-                return False
-            return True
-
-        if isinstance(move, Discard):
-            if move.card < 0 or move.card >= hand_size:
-                return False
-            if common_view.hintTokens >= self.gameSettings.maxHintTokens:
-                return False
-            return True
-
-        if isinstance(move, (ColorHint, NumberHint)):
-            hint_tokens = common_view.hintTokens
-            if hint_tokens <= 0:
-                return False
-
-            if move.teammate not in player_view.teammates:
-                return False
-
-            if move.teammate == self._player_index:
-                return False
-
-            if not move.cards:
-                return False
-
-            teammate_hand = player_view.teammates[move.teammate]
-
-            if isinstance(move, ColorHint):
-                matching_indices = [
-                    idx for idx, card in enumerate(teammate_hand.cards)
-                    if card.color == move.color
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                        return False
-                    if teammate_hand.cards[card_idx].color != move.color:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            elif isinstance(move, NumberHint):
-                matching_indices = [
-                    idx for idx, card in enumerate(teammate_hand.cards)
-                    if card.number == move.number
-                ]
-
-                for card_idx in move.cards:
-                    if card_idx < 0 or card_idx >= len(teammate_hand.cards):
-                        return False
-                    if teammate_hand.cards[card_idx].number != move.number:
-                        return False
-
-                if set(move.cards) != set(matching_indices):
-                    return False
-
-            return True
-
-        return False
 
     def get_decision_summary(self) -> Optional[str]:
         """

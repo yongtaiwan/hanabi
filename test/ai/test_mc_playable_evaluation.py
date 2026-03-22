@@ -82,7 +82,7 @@ def test_playable_card_scores_higher():
     )
 
     # Filter to valid moves
-    candidate_moves = [m for m in candidate_moves if player._is_move_valid(m, player_view)]
+    candidate_moves = [m for m in candidate_moves if player.is_move_legal(player_view, m)]
 
     # Find Play and Discard moves for card 0
     play_move = None

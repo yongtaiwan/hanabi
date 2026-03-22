@@ -23,3 +23,12 @@ class Number(Enum):
     FOUR = 4
     FIVE = 5
 
+
+class CardKind(Enum):
+    """Full-information bucket for a card (mutually exclusive)."""
+
+    USELESS = "useless"
+    PLAYABLE = "playable"
+    CRITICAL = "critical"
+    DISPENSABLE = "dispensable"
+

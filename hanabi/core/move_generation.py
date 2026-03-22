@@ -7,6 +7,7 @@ given their current view of the game state.
 
 from typing import List
 from .game import PlayerView, CommonView, GameSettings
+from .hint_rules import indices_matching_color, indices_matching_number
 from .moves import Move, Play, Discard, ColorHint, NumberHint
 from .enums import Color, Number
 
@@ -67,22 +68,14 @@ def generate_all_valid_moves(
             for color in Color:
                 if color == Color.MULTI:
                     continue  # Skip MULTI color (not used in standard game)
-                # Find all cards matching this color
-                matching_indices = [
-                    idx for idx, card in enumerate(teammate_hand.cards)
-                    if card.color == color
-                ]
+                matching_indices = indices_matching_color(teammate_hand.cards, color)
                 # Hint must include ALL matching cards (rule requirement)
                 if matching_indices:
                     valid_moves.append(ColorHint(teammate_index, matching_indices, color))
 
             # Generate all NumberHint moves
             for number in Number:
-                # Find all cards matching this number
-                matching_indices = [
-                    idx for idx, card in enumerate(teammate_hand.cards)
-                    if card.number == number
-                ]
+                matching_indices = indices_matching_number(teammate_hand.cards, number)
                 # Hint must include ALL matching cards (rule requirement)
                 if matching_indices:
                     valid_moves.append(NumberHint(teammate_index, matching_indices, number))
