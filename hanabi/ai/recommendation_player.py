@@ -244,7 +244,7 @@ class RecommendationPlayer(BasePlayer):
 
     @staticmethod
     def _rec_discard_c1(
-        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+        _hand_cards: List[Card], _common_view: CommonView, _settings: GameSettings
     ) -> int:
         """Paper priority 5: recommend that C1 be discarded."""
         return 4 + (3 - _REC_SLOT_ORDER[0])
