@@ -1,7 +1,7 @@
 ---
 description: Python style and structure for the hanabi package
 globs: "**/*.py"
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Python conventions (this repo)
@@ -22,7 +22,7 @@ alwaysApply: false
 
 # Comparisons
 
-- **Constant on the left** (`==` / `!=`): When comparing to a **literal** (number, string, `True`/`False`) or a **short named constant** (module constant, `Enum` member), put that value **first**—e.g. `4 == hand_size`, `"play" == command`, `NUM_PLAYERS == settings.num_players`, `CardKind.PLAYABLE == kind`. Readers see the expected value immediately; the right-hand side is usually longer. **Do not** apply to idioms that the community standard keeps as-is (e.g. `if __name__ == "__main__":`). Prefer **`x is None`** / **`x is not None`** (identity), not `None == x`.
+- **Constant on the left** (`==` / `!=`): **Always** use this style in this repo when you write or edit comparisons. Put the **literal**, **`Enum` member**, **`True`/`False`**, or **short module-level constant** on the **left**, and the longer or computed expression on the **right**—e.g. `4 == len(xs)`, `"play" == command`, `NUM_PLAYERS == settings.num_players`, `CardKind.PLAYABLE == common_view.card_kind(card, settings)`, `Number.FIVE == card.number`. Same for `!=` when one side is such a constant. Readers see the expected value first. **Exceptions**: keep **`if __name__ == "__main__":`** as-is; use **`x is None`** / **`x is not None`** (identity), not `None == x`. When both sides are arbitrary variables and neither is a named constant, order is unconstrained.
 
 # Control flow and dispatch
 

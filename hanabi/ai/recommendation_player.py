@@ -30,6 +30,9 @@ from hanabi.core.card import Card
 # Hint encoding: 0-3 = rank hint to player at position 1-4 (clockwise from hinter),
 # 4-7 = suit hint to position 1-4.
 
+# Slots in paper tie-break order (C1 first through C4): C1=idx 3 ... C4=idx 0.
+_REC_SLOT_ORDER = (3, 2, 1, 0)
+
 
 class RecommendationPlayer(BasePlayer):
     """
@@ -49,10 +52,10 @@ class RecommendationPlayer(BasePlayer):
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
-        return game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION
+        return NUM_PLAYERS_FOR_RECOMMENDATION == game_settings.num_players
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
-        assert game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION, (
+        assert NUM_PLAYERS_FOR_RECOMMENDATION == game_settings.num_players, (
             "RecommendationPlayer requires 5-player games"
         )
         super().set_game_settings(game_settings)
@@ -149,35 +152,77 @@ class RecommendationPlayer(BasePlayer):
         common_view: CommonView,
         settings: GameSettings,
     ) -> int:
-        assert len(hand_cards) == 4
-        order_c1_first = (3, 2, 1, 0)
+        assert 4 == len(hand_cards)
+        # Like ``a or b or ...`` but each rule may legitimately return 0 (play C4).
+        for rule in (
+            self._rec_play_rank5,
+            self._rec_play_lowest_rank,
+            self._rec_discard_useless,
+            self._rec_discard_dispensable,
+            self._rec_discard_c1,
+        ):
+            r = rule(hand_cards, common_view, settings)
+            if r is not None:
+                return r
+        assert False, "discard C1 (paper priority 5) always applies"
 
-        for idx in order_c1_first:
+    @staticmethod
+    def _rec_play_rank5(
+        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+    ) -> Optional[int]:
+        """Paper priority 1: play the playable 5 of lowest index (C1 ... C4)."""
+        for idx in _REC_SLOT_ORDER:
             card = hand_cards[idx]
-            if card.number == Number.FIVE and common_view.card_kind(card, settings) == CardKind.PLAYABLE:
+            if Number.FIVE == card.number and CardKind.PLAYABLE == common_view.card_kind(card, settings):
                 return 3 - idx
+        return None
+
+    @staticmethod
+    def _rec_play_lowest_rank(
+        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+    ) -> Optional[int]:
+        """Paper priority 2: play lowest-rank playable; tie -> lowest index."""
         playable = [
             (idx, hand_cards[idx].number.value)
-            for idx in order_c1_first
-            if common_view.card_kind(hand_cards[idx], settings) == CardKind.PLAYABLE
+            for idx in _REC_SLOT_ORDER
+            if CardKind.PLAYABLE == common_view.card_kind(hand_cards[idx], settings)
         ]
-        if playable:
-            playable.sort(key=lambda x: (x[1], x[0]))
-            idx = playable[0][0]
-            return 3 - idx
-        for idx in order_c1_first:
-            if common_view.card_kind(hand_cards[idx], settings) == CardKind.USELESS:
+        if not playable:
+            return None
+        playable.sort(key=lambda x: (x[1], x[0]))
+        return 3 - playable[0][0]
+
+    @staticmethod
+    def _rec_discard_useless(
+        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+    ) -> Optional[int]:
+        """Paper priority 3: discard dead (useless) card of lowest index."""
+        for idx in _REC_SLOT_ORDER:
+            if CardKind.USELESS == common_view.card_kind(hand_cards[idx], settings):
                 return 4 + (3 - idx)
+        return None
+
+    @staticmethod
+    def _rec_discard_dispensable(
+        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+    ) -> Optional[int]:
+        """Paper priority 4: discard highest-rank non-indispensable; tie -> lowest index."""
         dispensable = [
             (idx, hand_cards[idx].number.value)
-            for idx in order_c1_first
-            if common_view.card_kind(hand_cards[idx], settings) == CardKind.DISPENSABLE
+            for idx in _REC_SLOT_ORDER
+            if CardKind.DISPENSABLE == common_view.card_kind(hand_cards[idx], settings)
         ]
-        if dispensable:
-            dispensable.sort(key=lambda x: (-x[1], x[0]))
-            idx = dispensable[0][0]
-            return 4 + (3 - idx)
-        return 7
+        if not dispensable:
+            return None
+        dispensable.sort(key=lambda x: (-x[1], x[0]))
+        return 4 + (3 - dispensable[0][0])
+
+    @staticmethod
+    def _rec_discard_c1(
+        hand_cards: List[Card], common_view: CommonView, settings: GameSettings
+    ) -> int:
+        """Paper priority 5: recommend that C1 be discarded."""
+        return 4 + (3 - _REC_SLOT_ORDER[0])
 
     def _try_follow_play_recommendation(
         self,
@@ -300,15 +345,15 @@ class RecommendationPlayer(BasePlayer):
         assert hand.cards, "encoding hint requires the target player to have at least one card"
         if is_number:
             for num in Number:
-                indices = [i for i, c in enumerate(hand.cards) if c.number == num]
+                indices = [i for i, c in enumerate(hand.cards) if num == c.number]
                 if indices:
                     return NumberHint(target, indices, num)
             assert False, "non-empty hand has a rank; encoding rank hint should exist"
 
         for color in Color:
-            if color == Color.MULTI:
+            if Color.MULTI == color:
                 continue
-            indices = [i for i, c in enumerate(hand.cards) if c.color == color]
+            indices = [i for i, c in enumerate(hand.cards) if color == c.color]
             if indices:
                 return ColorHint(target, indices, color)
         assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
