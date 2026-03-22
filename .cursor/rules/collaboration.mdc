@@ -1,0 +1,12 @@
+---
+description: How the AI should scope work and communicate in this repo
+alwaysApply: true
+---
+
+# Collaboration and change scope
+
+- **Minimal diffs**: Change only what the task requires. No drive-by refactors, unrelated files, or scope creep. Prefer a small, correct change over a broad cleanup in the same PR unless explicitly asked.
+- **Match the codebase**: Read surrounding code first. Reuse existing helpers, patterns, and naming. New code should read as if the same author wrote it.
+- **Formatting and tooling**: Follow what the repo already uses (e.g. `unittest`, package layout under `hanabi/`). Do not add new tooling or config unless the task asks for it.
+- **Documentation**: Do not create or edit markdown docs unless the user requests it.
+- **When citing code** in chat, use Cursor-style fenced blocks with line range and path (opening fence on its own line) so the user can jump to the file.
