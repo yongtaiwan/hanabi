@@ -66,8 +66,7 @@ class TestHintConstraints(unittest.TestCase):
             hand = world._hands[0]
             self.assertEqual(len(hand), player_view.own_hand_size)
             # Card at position 0 should be red
-            self.assertEqual(hand[0].color, Color.RED,
-                           f"Card at position 0 should be red, got {hand[0]}")
+            self.assertEqual(hand[0].color, Color.RED, f"Card at position 0 should be red, got {hand[0]}")
 
     def test_number_hint_constrains_sampling(self):
         """Test that number hints constrain card sampling."""
@@ -88,8 +87,7 @@ class TestHintConstraints(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(hand[0].number, Number.ONE,
-                           f"Card at position 0 should be 1, got {hand[0]}")
+            self.assertEqual(hand[0].number, Number.ONE, f"Card at position 0 should be 1, got {hand[0]}")
 
     def test_combined_hints_constrain_sampling(self):
         """Test that combined color and number hints fully constrain a card."""
@@ -112,8 +110,7 @@ class TestHintConstraints(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(hand[0], Card(Color.RED, Number.ONE),
-                           f"Card at position 0 should be Red 1, got {hand[0]}")
+            self.assertEqual(hand[0], Card(Color.RED, Number.ONE), f"Card at position 0 should be Red 1, got {hand[0]}")
 
 
 class TestPlayableCardDetection(unittest.TestCase):
@@ -156,6 +153,7 @@ class TestPlayableCardDetection(unittest.TestCase):
 
         # Test that MCGameState correctly identifies playable cards
         from hanabi.ai.monte_carlo_player import MCGameState
+
         test_state = MCGameState(
             settings=self.settings,
             hands=[[Card(playable_color, Number.ONE)]],
@@ -171,9 +169,10 @@ class TestPlayableCardDetection(unittest.TestCase):
 
         # Card should be playable
         card = test_state._hands[0][0]
-        is_playable = (card.color not in test_state._cards_played and card.number == Number.ONE) or \
-                     (card.color in test_state._cards_played and
-                      card.number.value == test_state._cards_played[card.color].value + 1)
+        is_playable = (card.color not in test_state._cards_played and card.number == Number.ONE) or (
+            card.color in test_state._cards_played
+            and card.number.value == test_state._cards_played[card.color].value + 1
+        )
         self.assertTrue(is_playable, f"Card {card} should be playable")
 
     def test_playable_card_next_in_sequence(self):
@@ -228,6 +227,7 @@ class TestMonteCarloEvaluation(unittest.TestCase):
 
         # Generate candidate moves
         from hanabi.core.move_generation import generate_all_valid_moves
+
         candidate_moves = generate_all_valid_moves(
             player_view=player_view,
             common_view=common_view,
@@ -259,4 +259,3 @@ class TestMonteCarloEvaluation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

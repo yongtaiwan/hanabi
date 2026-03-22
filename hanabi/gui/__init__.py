@@ -9,11 +9,10 @@ from .gui_player import GUIPlayer
 from .gui_observer import GUIObserver
 
 __all__ = [
-    'play_gui_game',
-    'GUIGame',
-    'GUIDisplay',
-    'GUIInput',
-    'GUIPlayer',
-    'GUIObserver',
+    "play_gui_game",
+    "GUIGame",
+    "GUIDisplay",
+    "GUIInput",
+    "GUIPlayer",
+    "GUIObserver",
 ]
-

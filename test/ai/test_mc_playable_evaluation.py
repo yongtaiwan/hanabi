@@ -15,9 +15,9 @@ from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig, MCG
 
 def test_playable_card_scores_higher():
     """Test that playing a known playable card scores higher than discarding it."""
-    print("="*70)
+    print("=" * 70)
     print("Testing: Playable card should score higher than discard")
-    print("="*70)
+    print("=" * 70)
 
     # Use a config with more simulations for reliability
     config = MonteCarloConfig(
@@ -32,14 +32,15 @@ def test_playable_card_scores_higher():
     settings = create_standard_game_settings(3)
     player = MonteCarloPlayer(0, config)
     from hanabi.ai.random_player import RandomPlayer
+
     team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
     game = Game.create(team=team, settings=settings)
 
     # Find a playable color
-    common_view = game.state.commonView
+    common_view = game.state.common_view
     playable_color = None
     for color in [Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW, Color.WHITE]:
-        if color not in common_view.cardsPlayed:
+        if color not in common_view.cards_played:
             playable_color = color
             break
 
@@ -49,7 +50,7 @@ def test_playable_card_scores_higher():
 
     print(f"Using playable color: {playable_color}")
 
-    player_view = game._getPlayerView(0)
+    player_view = game._get_player_view(0)
     # Give hints that card 0 is this playable color and number 1
     color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
     number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
@@ -57,7 +58,7 @@ def test_playable_card_scores_higher():
     player.observe(0, number_hint, player_view)
 
     # Verify hints
-    hints = player.getHints()
+    hints = player.get_hints()
     print(f"Hints for card 0: {hints.get(0, {})}")
     assert 0 in hints
     assert hints[0]["color"] == playable_color
@@ -134,4 +135,3 @@ def test_playable_card_scores_higher():
 
 if __name__ == "__main__":
     test_playable_card_scores_higher()
-

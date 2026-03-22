@@ -39,7 +39,7 @@ def main():
         num_runs=10,  # Change this to run more or fewer games
         save_records=True,  # Save individual game records
         random_seed=42,  # Seed for first run, subsequent runs use sequential seeds
-        experiment_id="random_player_test"
+        experiment_id="random_player_test",
     )
 
     # Save statistics (saves to game_records/experiment_<id>/statistics.yaml)

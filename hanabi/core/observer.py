@@ -35,13 +35,12 @@ class Observer(ABC):
 
     @property
     @abstractmethod
-    def gameSettings(self) -> GameSettings:
+    def game_settings(self) -> GameSettings:
         """Get the game settings."""
         pass
 
     @property
     @abstractmethod
-    def commonView(self) -> CommonView:
+    def common_view(self) -> CommonView:
         """Get the common view of the game state."""
         pass
-

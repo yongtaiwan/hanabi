@@ -61,7 +61,7 @@ class GUIInput:
             return
 
         # Check if there's an open menu
-        menu_open = hasattr(self._display, '_action_menu') and self._display._action_menu
+        menu_open = hasattr(self._display, "_action_menu") and self._display._action_menu
 
         # If menu is open, check if click is on the menu itself
         if menu_open:
@@ -73,15 +73,14 @@ class GUIInput:
                 screen_x = event.x_root
                 screen_y = event.y_root
                 # Check if click is within menu bounds (in screen coordinates)
-                if (menu_x <= screen_x <= menu_x + menu_width and
-                    menu_y <= screen_y <= menu_y + menu_height):
+                if menu_x <= screen_x <= menu_x + menu_width and menu_y <= screen_y <= menu_y + menu_height:
                     return  # Click is on menu, don't close it
             except:
                 pass
 
         # Check if click is on a card
         clicked_card = None
-        if hasattr(self._display, '_card_positions') and self._display._card_positions:
+        if hasattr(self._display, "_card_positions") and self._display._card_positions:
             try:
                 for (player_idx, card_idx), position in self._display._card_positions.items():
                     if len(position) != 4:
@@ -96,7 +95,7 @@ class GUIInput:
 
         # If menu is open, close it first
         if menu_open:
-            if hasattr(self._display, '_close_action_menu'):
+            if hasattr(self._display, "_close_action_menu"):
                 self._display._close_action_menu()
 
         # If clicking on a card, open menu for that card (whether menu was open or not)
@@ -106,12 +105,12 @@ class GUIInput:
                 player_idx,
                 card_idx,
                 event.x_root,  # Screen coordinates
-                event.y_root
+                event.y_root,
             )
             return
 
         # No menu open - check if click is on a card
-        if not hasattr(self._display, '_card_positions') or not self._display._card_positions:
+        if not hasattr(self._display, "_card_positions") or not self._display._card_positions:
             return
 
         # Check if click is on a card by checking stored positions
@@ -126,7 +125,7 @@ class GUIInput:
                         player_idx,
                         card_idx,
                         event.x_root,  # Screen coordinates
-                        event.y_root
+                        event.y_root,
                     )
                     return
         except (KeyError, ValueError, TypeError) as e:

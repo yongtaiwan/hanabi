@@ -23,10 +23,10 @@ def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
     """Factory function to create a MonteCarloPlayer with fast config for testing."""
     # Use fast config for testing (100-200ms per turn instead of 1-2s)
     config = MonteCarloConfig(
-        min_think_time_s=0.1,   # 100ms
-        max_think_time_s=0.2,   # 200ms
+        min_think_time_s=0.1,  # 100ms
+        max_think_time_s=0.2,  # 200ms
         min_simulations=1,
-        max_simulations=20,     # Cap at 20 simulations for speed
+        max_simulations=20,  # Cap at 20 simulations for speed
     )
     return MonteCarloPlayer(player_index, config=config)
 
@@ -57,7 +57,7 @@ def main():
         num_runs=3,
         save_records=False,  # Don't save for quick test
         random_seed=42,
-        experiment_id="monte_carlo_test"
+        experiment_id="monte_carlo_test",
     )
 
     # Print summary
@@ -81,4 +81,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

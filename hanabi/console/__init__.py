@@ -9,11 +9,10 @@ from .console_player import ConsolePlayer
 from .console_observer import ConsoleObserver
 
 __all__ = [
-    'play_console_game',
-    'ConsoleDisplay',
-    'Colors',
-    'ConsoleInput',
-    'ConsolePlayer',
-    'ConsoleObserver',
+    "play_console_game",
+    "ConsoleDisplay",
+    "Colors",
+    "ConsoleInput",
+    "ConsolePlayer",
+    "ConsoleObserver",
 ]
-

@@ -78,8 +78,7 @@ class TestFinalRound(unittest.TestCase):
         self._exhaust_deck()
 
         # _player_exhausting_deck should be set to the player who exhausted it
-        self.assertIsNotNone(self.engine._player_exhausting_deck,
-                           "Player exhausting deck should be set")
+        self.assertIsNotNone(self.engine._player_exhausting_deck, "Player exhausting deck should be set")
         self.assertIsInstance(self.engine._player_exhausting_deck, int)
         self.assertGreaterEqual(self.engine._player_exhausting_deck, 0)
         self.assertLess(self.engine._player_exhausting_deck, 3)
@@ -135,8 +134,9 @@ class TestFinalRound(unittest.TestCase):
                 break
 
             # This player should be able to take their final turn
-            self.assertNotIn(current, players_taken_final_turn,
-                           f"Player {current} should not have taken final turn yet")
+            self.assertNotIn(
+                current, players_taken_final_turn, f"Player {current} should not have taken final turn yet"
+            )
 
             # Make a move (discard if possible)
             hand = self.engine.gameState.player_hands[current]
@@ -225,18 +225,17 @@ class TestFinalRound(unittest.TestCase):
 
         # Now set lives to 1
         from hanabi.core.game import CommonView, GameState
+
         state = self.engine.gameState
         new_common_view = CommonView(
             live_tokens=1,
             hint_tokens=state.common_view.hint_tokens,
             cards_to_draw=state.common_view.cards_to_draw,
             cards_discarded=state.common_view.cards_discarded,
-            cards_played=state.common_view.cards_played
+            cards_played=state.common_view.cards_played,
         )
         new_state = GameState(
-            common_view=new_common_view,
-            player_hands=state.player_hands,
-            draw_deck_index=state.draw_deck_index
+            common_view=new_common_view, player_hands=state.player_hands, draw_deck_index=state.draw_deck_index
         )
         self.engine._game_state = new_state
 
@@ -268,5 +267,5 @@ class TestFinalRound(unittest.TestCase):
             self.assertEqual(self.engine.gameState.common_view.live_tokens, 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -5,8 +5,14 @@ Comprehensive tests for Game class to ensure all functionality works correctly.
 import unittest
 import copy
 from hanabi.core.game import (
-    create_standard_game_settings, Game, GameState, GameSettings,
-    CommonView, Hand, StartPosition, Deck
+    create_standard_game_settings,
+    Game,
+    GameState,
+    GameSettings,
+    CommonView,
+    Hand,
+    StartPosition,
+    Deck,
 )
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.player import HumanPlayer, PlayerTeam
@@ -78,9 +84,7 @@ class TestGameComprehensive(unittest.TestCase):
             team = PlayerTeam(players)
             game = Game.create(team, self.settings)
             # Get first few cards from each player's hand
-            first_cards = tuple(
-                tuple(hand.cards[:3]) for hand in game.state.player_hands
-            )
+            first_cards = tuple(tuple(hand.cards[:3]) for hand in game.state.player_hands)
             decks.append(first_cards)
 
         # At least some games should have different card orders
@@ -182,7 +186,7 @@ class TestGameComprehensive(unittest.TestCase):
 
             # Partial hint (only some matching cards) should be invalid
             if len(all_matching) > 1:
-                partial_matching = all_matching[:len(all_matching) - 1]  # All but one
+                partial_matching = all_matching[: len(all_matching) - 1]  # All but one
                 move = ColorHint(1, partial_matching, color)
                 self.assertFalse(state._validate(0, move))
 
@@ -967,6 +971,7 @@ class TestGameComprehensive(unittest.TestCase):
 
     def test_process_move_with_unknown_move_type(self):
         """Test that unknown move types raise AssertionError."""
+
         # Create a fake move type
         class FakeMove:
             pass
@@ -1215,5 +1220,5 @@ class TestGameComprehensive(unittest.TestCase):
         self.assertEqual(self.game.team.players, self.players)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

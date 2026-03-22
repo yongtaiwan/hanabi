@@ -7,6 +7,7 @@ Runs all GUI-related tests and provides a summary.
 import unittest
 import sys
 
+
 def run_all_gui_tests():
     """Run all GUI tests."""
     # Discover and run all GUI tests
@@ -15,11 +16,11 @@ def run_all_gui_tests():
 
     # Add all GUI test modules
     test_modules = [
-        'test.gui.test_gui',
-        'test.gui.test_gui_playthrough',
-        'test.gui.test_gui_stress',
-        'test.gui.test_gui_automated_play',
-        'test.gui.test_gui_comprehensive'
+        "test.gui.test_gui",
+        "test.gui.test_gui_playthrough",
+        "test.gui.test_gui_stress",
+        "test.gui.test_gui_automated_play",
+        "test.gui.test_gui_comprehensive",
     ]
 
     for module_name in test_modules:
@@ -36,9 +37,9 @@ def run_all_gui_tests():
     result = runner.run(suite)
 
     # Print summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST SUMMARY")
-    print("="*70)
+    print("=" * 70)
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
@@ -58,7 +59,7 @@ def run_all_gui_tests():
 
     return len(result.failures) == 0 and len(result.errors) == 0
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = run_all_gui_tests()
     sys.exit(0 if success else 1)
-

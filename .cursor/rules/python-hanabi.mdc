@@ -6,6 +6,8 @@ alwaysApply: false
 
 # Python conventions (this repo)
 
+- **Line length**: **120** columns maximum for Python (`pyproject.toml` / `ruff format`; `.editorconfig` for editors). Run `ruff format .` from a venv when touching style. Wrap before exceeding: break long strings with **implicit f-string concatenation** (adjacent `f"..."` on consecutive lines), split `assert` / `logger` messages the same way, and break long expressions after commas or inside parentheses.
+- **Conditional expression layout**: For `target = a if cond else b`, keep **`a if cond else (` on one line** when `a` and `cond` are short; put only the **longer operand** (usually the `else` call) in parentheses and continue on the next line, closing with `)`. Avoid stacking `if` / `else` on separate lines unless both operands are large—**prefer 2–3 lines over 6–7** when one side is a short literal.
 - **Layout**: Package code lives under `hanabi/` (`core`, `console`, `gui`, `ai`, `tools`). Tests under `test/` mirror that structure; use `unittest` and import from `hanabi...` (see `test/core/test_game_engine.py`).
 - **Modules**: Start with a short module docstring. Larger modules may use `from __future__ import annotations`, `typing` imports, and `logging.getLogger(__name__)` where already established.
 - **Types**: Use `typing` names consistent with nearby files (`List`, `Dict`, `Optional`, etc.). Use `TYPE_CHECKING` for import cycles when the codebase already does.
@@ -16,6 +18,8 @@ alwaysApply: false
 # Control flow and dispatch
 
 - **Short branches first**: When order is semantically equivalent, handle the **smallest** branch first (fewer lines or simpler predicate) so the main case stays easy to scan.
+- **Positive tests when symmetric**: If two branches are about the same size, prefer the branch with the **simpler or positive** condition first (e.g. `x == y` before a multi-line `else`, rather than `x != y` with a one-line `else`) so readers see the special case first and the main case under `else`.
+- **Conditional expression** (`x if cond else y`): When both branches only set the **same** variable to a value, use a conditional expression instead of duplicating the assignment in `if`/`else`. Prefer **not** nesting ternaries; use a full `if`/`else` when a branch needs multiple statements or non-trivial side effects.
 - **Early exit**: Prefer **guard clauses** (`return` soon) over deep nesting; keep the “happy path” or largest case at the end of the function when that reads best.
 - **Exhaustive dispatch** (closed set of variants, e.g. all `Move` subclasses the engine knows): List **every** case explicitly; use `assert False, f"unexpected … {type(x)}"` instead of a silent `else: return` / generic fallback. This matches repo rules: unexpected types are bugs.
 - **Event handlers** (`observe`, etc.) where **ignoring** most events is correct: use early handling + `return` for the cases you care about; a final **plain `return`** (no assert) is OK when “everything else is intentionally ignored”—add a one-line comment if non-obvious.

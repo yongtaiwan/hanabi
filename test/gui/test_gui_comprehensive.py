@@ -192,7 +192,7 @@ class TestGUIGameFlow(unittest.TestCase):
     def test_new_game_creation(self):
         """Test creating a new game."""
         # Mock the dialog to return 2 players
-        with patch.object(self.game, '_ask_num_players', return_value=2):
+        with patch.object(self.game, "_ask_num_players", return_value=2):
             self.game._new_game()
 
             self.assertIsNotNone(self.game._game)
@@ -216,12 +216,9 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._input_handler.set_move_callback(self.game._on_move_made)
         self.game._display.set_move_callback(self.game._on_move_made)
 
-        self.game._history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        self.game._history = GameHistory(
+            {"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5}
+        )
         self.game._history.record_initial_state(game)
 
         # Select a card and play it
@@ -262,12 +259,9 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._input_handler.set_move_callback(self.game._on_move_made)
         self.game._display.set_move_callback(self.game._on_move_made)
 
-        self.game._history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        self.game._history = GameHistory(
+            {"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5}
+        )
         self.game._history.record_initial_state(game)
 
         # Discard a card
@@ -298,12 +292,9 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._input_handler.set_move_callback(self.game._on_move_made)
         self.game._display.set_move_callback(self.game._on_move_made)
 
-        self.game._history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        self.game._history = GameHistory(
+            {"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5}
+        )
         self.game._history.record_initial_state(game)
 
         # Give a color hint
@@ -356,12 +347,9 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._input_handler.set_move_callback(self.game._on_move_made)
         self.game._display.set_move_callback(self.game._on_move_made)
 
-        self.game._history = GameHistory({
-            "num_players": 3,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        self.game._history = GameHistory(
+            {"num_players": 3, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5}
+        )
         self.game._history.record_initial_state(game)
 
         # Make a move
@@ -387,12 +375,9 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._input_handler.set_move_callback(self.game._on_move_made)
         self.game._display.set_move_callback(self.game._on_move_made)
 
-        self.game._history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        self.game._history = GameHistory(
+            {"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5}
+        )
         self.game._history.record_initial_state(game)
 
         # Lose all lives
@@ -442,12 +427,7 @@ class TestGUISimulation(unittest.TestCase):
         display.set_move_callback(move_callback)
         input_handler.setup_canvas_clicks()
 
-        history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        history = GameHistory({"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5})
         history.record_initial_state(game)
 
         # Simulate 10 moves
@@ -586,6 +566,5 @@ class TestGUISimulation(unittest.TestCase):
                     break
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

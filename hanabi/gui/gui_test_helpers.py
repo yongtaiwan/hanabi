@@ -27,4 +27,3 @@ class TestFriendlyGUIGame(GUIGame):
         self._suppress_dialogs = True
         if self._display:
             self._display.set_suppress_dialogs(True)
-

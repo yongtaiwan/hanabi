@@ -1,6 +1,7 @@
 """
 Unit tests for critical discard detection in GUI game.
 """
+
 import unittest
 from hanabi.core.game import Game, create_standard_game_settings
 from hanabi.core.player import PlayerTeam, HumanPlayer
@@ -21,6 +22,7 @@ class TestCriticalDiscard(unittest.TestCase):
         self.game = Game.create(team, settings)
         # Create a GUIGame instance to access _is_critical_discard
         import tkinter as tk
+
         root = tk.Tk()
         root.withdraw()  # Hide window
         self.gui_game = GUIGame(root)
@@ -93,9 +95,7 @@ class TestCriticalDiscard(unittest.TestCase):
         state = self.game.state
 
         # Test max score for a color with nothing played and nothing discarded
-        max_score = self.gui_game._calculate_max_achievable_score(
-            Color.RED, state, Number.ONE, 0
-        )
+        max_score = self.gui_game._calculate_max_achievable_score(Color.RED, state, Number.ONE, 0)
         self.assertEqual(max_score, 5, "Max score should be 5 when nothing is played/discarded")
 
     def test_calculate_max_score_with_played_cards(self):
@@ -119,6 +119,5 @@ class TestCriticalDiscard(unittest.TestCase):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

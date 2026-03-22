@@ -61,12 +61,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         display.set_move_callback(record_move)
         input_handler.setup_canvas_clicks()
 
-        history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        history = GameHistory({"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5})
         history.record_initial_state(engine)
 
         # Simulate playing the game
@@ -159,7 +154,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         self.assertGreater(len(display._card_widgets), 0)
 
         # Save and verify history
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             temp_filename = f.name
 
         try:
@@ -486,6 +481,5 @@ class TestGUIAutomatedPlay(unittest.TestCase):
             # (The method should check for matching cards)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

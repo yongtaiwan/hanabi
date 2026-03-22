@@ -48,17 +48,17 @@ class TestPlayableCardPreference(unittest.TestCase):
         game = Game.create(team=team, settings=self.settings)
 
         # Find a color that hasn't been played yet (so '1' is playable)
-        common_view = game.state.commonView
+        common_view = game.state.common_view
         playable_color = None
         for color in [Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW, Color.WHITE]:
-            if color not in common_view.cardsPlayed:
+            if color not in common_view.cards_played:
                 playable_color = color
                 break
 
         if playable_color is None:
             self.skipTest("No playable color available - all colors already started")
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give player hints that card 0 is this playable color and number 1
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
@@ -68,7 +68,7 @@ class TestPlayableCardPreference(unittest.TestCase):
         player.observe(0, number_hint, player_view)
 
         # Verify hints are tracked
-        hints = player.getHints()
+        hints = player.get_hints()
         self.assertIn(0, hints)
         self.assertEqual(hints[0]["color"], playable_color)
         self.assertEqual(hints[0]["number"], Number.ONE)
@@ -78,8 +78,7 @@ class TestPlayableCardPreference(unittest.TestCase):
         move = player.play(player_view)
 
         # Verify that the move is a Play, not a Discard
-        self.assertIsInstance(move, Play,
-                             f"Expected Play move for known playable card, got {type(move)}")
+        self.assertIsInstance(move, Play, f"Expected Play move for known playable card, got {type(move)}")
         # The player should play a playable card (card 0 is known to be playable)
         # But other cards might also be playable, so we just verify it's a Play move
         # and that card 0 is indeed playable in the sampled world
@@ -87,10 +86,11 @@ class TestPlayableCardPreference(unittest.TestCase):
         world = player._sample_determinized_state(player_view)
         hand = world._hands[0]
         # Card 0 should be the playable card we hinted
-        self.assertEqual(hand[0], Card(playable_color, Number.ONE),
-                        f"Card 0 should be {playable_color} 1, got {hand[0]}")
+        self.assertEqual(
+            hand[0], Card(playable_color, Number.ONE), f"Card 0 should be {playable_color} 1, got {hand[0]}"
+        )
         # Verify it's playable
-        is_playable = (hand[0].color not in common_view.cardsPlayed and hand[0].number == Number.ONE)
+        is_playable = hand[0].color not in common_view.cards_played and hand[0].number == Number.ONE
         self.assertTrue(is_playable, f"Card 0 ({hand[0]}) should be playable")
 
     def test_playable_card_scores_higher_in_simulation(self):
@@ -109,17 +109,17 @@ class TestPlayableCardPreference(unittest.TestCase):
         game = Game.create(team=team, settings=self.settings)
 
         # Find a playable color
-        common_view = game.state.commonView
+        common_view = game.state.common_view
         playable_color = None
         for color in [Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW, Color.WHITE]:
-            if color not in common_view.cardsPlayed:
+            if color not in common_view.cards_played:
                 playable_color = color
                 break
 
         if playable_color is None:
             self.skipTest("No playable color available")
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give hints
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
@@ -132,11 +132,13 @@ class TestPlayableCardPreference(unittest.TestCase):
         hand = world._hands[0]
 
         # Verify that card 0 is indeed the playable card
-        self.assertEqual(hand[0], Card(playable_color, Number.ONE),
-                        f"Card 0 should be {playable_color} 1, got {hand[0]}")
+        self.assertEqual(
+            hand[0], Card(playable_color, Number.ONE), f"Card 0 should be {playable_color} 1, got {hand[0]}"
+        )
 
         # Test that playing it is valid
         from hanabi.core.moves import Play
+
         play_move = Play(0)
         test_state = world.clone()
         test_state.apply_move(0, play_move)
@@ -144,8 +146,7 @@ class TestPlayableCardPreference(unittest.TestCase):
         # After playing, score should increase
         # (We can't easily test the exact score without running full rollouts,
         # but we can verify the card is playable)
-        self.assertGreaterEqual(test_state.score(), world.score(),
-                               "Playing a playable card should not decrease score")
+        self.assertGreaterEqual(test_state.score(), world.score(), "Playing a playable card should not decrease score")
 
 
 class TestHintConstraintCorrectness(unittest.TestCase):
@@ -172,7 +173,7 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give color hint
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
         player.observe(0, hint, player_view)
@@ -181,8 +182,7 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(hand[0].color, Color.RED,
-                           f"Card 0 should always be red, got {hand[0]}")
+            self.assertEqual(hand[0].color, Color.RED, f"Card 0 should always be red, got {hand[0]}")
 
     def test_number_hint_constrains_sampling(self):
         """Test that number hints constrain sampled cards."""
@@ -194,7 +194,7 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give number hint
         hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
         player.observe(0, hint, player_view)
@@ -203,8 +203,7 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(hand[0].number, Number.ONE,
-                           f"Card 0 should always be 1, got {hand[0]}")
+            self.assertEqual(hand[0].number, Number.ONE, f"Card 0 should always be 1, got {hand[0]}")
 
     def test_combined_hints_fully_constrain(self):
         """Test that combined color and number hints fully constrain a card."""
@@ -216,7 +215,7 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give both hints
         color_hint = ColorHint(teammate=0, color=Color.BLUE, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.TWO, cards=[0])
@@ -227,10 +226,8 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(hand[0], Card(Color.BLUE, Number.TWO),
-                           f"Card 0 should always be Blue 2, got {hand[0]}")
+            self.assertEqual(hand[0], Card(Color.BLUE, Number.TWO), f"Card 0 should always be Blue 2, got {hand[0]}")
 
 
 if __name__ == "__main__":
     unittest.main()
-

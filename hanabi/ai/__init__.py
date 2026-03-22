@@ -8,10 +8,9 @@ from .monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 from .recommendation_player import RecommendationPlayer
 
 __all__ = [
-    'RandomPlayer',
-    'CommonSensePlayer',
-    'MonteCarloPlayer',
-    'MonteCarloConfig',
-    'RecommendationPlayer',
+    "RandomPlayer",
+    "CommonSensePlayer",
+    "MonteCarloPlayer",
+    "MonteCarloConfig",
+    "RecommendationPlayer",
 ]
-

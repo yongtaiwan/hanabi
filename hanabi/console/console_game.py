@@ -25,21 +25,19 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Enable debug logging if --debug flag is present
     if "--debug" in sys.argv or "-d" in sys.argv:
         logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%H:%M:%S'
+            level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
         )
-        logging.getLogger('hanabi.game').setLevel(logging.DEBUG)
+        logging.getLogger("hanabi.game").setLevel(logging.DEBUG)
         print("Debug logging enabled. Check console for detailed game state information.")
 
     # Check if 1-player mode
     if one_player_mode is None:
         while True:
             response = input("Play in 1-player mode? (y/n): ").strip().lower()
-            if response in ['y', 'yes']:
+            if response in ["y", "yes"]:
                 one_player_mode = True
                 break
-            elif response in ['n', 'no']:
+            elif response in ["n", "no"]:
                 one_player_mode = False
                 break
             else:
@@ -80,8 +78,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         # For interactive play, use fast config for MonteCarlo
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(
-                min_think_time_s=0.3,   # 300ms
-                max_think_time_s=0.5,   # 500ms
+                min_think_time_s=0.3,  # 300ms
+                max_think_time_s=0.5,  # 500ms
                 min_simulations=2,
                 max_simulations=50,
             )
@@ -122,16 +120,19 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     display.clear_previous_round_moves()  # Initialize move tracking
 
     # Initialize game history (before creating game so callback can use it)
-    history = GameHistory({
-        "num_players": num_players,
-        "max_live_tokens": settings.maxLiveTokens,
-        "max_hint_tokens": settings.maxHintTokens,
-        "max_cards_in_hand": settings.maxCardsInHand
-    })
+    history = GameHistory(
+        {
+            "num_players": num_players,
+            "max_live_tokens": settings.max_live_tokens,
+            "max_hint_tokens": settings.max_hint_tokens,
+            "max_cards_in_hand": settings.max_cards_in_hand,
+        }
+    )
 
     # Create game (will create players inside)
     # First create placeholder players, then replace with ConsolePlayers
     from hanabi.core.player import HumanPlayer
+
     placeholder_players = [HumanPlayer(i) for i in range(num_players)]
     team = PlayerTeam(placeholder_players)
 
@@ -141,9 +142,9 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         from .console_display import Colors
 
         # Record the move for previous round display
-        # Use old_state.turnNumber + 1 because the move was made at that turn
+        # Use old_state.turn_number + 1 because the move was made at that turn
         # (old_state has turn N, move is made, new_state has turn N+1)
-        move_turn_number = old_state.turnNumber + 1
+        move_turn_number = old_state.turn_number + 1
         display.record_move(player_index, move, move_turn_number)
 
         # Record move in history (using closure to access history and game)
@@ -164,15 +165,15 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         # Get the move message in the same format as Game Events
         if isinstance(move, Play):
             state = old_state if old_state else game.state
-            if state and player_index < len(state.playerHands):
-                card = state.playerHands[player_index].cards[move.card]
+            if state and player_index < len(state.player_hands):
+                card = state.player_hands[player_index].cards[move.card]
                 move_msg = f"P{player_index + 1} plays {card.color.name.lower()} {card.number.value}."
             else:
                 move_msg = f"P{player_index + 1} plays card {move.card + 1}."
         elif isinstance(move, Discard):
             state = old_state if old_state else game.state
-            if state and player_index < len(state.playerHands):
-                card = state.playerHands[player_index].cards[move.card]
+            if state and player_index < len(state.player_hands):
+                card = state.player_hands[player_index].cards[move.card]
                 move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
             else:
                 move_msg = f"P{player_index + 1} discards card {move.card + 1}."
@@ -194,7 +195,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
         # Print decision summary
         player = game.team.players[player_index]
-        if hasattr(player, 'get_decision_summary'):
+        if hasattr(player, "get_decision_summary"):
             summary = player.get_decision_summary()
             if summary:
                 # Get player class name for display
@@ -203,12 +204,12 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
         # Only update display if it's not the current player's turn (to avoid double display)
         # The display will be shown in play() when it's the player's turn
-        if player_index != new_state.currentPlayer:
+        if player_index != new_state.current_player:
             # Update display to show the new game state
-            display.display_game_state(game, game.currentPlayer)
+            display.display_game_state(game, game.current_player)
 
             # Pause before next turn (only if game not finished)
-            if not game.isFinished:
+            if not game.is_finished:
                 input(f"{Colors.BRIGHT_BLACK}Press Enter to continue to next turn...{Colors.RESET}")
                 display.clear_screen()
 
@@ -221,6 +222,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         # ai_player_type should be set above
         if ai_player_type is None:
             from hanabi.ai import RandomPlayer
+
             ai_player_type = RandomPlayer  # Default fallback
 
         # Create human player (player 0)
@@ -243,7 +245,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     game._team = PlayerTeam(players)
 
     # Set game settings and common view for all players
-    common_view = game.state.commonView
+    common_view = game.state.common_view
     for player in players:
         player.set_game_settings(settings)
         player.set_common_view(common_view)
@@ -253,10 +255,14 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
     # Welcome message
     from .console_display import Colors
+
     print(f"\n{Colors.BRIGHT_CYAN}Welcome to Hanabi!{Colors.RESET}")
     if one_player_mode:
         ai_type_name = ai_player_type.__name__ if ai_player_type else "Random"
-        print(f"{Colors.BRIGHT_GREEN}Playing in 1-player mode with {num_players - 1} {ai_type_name} AI player(s){Colors.RESET}")
+        print(
+            f"{Colors.BRIGHT_GREEN}Playing in 1-player mode with {num_players - 1} "
+            f"{ai_type_name} AI player(s){Colors.RESET}"
+        )
     print("=" * 70)
 
     # Play the game (game loop is handled by Game.play())
@@ -266,6 +272,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         game.play()
     except KeyboardInterrupt:
         from .console_display import Colors
+
         print(f"\n{Colors.BRIGHT_YELLOW}Game quit by player.{Colors.RESET}")
         return
 
@@ -274,7 +281,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
     # Save game history with final score
     from .console_display import Colors
-    final_score = game.getScore()
+
+    final_score = game.get_score()
     history.record_final_score(game)
     history_file = history.save_to_file(final_score=final_score)
     print(f"{Colors.BRIGHT_CYAN}Game history saved to: {Colors.BRIGHT_WHITE}{history_file}{Colors.RESET}")
@@ -283,4 +291,3 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
 
 if __name__ == "__main__":
     play_console_game()
-

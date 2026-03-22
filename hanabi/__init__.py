@@ -9,10 +9,7 @@ __version__ = "0.1.0"
 # Import main classes for easy access
 from .core.enums import Color, Number
 from .core.card import Card, Suit
-from .core.game import (
-    Hand, GameSettings, CommonView, PlayerView, GameState, Game,
-    create_standard_game_settings
-)
+from .core.game import Hand, GameSettings, CommonView, PlayerView, GameState, Game, create_standard_game_settings
 from .core.game_field import GameField
 from .core.moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
 from .core.observer import Observer
@@ -21,35 +18,35 @@ from .ai import RandomPlayer
 
 __all__ = [
     # Enums
-    'Color',
-    'Number',
+    "Color",
+    "Number",
     # Cards
-    'Card',
-    'Suit',
+    "Card",
+    "Suit",
     # Game state
-    'Hand',
-    'GameSettings',
-    'create_standard_game_settings',
-    'CommonView',
-    'PlayerView',
-    'GameState',
-    'Game',
-    'GameField',
+    "Hand",
+    "GameSettings",
+    "create_standard_game_settings",
+    "CommonView",
+    "PlayerView",
+    "GameState",
+    "Game",
+    "GameField",
     # Moves
-    'Move',
-    'Hint',
-    'CardMove',
-    'Play',
-    'Discard',
-    'ColorHint',
-    'NumberHint',
+    "Move",
+    "Hint",
+    "CardMove",
+    "Play",
+    "Discard",
+    "ColorHint",
+    "NumberHint",
     # Players
-    'Observer',
-    'Player',
-    'BasePlayer',
-    'HintTrackingPlayer',
-    'HumanPlayer',
-    'RandomPlayer',
-    'StrategyAlphaPlayer',
-    'PlayerTeam',
+    "Observer",
+    "Player",
+    "BasePlayer",
+    "HintTrackingPlayer",
+    "HumanPlayer",
+    "RandomPlayer",
+    "StrategyAlphaPlayer",
+    "PlayerTeam",
 ]

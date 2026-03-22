@@ -56,8 +56,8 @@ def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
     # Use a balanced config: not too slow, but still effective
     # Disable verbose logging for faster experiments
     config = MonteCarloConfig(
-        min_think_time_s=0.5,   # 500ms
-        max_think_time_s=1.0,   # 1 second
+        min_think_time_s=0.5,  # 500ms
+        max_think_time_s=1.0,  # 1 second
         min_simulations=5,
         max_simulations=50,
         verbose=False,  # Disable terminal output for faster experiments
@@ -117,10 +117,7 @@ def run_experiments(
         #   exp_ai_comparison/<timestamp>/<Np>p/...
         experiment_id = os.path.join(timestamp, f"{num_players}p")
 
-        print(
-            f"Experiment ID: {experiment_id} "
-            f"(runs={num_runs}, seed={base_seed})"
-        )
+        print(f"Experiment ID: {experiment_id} (runs={num_runs}, seed={base_seed})")
 
         results: ExperimentResults = game_field.run_experiment(
             ai_factories=ai_factories,
@@ -135,8 +132,7 @@ def run_experiments(
         stats_file = game_field.save_statistics(results)
         print(f"Statistics saved to: {stats_file}")
         print(
-            "Settings saved to: "
-            f"{os.path.join(GameField.EXPERIMENTS_BASE_DIR, results.experiment_id, 'settings.yaml')}"
+            f"Settings saved to: {os.path.join(GameField.EXPERIMENTS_BASE_DIR, results.experiment_id, 'settings.yaml')}"
         )
         print(
             "Game records saved to: "
@@ -214,11 +210,7 @@ def run_experiments(
         lines.append(f"## {num_players}-player games\n")
 
         # Add ranking for this player count
-        sorted_ais = sorted(
-            results.summary.items(),
-            key=lambda x: x[1].average_score,
-            reverse=True
-        )
+        sorted_ais = sorted(results.summary.items(), key=lambda x: x[1].average_score, reverse=True)
         lines.append("### Ranking by Average Score")
         lines.append("")
         for rank, (ai_name, stats) in enumerate(sorted_ais, 1):
@@ -228,19 +220,10 @@ def run_experiments(
         for ai_name, stats in results.summary.items():
             lines.append(f"### {ai_name}")
             lines.append(f"- Games played: {stats.games_played}")
-            lines.append(
-                f"- Score: avg {stats.average_score:.2f}, "
-                f"best {stats.best_score}, worst {stats.worst_score}"
-            )
-            lines.append(
-                f"- Moves: avg {stats.average_moves:.1f}"
-            )
-            lines.append(
-                f"- Thinking time: avg {stats.average_duration:.3f}s per game"
-            )
-            lines.append(
-                f"- Perfect-score win rate: {stats.win_rate * 100:.1f}%"
-            )
+            lines.append(f"- Score: avg {stats.average_score:.2f}, best {stats.best_score}, worst {stats.worst_score}")
+            lines.append(f"- Moves: avg {stats.average_moves:.1f}")
+            lines.append(f"- Thinking time: avg {stats.average_duration:.3f}s per game")
+            lines.append(f"- Perfect-score win rate: {stats.win_rate * 100:.1f}%")
             lines.append("")
 
         lines.append("")
@@ -252,7 +235,10 @@ def run_experiments(
 def main() -> None:
     """Entry point for running AI comparison experiments."""
     import argparse
-    parser = argparse.ArgumentParser(description="Run AI comparison experiments (Random, CommonSense, Recommendation, MonteCarlo).")
+
+    parser = argparse.ArgumentParser(
+        description="Run AI comparison experiments (Random, CommonSense, Recommendation, MonteCarlo)."
+    )
     parser.add_argument(
         "--players",
         type=int,
@@ -276,5 +262,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

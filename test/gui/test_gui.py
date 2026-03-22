@@ -270,11 +270,11 @@ class TestGUIGameIntegration(unittest.TestCase):
         self.assertIsNone(self.game._engine)
         self.assertFalse(self.game._is_replay_mode)
 
-    @patch('hanabi.gui_game.messagebox')
+    @patch("hanabi.gui_game.messagebox")
     def test_new_game_flow(self, mock_messagebox):
         """Test new game creation flow."""
         # Mock the dialog to return 3 players
-        with patch.object(self.game, '_ask_num_players', return_value=3):
+        with patch.object(self.game, "_ask_num_players", return_value=3):
             self.game._new_game()
 
             # Check that game was initialized
@@ -297,12 +297,14 @@ class TestGUIGameIntegration(unittest.TestCase):
         self.game._display.set_move_callback(self.game._on_move_made)
 
         # Create history
-        self.game._history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": settings.max_live_tokens,
-            "max_hint_tokens": settings.max_hint_tokens,
-            "max_cards_in_hand": settings.max_cards_in_hand
-        })
+        self.game._history = GameHistory(
+            {
+                "num_players": 2,
+                "max_live_tokens": settings.max_live_tokens,
+                "max_hint_tokens": settings.max_hint_tokens,
+                "max_cards_in_hand": settings.max_cards_in_hand,
+            }
+        )
         self.game._history.record_initial_state(self.game._engine)
 
         # Make a play move
@@ -346,13 +348,8 @@ class TestGUIGameIntegration(unittest.TestCase):
         """Test replay history format parsing."""
         # Mock history data
         history_data = {
-            "s": {
-                "num_players": 3,
-                "max_live_tokens": 3,
-                "max_hint_tokens": 8,
-                "max_cards_in_hand": 5
-            },
-            "m": []
+            "s": {"num_players": 3, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5},
+            "m": [],
         }
 
         # Should not raise error
@@ -379,6 +376,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
         self.input_handler = GUIInput(self.engine, self.display)
 
         self.move_callback_calls = []
+
         def record_move(move):
             self.move_callback_calls.append(move)
 
@@ -531,6 +529,5 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
         self.display._update_action_buttons()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

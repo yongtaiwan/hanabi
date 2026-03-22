@@ -12,7 +12,7 @@ from hanabi.core.enums import Color, Number
 
 class TestConsoleInput(unittest.TestCase):
     """Test cases for ConsoleInput."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         self.settings = create_standard_game_settings(3)
@@ -20,7 +20,7 @@ class TestConsoleInput(unittest.TestCase):
         team = PlayerTeam(self.players)
         self.game = Game.create(team, self.settings)
         self.input_parser = ConsoleInput(self.game, 0)
-    
+
     def test_parse_play(self):
         """Test parsing play command."""
         # Card indices in full commands are 1-based (UI)
@@ -29,14 +29,14 @@ class TestConsoleInput(unittest.TestCase):
         self.assertIsNone(error)
         self.assertIsInstance(move, Play)
         self.assertEqual(move.card, 0)
-    
+
     def test_parse_play_invalid_index(self):
         """Test parsing play with invalid card index."""
         move, error = self.input_parser.parse_move(0, "play 10")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Invalid card index", error)
-    
+
     def test_parse_discard(self):
         """Test parsing discard command."""
         move, error = self.input_parser.parse_move(0, "discard 3")
@@ -44,12 +44,12 @@ class TestConsoleInput(unittest.TestCase):
         self.assertIsNone(error)
         self.assertIsInstance(move, Discard)
         self.assertEqual(move.card, 2)
-    
+
     def test_parse_color_hint(self):
         """Test parsing color hint command."""
         state = self.game.state
         teammate_hand = state.player_hands[1]
-        
+
         if teammate_hand.cards:
             color = teammate_hand.cards[0].color
             move, error = self.input_parser.parse_move(0, f"hint 2 color {color.name}")
@@ -58,12 +58,12 @@ class TestConsoleInput(unittest.TestCase):
             self.assertIsInstance(move, ColorHint)
             self.assertEqual(move.teammate, 1)  # Player 2 is index 1
             self.assertEqual(move.color, color)
-    
+
     def test_parse_number_hint(self):
         """Test parsing number hint command."""
         state = self.game.state
         teammate_hand = state.player_hands[1]
-        
+
         if teammate_hand.cards:
             number = teammate_hand.cards[0].number
             move, error = self.input_parser.parse_move(0, f"hint 2 number {number.value}")
@@ -72,35 +72,35 @@ class TestConsoleInput(unittest.TestCase):
             self.assertIsInstance(move, NumberHint)
             self.assertEqual(move.teammate, 1)  # Player 2 is index 1
             self.assertEqual(move.number, number)
-    
+
     def test_parse_hint_self(self):
         """Test that hinting yourself is invalid."""
         move, error = self.input_parser.parse_move(0, "hint 1 color RED")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("cannot give a hint to yourself", error)
-    
+
     def test_parse_hint_invalid_player(self):
         """Test hinting invalid player."""
         move, error = self.input_parser.parse_move(0, "hint 10 color RED")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Invalid player", error)
-    
+
     def test_parse_hint_invalid_color(self):
         """Test hinting with invalid color."""
         move, error = self.input_parser.parse_move(0, "hint 2 color INVALID")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Invalid color", error)
-    
+
     def test_parse_hint_invalid_number(self):
         """Test hinting with invalid number."""
         move, error = self.input_parser.parse_move(0, "hint 2 number 10")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Number must be between", error)
-    
+
     def test_parse_hint_no_matching_cards(self):
         """Test hinting when teammate has no matching cards."""
         # This is tricky - we'd need to know the hand contents
@@ -108,21 +108,21 @@ class TestConsoleInput(unittest.TestCase):
         move, error = self.input_parser.parse_move(0, "hint 2 color MULTI")
         # Either succeeds (if MULTI exists) or fails (if it doesn't)
         # Both are valid outcomes
-    
+
     def test_parse_unknown_command(self):
         """Test parsing unknown command."""
         move, error = self.input_parser.parse_move(0, "unknown command")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Unknown command", error)
-    
+
     def test_parse_empty_input(self):
         """Test parsing empty input."""
         move, error = self.input_parser.parse_move(0, "")
         self.assertIsNone(move)
         self.assertIsNotNone(error)
         self.assertIn("Empty input", error)
-    
+
     def test_parse_incomplete_command(self):
         """Test parsing incomplete command."""
         move, error = self.input_parser.parse_move(0, "play")
@@ -131,6 +131,5 @@ class TestConsoleInput(unittest.TestCase):
         self.assertIn("Usage", error)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

@@ -62,9 +62,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Each hint is stored as (hint_type, value) where hint_type is 'color' or 'number'
         self._teammate_hints: Dict[int, List[tuple]] = {}
 
-    def observe_color_hint_move(
-        self, player_index: int, move: ColorHint, observer_view: PlayerView
-    ) -> None:
+    def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
             self._received_hints.append(move)
@@ -72,11 +70,9 @@ class CommonSensePlayer(HintTrackingPlayer):
         if teammate_idx != self._player_index:
             if teammate_idx not in self._teammate_hints:
                 self._teammate_hints[teammate_idx] = []
-            self._teammate_hints[teammate_idx].append(('color', move.color))
+            self._teammate_hints[teammate_idx].append(("color", move.color))
 
-    def observe_number_hint_move(
-        self, player_index: int, move: NumberHint, observer_view: PlayerView
-    ) -> None:
+    def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
             self._received_hints.append(move)
@@ -84,12 +80,12 @@ class CommonSensePlayer(HintTrackingPlayer):
         if teammate_idx != self._player_index:
             if teammate_idx not in self._teammate_hints:
                 self._teammate_hints[teammate_idx] = []
-            self._teammate_hints[teammate_idx].append(('number', move.number))
+            self._teammate_hints[teammate_idx].append(("number", move.number))
 
     def _get_all_possible_cards(self) -> List[Card]:
         """Get all possible cards in the game from settings."""
         if not self._all_possible_cards:
-            settings = self.gameSettings
+            settings = self.game_settings
             cards = []
             for color, suit in settings.cards.items():
                 for number, quantity in suit.cards.items():
@@ -100,25 +96,21 @@ class CommonSensePlayer(HintTrackingPlayer):
 
     def _update_seen_cards(self, player_view: PlayerView) -> None:
         """Update the set of cards we've seen."""
-        common_view = self.commonView
+        common_view = self.common_view
 
         # Add all cards from teammates' hands
         for teammate_idx, hand in player_view.teammates.items():
             for card in hand.cards:
                 self._seen_cards.add(card)
 
-        # Add all discarded cards (reconstruct from cardsDiscarded structure)
-        for color, suit in common_view.cardsDiscarded.items():
+        # Add all discarded cards (reconstruct from cards_discarded structure)
+        for color, suit in common_view.cards_discarded.items():
             # Suit.cards is a Dict[Number, int] mapping number to count
             for number, count in suit.cards.items():
                 for _ in range(count):
                     self._seen_cards.add(Card(color, number))
 
-    def _get_possible_cards_for_position(
-        self,
-        position: int,
-        player_view: PlayerView
-    ) -> Set[Card]:
+    def _get_possible_cards_for_position(self, position: int, player_view: PlayerView) -> Set[Card]:
         """
         Get possible cards for a given position in hand.
 
@@ -131,7 +123,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         Returns:
             Set of possible cards for this position
         """
-        hints = self.getHints()
+        hints = self.get_hints()
         card_hints = hints.get(position, {})
 
         all_cards = set(self._get_all_possible_cards())
@@ -141,6 +133,7 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         # Count how many of each card we've seen
         from collections import Counter
+
         seen_card_counts = Counter(self._seen_cards)
         all_card_counts = Counter(self._get_all_possible_cards())
 
@@ -165,7 +158,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # If a position doesn't have a hint, but other positions do, we can infer
         # that this position doesn't have those properties (if the hint covered all
         # cards with that property, which hints always do)
-        hand_size = player_view.ownHandSize
+        hand_size = player_view.own_hand_size
 
         # Get all positions that have color hints
         positions_with_color_hints = {
@@ -204,7 +197,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         Returns:
             True if the card is playable
         """
-        cards_played = common_view.cardsPlayed
+        cards_played = common_view.cards_played
 
         if card.color not in cards_played:
             # Color not started - need a 1
@@ -226,7 +219,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             True if playing this card could lose a life
         """
         possible_cards = self._get_possible_cards_for_position(position, player_view)
-        common_view = self.commonView
+        common_view = self.common_view
 
         # If ANY possible card is not playable, we could lose a life
         for card in possible_cards:
@@ -250,7 +243,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.commonView
+        common_view = self.common_view
 
         # All possible cards must be playable
         for card in possible_cards:
@@ -277,7 +270,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.commonView
+        common_view = self.common_view
 
         # Check if ANY possible card is playable
         for card in possible_cards:
@@ -301,8 +294,8 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.commonView
-        cards_played = common_view.cardsPlayed
+        common_view = self.common_view
+        cards_played = common_view.cards_played
 
         # Check if all possible cards are 5s that finish suits
         for card in possible_cards:
@@ -316,11 +309,7 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         return True
 
-    def _count_new_playable_cards_from_hint(
-        self,
-        hint: Move,
-        player_view: PlayerView
-    ) -> int:
+    def _count_new_playable_cards_from_hint(self, hint: Move, player_view: PlayerView) -> int:
         """
         Count how many new playable cards a hint would identify.
 
@@ -339,7 +328,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             return 0
 
         teammate_hand = player_view.teammates[teammate_idx]
-        common_view = self.commonView
+        common_view = self.common_view
 
         # Count cards that would be identified as playable by this hint
         count = 0
@@ -406,8 +395,8 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return 0.0  # Unknown card, medium risk
 
-        common_view = self.commonView
-        cards_played = common_view.cardsPlayed
+        common_view = self.common_view
+        cards_played = common_view.cards_played
 
         # Calculate risk based on:
         # - Cards that are needed to finish suits (especially 5s)
@@ -447,7 +436,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         Returns:
             True if we have hints about this position
         """
-        hints = self.getHints()
+        hints = self.get_hints()
         card_hints = hints.get(position, {})
 
         # Check if we have any hints (color or number) for this position
@@ -477,7 +466,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         if isinstance(hint, ColorHint):
             # Check if teammate already has a color hint for this color
             for hint_type, value in previous_hints:
-                if hint_type == 'color' and value == hint.color:
+                if hint_type == "color" and value == hint.color:
                     # They already have this color hint - check if it's for the same cards
                     # We can't know exact positions, but if they have the hint, they likely
                     # already know what to do with it
@@ -485,7 +474,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         elif isinstance(hint, NumberHint):
             # Check if teammate already has a number hint for this number
             for hint_type, value in previous_hints:
-                if hint_type == 'number' and value == hint.number:
+                if hint_type == "number" and value == hint.number:
                     # They already have this number hint
                     return True
 
@@ -505,13 +494,13 @@ class CommonSensePlayer(HintTrackingPlayer):
         self._update_seen_cards(player_view)
 
         # Generate all valid moves
-        common_view = self.commonView
-        game_settings = self.gameSettings
+        common_view = self.common_view
+        game_settings = self.game_settings
         valid_moves = generate_all_valid_moves(
             player_view=player_view,
             common_view=common_view,
             game_settings=game_settings,
-            player_index=self._player_index
+            player_index=self._player_index,
         )
 
         # Filter to actually valid moves
@@ -519,7 +508,7 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         if not valid_moves:
             # Fallback: return a play move
-            hand_size = player_view.ownHandSize
+            hand_size = player_view.own_hand_size
             return Play(0) if hand_size > 0 else Play(0)
 
         # Rule 1: Never play a card that could lose a life
@@ -567,7 +556,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Rule 4: Hint that identifies most new playable cards, tiebreak by player playing soon
         # Avoid duplicate hints (don't give hints teammates already have)
         hint_moves = [m for m in valid_moves if isinstance(m, (ColorHint, NumberHint))]
-        if hint_moves and common_view.hintTokens > 0:
+        if hint_moves and common_view.hint_tokens > 0:
             # Filter out duplicate hints
             non_duplicate_hints = []
             for hint in hint_moves:
@@ -580,7 +569,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             # Score hints by number of new playable cards
             best_hint = None
             best_score = -1
-            num_players = game_settings.numPlayers
+            num_players = game_settings.num_players
 
             for hint in hints_to_consider:
                 playable_count = self._count_new_playable_cards_from_hint(hint, player_view)
@@ -588,9 +577,7 @@ class CommonSensePlayer(HintTrackingPlayer):
                     # Score = playable_count * 100 - turns_until_player
                     # Bonus for non-duplicate hints
                     duplicate_penalty = 0 if hint in non_duplicate_hints else 50
-                    turns_until = self._get_turns_until_player(
-                        hint.teammate, self._player_index, num_players
-                    )
+                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
                     score = playable_count * 100 - turns_until - duplicate_penalty
                     if score > best_score:
                         best_score = score
@@ -599,16 +586,22 @@ class CommonSensePlayer(HintTrackingPlayer):
             if best_hint:
                 playable_count = self._count_new_playable_cards_from_hint(best_hint, player_view)
                 if isinstance(best_hint, ColorHint):
-                    self._last_decision_summary = f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} (identifies {playable_count} new playable cards)"
+                    self._last_decision_summary = (
+                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
+                        f"(identifies {playable_count} new playable cards)"
+                    )
                 else:
-                    self._last_decision_summary = f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (identifies {playable_count} new playable cards)"
+                    self._last_decision_summary = (
+                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} "
+                        f"(identifies {playable_count} new playable cards)"
+                    )
                 return best_hint
 
         # Rule 5: Discard least risky card, tiebreak by oldest
         # NEVER discard a card that is definitely playable
         # NEVER discard a card that we have hints about AND could be playable
         # (If teammate hinted us about a card, they likely want us to play it)
-        if common_view.hintTokens < game_settings.maxHintTokens:
+        if common_view.hint_tokens < game_settings.max_hint_tokens:
             discard_moves = [m for m in valid_moves if isinstance(m, Discard)]
             # Filter out playable cards - never discard cards we know are playable
             safe_discard_moves = []
@@ -626,7 +619,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             if safe_discard_moves:
                 # Score discards: lower risk = better, older position = better (tiebreak)
                 best_discard = None
-                best_risk = float('inf')
+                best_risk = float("inf")
 
                 for discard in safe_discard_moves:
                     risk = self._get_discard_risk_score(discard.card, player_view)
@@ -639,12 +632,14 @@ class CommonSensePlayer(HintTrackingPlayer):
                         best_discard = discard
 
                 if best_discard:
-                    self._last_decision_summary = f"Discard card at position {best_discard.card + 1} (least risky, oldest)"
+                    self._last_decision_summary = (
+                        f"Discard card at position {best_discard.card + 1} (least risky, oldest)"
+                    )
                     return best_discard
 
         # Rule 6: Give hint that covers most cards, tiebreak by player playing soon
         # Avoid duplicate hints
-        if hint_moves and common_view.hintTokens > 0:
+        if hint_moves and common_view.hint_tokens > 0:
             # Filter out duplicate hints
             non_duplicate_hints = []
             for hint in hint_moves:
@@ -656,16 +651,14 @@ class CommonSensePlayer(HintTrackingPlayer):
 
             best_hint = None
             best_score = -1
-            num_players = game_settings.numPlayers
+            num_players = game_settings.num_players
 
             for hint in hints_to_consider:
                 card_count = self._get_hint_card_count(hint, player_view)
                 if card_count > 0:
                     # Bonus for non-duplicate hints
                     duplicate_penalty = 0 if hint in non_duplicate_hints else 20
-                    turns_until = self._get_turns_until_player(
-                        hint.teammate, self._player_index, num_players
-                    )
+                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
                     score = card_count * 10 - turns_until - duplicate_penalty
                     if score > best_score:
                         best_score = score
@@ -674,9 +667,14 @@ class CommonSensePlayer(HintTrackingPlayer):
             if best_hint:
                 card_count = self._get_hint_card_count(best_hint, player_view)
                 if isinstance(best_hint, ColorHint):
-                    self._last_decision_summary = f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} (covers {card_count} cards)"
+                    self._last_decision_summary = (
+                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
+                        f"(covers {card_count} cards)"
+                    )
                 else:
-                    self._last_decision_summary = f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (covers {card_count} cards)"
+                    self._last_decision_summary = (
+                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (covers {card_count} cards)"
+                    )
                 return best_hint
 
         # Fallback: return first valid move
@@ -691,4 +689,3 @@ class CommonSensePlayer(HintTrackingPlayer):
             Summary string describing the reasoning, or None if no decision made yet
         """
         return self._last_decision_summary
-

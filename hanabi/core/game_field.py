@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, asdict
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -30,6 +31,7 @@ from .game_history import GameHistory
 @dataclass
 class GameResult:
     """Result from a single game."""
+
     score: int
     moves_count: int
     duration_seconds: float
@@ -40,6 +42,7 @@ class GameResult:
 @dataclass
 class RunResult:
     """Results from one deck shuffle across all AIs."""
+
     run_id: int
     deck_seed: Optional[int]
     ai_results: Dict[str, GameResult] = field(default_factory=dict)
@@ -48,6 +51,7 @@ class RunResult:
 @dataclass
 class AIStatistics:
     """Aggregated statistics for one AI."""
+
     games_played: int
     average_score: float
     best_score: int
@@ -61,6 +65,7 @@ class AIStatistics:
 @dataclass
 class ExperimentResults:
     """Results from running multiple experiments."""
+
     experiment_id: str
     settings: Dict[str, Any]
     num_runs: int
@@ -210,14 +215,14 @@ class GameField:
                     os.symlink(target, link_path)
                 except OSError:
                     # Symlinks not supported - create a text file with the path
-                    with open(link_path + ".link", 'w') as f:
+                    with open(link_path + ".link", "w") as f:
                         f.write(target)
             return True
         except (OSError, AttributeError, Exception):
             # Symlinks not supported (e.g., Windows without admin rights)
             # Fallback: create a text file with the path
             try:
-                with open(link_path + ".link", 'w') as f:
+                with open(link_path + ".link", "w") as f:
                     f.write(os.path.abspath(target))
                 return True
             except Exception:
@@ -244,10 +249,7 @@ class GameField:
         return StartPosition(settings, deck)
 
     @staticmethod
-    def _create_game_from_start_position(
-        start_position: StartPosition,
-        team: PlayerTeam
-    ) -> Game:
+    def _create_game_from_start_position(start_position: StartPosition, team: PlayerTeam) -> Game:
         """
         Create and initialize a Game from a StartPosition.
 
@@ -272,14 +274,14 @@ class GameField:
 
         # Assert we have enough cards to deal
         required_cards = num_players * cards_per_player
-        assert len(deck_cards) >= required_cards, \
+        assert len(deck_cards) >= required_cards, (
             f"Not enough cards in deck: need {required_cards}, have {len(deck_cards)}"
+        )
 
         for player_idx in range(num_players):
             hand_cards = []
             for _ in range(cards_per_player):
-                assert draw_deck_index < len(deck_cards), \
-                    f"Ran out of cards while dealing to player {player_idx}"
+                assert draw_deck_index < len(deck_cards), f"Ran out of cards while dealing to player {player_idx}"
                 hand_cards.append(deck_cards[draw_deck_index])
                 draw_deck_index += 1
             player_hands.append(Hand(hand_cards))
@@ -291,7 +293,7 @@ class GameField:
             hint_tokens=settings.max_hint_tokens,
             cards_to_draw=remaining_cards,
             cards_discarded={},
-            cards_played={}
+            cards_played={},
         )
 
         # Initialize game state
@@ -302,7 +304,7 @@ class GameField:
             draw_deck_index=draw_deck_index,
             turn_number=0,
             current_player=0,
-            turns_left=None
+            turns_left=None,
         )
 
         # Create game instance
@@ -357,7 +359,7 @@ class GameField:
         save_record: bool = True,
         experiment_id: Optional[str] = None,
         run_id: Optional[int] = None,
-        ai_name: Optional[str] = None
+        ai_name: Optional[str] = None,
     ) -> GameResult:
         """
         Play a single game with a team of players using the same StartPosition.
@@ -389,6 +391,7 @@ class GameField:
 
         # Set up move callback to record moves if saving history
         if save_record:
+
             def on_move_callback(player_index: int, move, old_state, new_state):
                 if history:
                     # Record move in history
@@ -426,7 +429,9 @@ class GameField:
             history.record_final_score(game)
             # Generate filename with experiment context if available
             if experiment_id is not None and run_id is not None and ai_name is not None:
-                filename = f"run_{run_id:03d}_ai_{ai_name}.yaml" if YAML_AVAILABLE else f"run_{run_id:03d}_ai_{ai_name}.json"
+                filename = (
+                    f"run_{run_id:03d}_ai_{ai_name}.yaml" if YAML_AVAILABLE else f"run_{run_id:03d}_ai_{ai_name}.json"
+                )
                 # Save to all-games directory
                 all_games_dir = GameField._get_experiment_all_games_dir(experiment_id)
                 filepath = os.path.join(all_games_dir, filename)
@@ -447,7 +452,9 @@ class GameField:
             else:
                 # Fallback to default location
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                filename = f"experiment_game_{timestamp}.yaml" if YAML_AVAILABLE else f"experiment_game_{timestamp}.json"
+                filename = (
+                    f"experiment_game_{timestamp}.yaml" if YAML_AVAILABLE else f"experiment_game_{timestamp}.json"
+                )
                 game_record_path = history.save_to_file(filename=filename, final_score=final_score)
 
         return GameResult(
@@ -455,7 +462,7 @@ class GameField:
             moves_count=moves_count,
             duration_seconds=duration,
             end_reason=end_reason,
-            game_record_path=game_record_path
+            game_record_path=game_record_path,
         )
 
     def run_experiment(
@@ -464,7 +471,7 @@ class GameField:
         num_runs: int = 100,
         save_records: bool = True,
         random_seed: Optional[int] = None,
-        experiment_id: Optional[str] = None
+        experiment_id: Optional[str] = None,
     ) -> ExperimentResults:
         """
         Run an experiment: shuffle a deck, then let different AIs play the same deck.
@@ -521,11 +528,7 @@ class GameField:
 
                 # Play game
                 game_result = run_field._play_game_with_team(
-                    team,
-                    save_record=save_records,
-                    experiment_id=experiment_id,
-                    run_id=run_id,
-                    ai_name=ai_name
+                    team, save_record=save_records, experiment_id=experiment_id, run_id=run_id, ai_name=ai_name
                 )
                 run_result.ai_results[ai_name] = game_result
 
@@ -549,15 +552,11 @@ class GameField:
                     win_rate=wins[ai_name] / len(scores) if scores else 0.0,
                     std_dev=statistics.stdev(scores) if len(scores) > 1 else 0.0,
                     average_moves=statistics.mean(all_moves[ai_name]),
-                    average_duration=statistics.mean(all_durations[ai_name])
+                    average_duration=statistics.mean(all_durations[ai_name]),
                 )
 
         return ExperimentResults(
-            experiment_id=experiment_id,
-            settings=settings_dict,
-            num_runs=num_runs,
-            runs=runs,
-            summary=summary
+            experiment_id=experiment_id, settings=settings_dict, num_runs=num_runs, runs=runs, summary=summary
         )
 
     def save_settings(self, experiment_id: str, settings: GameSettings) -> str:
@@ -582,7 +581,7 @@ class GameField:
             "max_cards_in_hand": settings.max_cards_in_hand,
         }
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             if YAML_AVAILABLE:
                 yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
             else:
@@ -617,7 +616,7 @@ class GameField:
         # Convert to dict for serialization
         data = asdict(results)
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             if YAML_AVAILABLE:
                 yaml.dump(data, f, default_flow_style=False, sort_keys=False)
             else:

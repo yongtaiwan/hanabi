@@ -19,13 +19,13 @@ class RandomPlayer(BasePlayer):
     """
     AI player that makes random moves from all legitimate moves.
 
-    IMPORTANT: This player relies on the Game to update its commonView reference
+    IMPORTANT: This player relies on the Game to update its common_view reference
     after each move (via Game._set_common_view_for_players()). This ensures players
     always see the current state's CommonView, not a stale one.
 
     The player validates all moves before returning them using
     :meth:`hanabi.core.player.BasePlayer.is_move_legal`, which matches engine
-    hint and card-index rules using only ``commonView``, ``gameSettings``, and
+    hint and card-index rules using only ``common_view``, ``game_settings``, and
     ``playerView``.
     """
 
@@ -53,11 +53,11 @@ class RandomPlayer(BasePlayer):
 
         if not potential_moves:
             # No moves available - create a play move as fallback
-            hand_size = player_view.ownHandSize
+            hand_size = player_view.own_hand_size
             return Play(0) if hand_size > 0 else Play(0)
 
         # Filter moves to only include valid ones RIGHT NOW
-        # This is critical because the commonView is shared and can change
+        # This is critical because the common_view is shared and can change
         valid_moves = []
         for move in potential_moves:
             if self.is_move_legal(player_view, move):
@@ -66,7 +66,7 @@ class RandomPlayer(BasePlayer):
         # If filtering removed all moves, fall back to play moves only
         if not valid_moves:
             # Generate play moves as fallback (these should always be valid)
-            hand_size = player_view.ownHandSize
+            hand_size = player_view.own_hand_size
             for card_index in range(hand_size):
                 play_move = Play(card_index)
                 if self.is_move_legal(player_view, play_move):
@@ -82,8 +82,8 @@ class RandomPlayer(BasePlayer):
         # Only do a final check for hint moves to ensure tokens are still available
         # This is the only case where state can change between validation and selection
         if isinstance(selected, (ColorHint, NumberHint)):
-            # Read hintTokens directly from commonView RIGHT NOW
-            tokens = self.commonView.hintTokens
+            # Read hint_tokens directly from common_view RIGHT NOW
+            tokens = self.common_view.hint_tokens
             if tokens <= 0:
                 # Tokens are 0 - find another valid move from our list
                 # Prefer non-play moves if available
@@ -97,7 +97,7 @@ class RandomPlayer(BasePlayer):
                         selected = random.choice(play_moves)
                     else:
                         # Last resort
-                        hand_size = player_view.ownHandSize
+                        hand_size = player_view.own_hand_size
                         selected = Play(0) if hand_size > 0 else Play(0)
 
         return selected
@@ -113,13 +113,12 @@ class RandomPlayer(BasePlayer):
             List of all potential moves (game will validate them)
         """
         # Use the utility function to generate moves
-        common_view = self.commonView
-        game_settings = self.gameSettings
+        common_view = self.common_view
+        game_settings = self.game_settings
 
         return generate_all_valid_moves(
             player_view=player_view,
             common_view=common_view,
             game_settings=game_settings,
-            player_index=self._player_index
+            player_index=self._player_index,
         )
-

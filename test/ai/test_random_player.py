@@ -77,6 +77,7 @@ class TestRandomPlayer(unittest.TestCase):
         if state.common_view.hint_tokens <= 0:
             player = players[state.current_player]
             from hanabi.core.game import PlayerView
+
             teammates = {i: state.player_hands[i] for i in range(3) if i != state.current_player}
             player_view = PlayerView(teammates, len(state.player_hands[state.current_player].cards))
 
@@ -106,6 +107,7 @@ class TestRandomPlayer(unittest.TestCase):
         # Get a player and check validation
         player = players[0]
         from hanabi.core.game import PlayerView
+
         teammates = {i: state.player_hands[i] for i in range(3) if i != 0}
         player_view = PlayerView(teammates, len(state.player_hands[0].cards))
 

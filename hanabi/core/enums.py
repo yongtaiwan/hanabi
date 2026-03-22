@@ -7,6 +7,7 @@ from enum import Enum
 
 class Color(Enum):
     """Card colors in Hanabi."""
+
     MULTI = "MULTI"
     WHITE = "WHITE"
     RED = "RED"
@@ -17,6 +18,7 @@ class Color(Enum):
 
 class Number(Enum):
     """Card numbers in Hanabi."""
+
     ONE = 1
     TWO = 2
     THREE = 3
@@ -31,4 +33,3 @@ class CardKind(Enum):
     PLAYABLE = "playable"
     CRITICAL = "critical"
     DISPENSABLE = "dispensable"
-

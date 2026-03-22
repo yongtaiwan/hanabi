@@ -62,12 +62,7 @@ class TestGUIPlaythrough(unittest.TestCase):
         display.set_move_callback(process_move)
         input_handler.setup_canvas_clicks()
 
-        history = GameHistory({
-            "num_players": 2,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8,
-            "max_cards_in_hand": 5
-        })
+        history = GameHistory({"num_players": 2, "max_live_tokens": 3, "max_hint_tokens": 8, "max_cards_in_hand": 5})
         history.record_initial_state(engine)
 
         # Simulate playing the game
@@ -192,7 +187,7 @@ class TestGUIPlaythrough(unittest.TestCase):
         self.assertGreater(len(display._card_widgets), 0, "Display should show cards")
 
         # Verify history was saved correctly
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             temp_filename = f.name
 
         try:
@@ -244,8 +239,7 @@ class TestGUIPlaythrough(unittest.TestCase):
             # Selected card should be None (different player now) or valid
             if display._selected_card is not None:
                 new_hand = engine.gameState.player_hands[engine.current_player]
-                self.assertLess(display._selected_card, len(new_hand.cards),
-                              "Selected card should be valid")
+                self.assertLess(display._selected_card, len(new_hand.cards), "Selected card should be valid")
 
     def test_hint_mode_reset(self):
         """Test that hint mode resets correctly."""
@@ -392,6 +386,5 @@ class TestGUIPlaythrough(unittest.TestCase):
         self.assertGreater(len(display._card_widgets), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

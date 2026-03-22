@@ -91,8 +91,7 @@ class TestGUIStress(unittest.TestCase):
             # Selected card should be validated/reset
             new_hand = engine.gameState.player_hands[engine.current_player]
             if display._selected_card is not None:
-                self.assertLess(display._selected_card, len(new_hand.cards),
-                              "Selected card index should be valid")
+                self.assertLess(display._selected_card, len(new_hand.cards), "Selected card index should be valid")
 
     def test_hint_with_empty_hand(self):
         """Test hint when teammate has empty hand."""
@@ -184,8 +183,9 @@ class TestGUIStress(unittest.TestCase):
             # Selected card should be validated
             new_hand = engine.gameState.player_hands[engine.current_player]
             if display._selected_card is not None:
-                self.assertLess(display._selected_card, len(new_hand.cards),
-                              "Selected card should be valid after hand size change")
+                self.assertLess(
+                    display._selected_card, len(new_hand.cards), "Selected card should be valid after hand size change"
+                )
 
     def test_display_with_zero_tokens(self):
         """Test display when tokens are at zero."""
@@ -409,8 +409,9 @@ class TestGUIStress(unittest.TestCase):
 
                 # Should display correctly for any number of players
                 self.assertGreater(len(display._card_widgets), 0)
-                self.assertEqual(len(display._card_positions),
-                               sum(len(hand.cards) for hand in engine.gameState.player_hands))
+                self.assertEqual(
+                    len(display._card_positions), sum(len(hand.cards) for hand in engine.gameState.player_hands)
+                )
 
     def test_concurrent_display_updates(self):
         """Test that display handles rapid updates correctly."""
@@ -460,6 +461,5 @@ class TestGUIStress(unittest.TestCase):
         self.assertEqual(len(display._card_positions), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

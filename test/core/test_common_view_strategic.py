@@ -1,4 +1,4 @@
-"""Tests for CommonView.cardKind."""
+"""Tests for CommonView.card_kind."""
 
 import unittest
 
@@ -39,7 +39,7 @@ class TestCommonViewStrategic(unittest.TestCase):
         r5 = Card(Color.RED, Number.FIVE)
         self.assertTrue(common._color_rank_unreachable(Color.RED, Number.FIVE, settings))
         self.assertEqual(
-            common.cardKind(r5, settings),
+            common.card_kind(r5, settings),
             CardKind.USELESS,
         )
 
@@ -56,7 +56,7 @@ class TestCommonViewStrategic(unittest.TestCase):
         )
         r3 = Card(Color.RED, Number.THREE)
         self.assertEqual(
-            common.cardKind(r3, settings),
+            common.card_kind(r3, settings),
             CardKind.PLAYABLE,
         )
 
@@ -73,7 +73,7 @@ class TestCommonViewStrategic(unittest.TestCase):
         )
         r3 = Card(Color.RED, Number.THREE)
         self.assertEqual(
-            common.cardKind(r3, settings),
+            common.card_kind(r3, settings),
             CardKind.CRITICAL,
         )
 
@@ -89,7 +89,7 @@ class TestCommonViewStrategic(unittest.TestCase):
         )
         r3 = Card(Color.RED, Number.THREE)
         self.assertEqual(
-            common.cardKind(r3, settings),
+            common.card_kind(r3, settings),
             CardKind.DISPENSABLE,
         )
 

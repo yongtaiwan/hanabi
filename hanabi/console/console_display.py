@@ -13,37 +13,38 @@ from hanabi.core.moves import Move, ColorHint, NumberHint
 
 class Colors:
     """ANSI color codes for terminal output."""
+
     # Reset
-    RESET = '\033[0m'
+    RESET = "\033[0m"
 
     # Text colors
-    BLACK = '\033[30m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    MAGENTA = '\033[35m'
-    CYAN = '\033[36m'
-    WHITE = '\033[37m'
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
 
     # Bright colors
-    BRIGHT_BLACK = '\033[90m'
-    BRIGHT_RED = '\033[91m'
-    BRIGHT_GREEN = '\033[92m'
-    BRIGHT_YELLOW = '\033[93m'
-    BRIGHT_BLUE = '\033[94m'
-    BRIGHT_MAGENTA = '\033[95m'
-    BRIGHT_CYAN = '\033[96m'
-    BRIGHT_WHITE = '\033[97m'
+    BRIGHT_BLACK = "\033[90m"
+    BRIGHT_RED = "\033[91m"
+    BRIGHT_GREEN = "\033[92m"
+    BRIGHT_YELLOW = "\033[93m"
+    BRIGHT_BLUE = "\033[94m"
+    BRIGHT_MAGENTA = "\033[95m"
+    BRIGHT_CYAN = "\033[96m"
+    BRIGHT_WHITE = "\033[97m"
 
     # Background colors
-    BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-    BG_YELLOW = '\033[43m'
-    BG_BLUE = '\033[44m'
-    BG_MAGENTA = '\033[45m'
-    BG_CYAN = '\033[46m'
-    BG_WHITE = '\033[47m'
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+    BG_MAGENTA = "\033[45m"
+    BG_CYAN = "\033[46m"
+    BG_WHITE = "\033[47m"
 
 
 class ConsoleDisplay:
@@ -64,7 +65,7 @@ class ConsoleDisplay:
 
     def _supports_colors(self) -> bool:
         """Check if terminal supports colors."""
-        return hasattr(os, 'isatty') and os.isatty(1)
+        return hasattr(os, "isatty") and os.isatty(1)
 
     def _init_color_map(self) -> Dict[Color, str]:
         """Initialize color mapping for card colors with brighter colors."""
@@ -82,7 +83,7 @@ class ConsoleDisplay:
 
     def clear_screen(self) -> None:
         """Clear the console screen."""
-        os.system('cls' if os.name == 'nt' else 'clear')
+        os.system("cls" if os.name == "nt" else "clear")
 
     def _card_to_short_notation(self, card_str: str) -> str:
         """
@@ -98,7 +99,7 @@ class ConsoleDisplay:
         from hanabi.core.enums import Color
 
         # Match Card(COLOR, NUMBER)
-        match = re.match(r'Card\((\w+),\s*(\d+)\)', card_str)
+        match = re.match(r"Card\((\w+),\s*(\d+)\)", card_str)
         if match:
             color_name = match.group(1)
             number = match.group(2)
@@ -125,7 +126,8 @@ class ConsoleDisplay:
         import re
 
         # Replace Card(COLOR, NUMBER) with short notation
-        card_pattern = r'Card\((\w+),\s*(\d+)\)'
+        card_pattern = r"Card\((\w+),\s*(\d+)\)"
+
         def replace_card(match):
             return self._card_to_short_notation(match.group(0))
 
@@ -154,22 +156,24 @@ class ConsoleDisplay:
 
         # Colorize short card notation (e.g., G1, R5) - do this before colorizing standalone color names
         # Match patterns like G1, R5, W3, etc.
-        short_card_pattern = r'\b([WRYGB])(\d)\b'
+        short_card_pattern = r"\b([WRYGB])(\d)\b"
+
         def colorize_short_card(match):
             color_letter = match.group(1)
             number = match.group(2)
             # Map first letter to color enum
-            color_map = {'W': Color.WHITE, 'R': Color.RED, 'Y': Color.YELLOW,
-                        'G': Color.GREEN, 'B': Color.BLUE}
+            color_map = {"W": Color.WHITE, "R": Color.RED, "Y": Color.YELLOW, "G": Color.GREEN, "B": Color.BLUE}
             if color_letter in color_map:
                 color_enum = color_map[color_letter]
                 color_code = self._color_map.get(color_enum, Colors.BRIGHT_WHITE)
                 return f"{color_code}{color_letter}{number}{Colors.RESET}"
             return match.group(0)
+
         result = re.sub(short_card_pattern, colorize_short_card, result)
 
         # Also colorize full Card(COLOR, NUMBER) format (for current player's moves)
-        card_pattern = r'Card\((\w+),\s*(\d+)\)'
+        card_pattern = r"Card\((\w+),\s*(\d+)\)"
+
         def colorize_card(match):
             color_name = match.group(1)
             number = match.group(2)
@@ -180,74 +184,96 @@ class ConsoleDisplay:
                 return f"{color_code}Card({color_name}, {number}){Colors.RESET}"
             except KeyError:
                 return match.group(0)
+
         result = re.sub(card_pattern, colorize_card, result)
 
         # Mark Card() sections to prevent re-coloring (use a placeholder approach)
         # Actually, since Card() is already colorized, the negative lookbehind should work
 
         # Colorize player numbers: "player 1", "player 2", etc.
-        result = re.sub(r'\bplayer (\d+)\b',
-                       lambda m: f"{Colors.BRIGHT_CYAN}player {Colors.BRIGHT_WHITE}{m.group(1)}{Colors.RESET}",
-                       result, flags=re.IGNORECASE)
+        result = re.sub(
+            r"\bplayer (\d+)\b",
+            lambda m: f"{Colors.BRIGHT_CYAN}player {Colors.BRIGHT_WHITE}{m.group(1)}{Colors.RESET}",
+            result,
+            flags=re.IGNORECASE,
+        )
 
         # Colorize color names (standalone): RED, YELLOW, GREEN, BLUE, WHITE (uppercase)
         # and red, yellow, green, blue, white (lowercase)
         # Also colorize numbers that follow color names (e.g., "red 1" - both words in red)
         # Do this after card names to avoid double-coloring
-        for color_name_upper in ['RED', 'YELLOW', 'GREEN', 'BLUE', 'WHITE']:
+        for color_name_upper in ["RED", "YELLOW", "GREEN", "BLUE", "WHITE"]:
             try:
                 color_enum = Color[color_name_upper]
                 color_code = self._color_map.get(color_enum, Colors.BRIGHT_WHITE)
                 color_name_lower = color_name_upper.lower()
                 # Match both uppercase and lowercase color names
                 # Match color name only if it's not part of "Card(COLOR, NUMBER)"
-                result = re.sub(rf'(?<!Card\()\b{color_name_upper}\b(?!,\s*\d+\))',
-                               f"{color_code}{color_name_upper}{Colors.RESET}",
-                               result)
+                result = re.sub(
+                    rf"(?<!Card\()\b{color_name_upper}\b(?!,\s*\d+\))",
+                    f"{color_code}{color_name_upper}{Colors.RESET}",
+                    result,
+                )
                 # Match lowercase color name followed by space and number - color both
                 # Pattern: color_name + space + number (but not if part of Card(...))
                 # Do this BEFORE matching standalone color names to avoid double matching
-                result = re.sub(rf'(?<!Card\()\b{color_name_lower}\b(?!,\s*\d+\))\s+(\d+)(?![^\s])',
-                               f"{color_code}{color_name_lower} {color_code}\\1{Colors.RESET}",
-                               result)
+                result = re.sub(
+                    rf"(?<!Card\()\b{color_name_lower}\b(?!,\s*\d+\))\s+(\d+)(?![^\s])",
+                    f"{color_code}{color_name_lower} {color_code}\\1{Colors.RESET}",
+                    result,
+                )
                 # Match lowercase color name (standalone, not followed by number)
                 # Use negative lookahead to ensure it's not already colorized
-                result = re.sub(rf'(?<!Card\()\b{color_name_lower}\b(?!,\s*\d+\))(?!\s+\d+)(?<!{re.escape(color_code)})(?<!{re.escape(Colors.RESET)})',
-                               f"{color_code}{color_name_lower}{Colors.RESET}",
-                               result)
+                standalone_color_pat = (
+                    rf"(?<!Card\()\b{color_name_lower}\b(?!,\s*\d+\))"
+                    rf"(?!\s+\d+)"
+                    rf"(?<!{re.escape(color_code)})(?<!{re.escape(Colors.RESET)})"
+                )
+                result = re.sub(
+                    standalone_color_pat,
+                    f"{color_code}{color_name_lower}{Colors.RESET}",
+                    result,
+                )
             except KeyError:
                 pass
 
         # Colorize success keywords
-        success_words = ['Successfully', 'completed', 'Bonus']
+        success_words = ["Successfully", "completed", "Bonus"]
         for word in success_words:
-            result = re.sub(rf'\b{word}\b',
-                           f"{Colors.BRIGHT_GREEN}{word}{Colors.RESET}",
-                           result, flags=re.IGNORECASE)
+            result = re.sub(rf"\b{word}\b", f"{Colors.BRIGHT_GREEN}{word}{Colors.RESET}", result, flags=re.IGNORECASE)
 
         # Colorize error keywords
-        error_words = ['Invalid', 'discarded', 'Lost']
+        error_words = ["Invalid", "discarded", "Lost"]
         for word in error_words:
-            result = re.sub(rf'\b{word}\b',
-                           f"{Colors.BRIGHT_RED}{word}{Colors.RESET}",
-                           result, flags=re.IGNORECASE)
+            result = re.sub(rf"\b{word}\b", f"{Colors.BRIGHT_RED}{word}{Colors.RESET}", result, flags=re.IGNORECASE)
 
         # Colorize important info (do this last to avoid conflicts)
-        result = re.sub(r'(Hint tokens?):\s*(\d+)',
-                       lambda m: f"{Colors.BRIGHT_CYAN}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
-                       result, flags=re.IGNORECASE)
-        result = re.sub(r'(Lives remaining):\s*(\d+)',
-                       lambda m: f"{Colors.BRIGHT_YELLOW}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
-                       result, flags=re.IGNORECASE)
-        result = re.sub(r'(indices?):\s*([\d,\s]+)',
-                       lambda m: f"{Colors.BRIGHT_CYAN}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
-                       result, flags=re.IGNORECASE)
+        result = re.sub(
+            r"(Hint tokens?):\s*(\d+)",
+            lambda m: f"{Colors.BRIGHT_CYAN}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
+            result,
+            flags=re.IGNORECASE,
+        )
+        result = re.sub(
+            r"(Lives remaining):\s*(\d+)",
+            lambda m: f"{Colors.BRIGHT_YELLOW}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
+            result,
+            flags=re.IGNORECASE,
+        )
+        result = re.sub(
+            r"(indices?):\s*([\d,\s]+)",
+            lambda m: f"{Colors.BRIGHT_CYAN}{m.group(1)}: {Colors.BRIGHT_WHITE}{m.group(2)}{Colors.RESET}",
+            result,
+            flags=re.IGNORECASE,
+        )
 
         # Colorize standalone numbers (do this last, but avoid numbers already colored)
         # Match numbers that aren't already inside color codes
-        result = re.sub(r'(?<!\[)(?<!\d)\b(\d+)\b(?!\d)(?!\s*(?:/|remaining|tokens|indices))',
-                       lambda m: f"{Colors.BRIGHT_WHITE}{m.group(1)}{Colors.RESET}",
-                       result)
+        result = re.sub(
+            r"(?<!\[)(?<!\d)\b(\d+)\b(?!\d)(?!\s*(?:/|remaining|tokens|indices))",
+            lambda m: f"{Colors.BRIGHT_WHITE}{m.group(1)}{Colors.RESET}",
+            result,
+        )
 
         return result
 
@@ -260,7 +286,7 @@ class ConsoleDisplay:
             player_index: Index of the current player
         """
         state = game.state
-        common_view = state.commonView
+        common_view = state.common_view
         settings = game.settings
 
         print("\n" + "=" * 70)
@@ -274,7 +300,7 @@ class ConsoleDisplay:
         self._display_tokens(common_view, settings)
 
         # Display current score
-        current_score = game.getScore()
+        current_score = game.get_score()
         max_score = 25  # Perfect score
         print(f"\n{Colors.BRIGHT_WHITE}Current Score: {Colors.BRIGHT_CYAN}{current_score}/{max_score}{Colors.RESET}")
 
@@ -283,18 +309,18 @@ class ConsoleDisplay:
 
         # Display discard pile details (reconstruct from common view)
         discard_pile = []
-        for color, suit in common_view.cardsDiscarded.items():
+        for color, suit in common_view.cards_discarded.items():
             for number, count in suit.cards.items():
                 for _ in range(count):
                     discard_pile.append(Card(color, number))
         self._display_discard_pile(discard_pile)
 
         # Display draw deck count (make it more visible)
-        deck_count = common_view.cardsToDraw
+        deck_count = common_view.cards_to_draw
         if deck_count == 0:
             # Deck is exhausted - show warning
             # Check if this is the final turn phase (deck exhausted but game not finished)
-            if not game.isFinished:
+            if not game.is_finished:
                 # Other players get their final turn
                 print(f"\n{Colors.BRIGHT_RED}⚠️  Draw deck is empty! This is your FINAL TURN! ⚠️{Colors.RESET}")
             else:
@@ -305,16 +331,17 @@ class ConsoleDisplay:
 
         # Display other players' hands (starting from the next player)
         print(f"\n{Colors.BRIGHT_WHITE}Other Players' Hands:{Colors.RESET}")
-        # Get player view directly from state (same as _getPlayerView but we can access it here)
+        # Get player view directly from state (same as _get_player_view but we can access it here)
         from hanabi.core.game import PlayerView
+
         state = game.state
         teammates: Dict[int, Hand] = {}
-        for i, hand in enumerate(state.playerHands):
+        for i, hand in enumerate(state.player_hands):
             if i != player_index:
                 teammates[i] = hand
-        own_hand_size = len(state.playerHands[player_index].cards)
+        own_hand_size = len(state.player_hands[player_index].cards)
         player_view = PlayerView(teammates, own_hand_size)
-        num_players = game.settings.numPlayers
+        num_players = game.settings.num_players
 
         # Reorder teammates to start from the next player after current player
         teammates_list = list(player_view.teammates.items())
@@ -332,20 +359,21 @@ class ConsoleDisplay:
 
         # Display current player's hand with hints
         print(f"\n{Colors.BRIGHT_WHITE}Your Hand:{Colors.RESET}")
-        own_hand = state.playerHands[player_index]
+        own_hand = state.player_hands[player_index]
         from hanabi.core.player import HintTrackingPlayer
+
         player = game.team.players[player_index]
-        player_hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
+        player_hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
         self._display_own_hand_with_hints(own_hand, player_hints)
 
         print("\n" + "=" * 70)
 
     def _display_tokens(self, common_view: CommonView, settings: GameSettings) -> None:
         """Display hint and life tokens with emojis (uniform width with spacing)."""
-        hint_tokens = common_view.hintTokens
-        life_tokens = common_view.liveTokens
-        max_hints = settings.maxHintTokens
-        max_lives = settings.maxLiveTokens
+        hint_tokens = common_view.hint_tokens
+        life_tokens = common_view.live_tokens
+        max_hints = settings.max_hint_tokens
+        max_lives = settings.max_live_tokens
 
         # Emoji for hint tokens (💡 = lightbulb)
         hint_emoji = "💡"
@@ -389,13 +417,17 @@ class ConsoleDisplay:
         life_count_str = f"({life_tokens}/{max_lives})"
 
         print(f"\n{Colors.BRIGHT_WHITE}Tokens:{Colors.RESET}")
-        print(f"  {Colors.BRIGHT_CYAN}Hints:{Colors.RESET} {hint_emoji_str}{hint_pad} {hint_count_str:>{max_count_width}}")
-        print(f"  {Colors.BRIGHT_RED}Lives:{Colors.RESET} {life_emoji_str}{life_pad} {life_count_str:>{max_count_width}}")
+        print(
+            f"  {Colors.BRIGHT_CYAN}Hints:{Colors.RESET} {hint_emoji_str}{hint_pad} {hint_count_str:>{max_count_width}}"
+        )
+        print(
+            f"  {Colors.BRIGHT_RED}Lives:{Colors.RESET} {life_emoji_str}{life_pad} {life_count_str:>{max_count_width}}"
+        )
 
     def _display_fireworks(self, common_view: CommonView) -> None:
         """Display the fireworks (played cards)."""
         print(f"\n{Colors.BRIGHT_WHITE}Fireworks (Played Cards):{Colors.RESET}")
-        cards_played = common_view.cardsPlayed
+        cards_played = common_view.cards_played
 
         # Display each color
         for color in [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]:
@@ -416,6 +448,7 @@ class ConsoleDisplay:
 
         # Group cards by color, keeping list of numbers (not counts)
         from collections import defaultdict
+
         grouped = defaultdict(list)
 
         for card in discard_pile:
@@ -449,9 +482,9 @@ class ConsoleDisplay:
             # Display indices on first line (1-based) with fixed width columns
             index_parts = []
             for i in range(len(cards)):
-                index_str = f"{Colors.BRIGHT_CYAN}[{i+1}]{Colors.RESET}"
+                index_str = f"{Colors.BRIGHT_CYAN}[{i + 1}]{Colors.RESET}"
                 # Pad to fixed visual width (ANSI codes don't count)
-                visual_width = len(f"[{i+1}]")  # "[1]" = 3 chars
+                visual_width = len(f"[{i + 1}]")  # "[1]" = 3 chars
                 padding = " " * (col_width - visual_width)
                 index_parts.append(f"{index_str}{padding}")
             indices_line = "".join(index_parts)
@@ -488,9 +521,9 @@ class ConsoleDisplay:
             # Display indices on first line (1-based for UI) with fixed width columns
             index_parts = []
             for i in range(len(cards)):
-                index_str = f"{Colors.BRIGHT_CYAN}[{i+1}]{Colors.RESET}"
+                index_str = f"{Colors.BRIGHT_CYAN}[{i + 1}]{Colors.RESET}"
                 # Pad to fixed visual width (ANSI codes don't count)
-                visual_width = len(f"[{i+1}]")  # "[1]" = 3 chars
+                visual_width = len(f"[{i + 1}]")  # "[1]" = 3 chars
                 padding = " " * (col_width - visual_width)
                 index_parts.append(f"{index_str}{padding}")
             indices_line = "".join(index_parts)
@@ -538,33 +571,52 @@ class ConsoleDisplay:
     def display_available_moves(self, game: Game, player_index: int) -> None:
         """Display available moves for the current player."""
         state = game.state
-        common_view = state.commonView
-        hand = state.playerHands[player_index]
-        num_players = game.settings.numPlayers
+        common_view = state.common_view
+        hand = state.player_hands[player_index]
+        num_players = game.settings.num_players
 
         print(f"\n{Colors.BRIGHT_WHITE}Available Moves:{Colors.RESET}")
 
         # Play a card
         if hand.cards:
-            print(f"  {Colors.BRIGHT_GREEN}p<index> or play <index>{Colors.RESET} - Play a card (indices 1-{len(hand.cards)})")
+            print(
+                f"  {Colors.BRIGHT_GREEN}p<index> or play <index>{Colors.RESET} - "
+                f"Play a card (indices 1-{len(hand.cards)})"
+            )
             print(f"    Examples: {Colors.BRIGHT_GREEN}p1{Colors.RESET}, {Colors.BRIGHT_GREEN}play 1{Colors.RESET}")
 
         # Discard a card (only available if hint tokens are not at maximum)
-        if hand.cards and common_view.hintTokens < game.settings.maxHintTokens:
-            print(f"  {Colors.BRIGHT_YELLOW}d<index> or discard <index>{Colors.RESET} - Discard a card (indices 1-{len(hand.cards)})")
-            print(f"    Examples: {Colors.BRIGHT_YELLOW}d2{Colors.RESET}, {Colors.BRIGHT_YELLOW}discard 2{Colors.RESET}")
-        elif hand.cards and common_view.hintTokens >= game.settings.maxHintTokens:
+        if hand.cards and common_view.hint_tokens < game.settings.max_hint_tokens:
+            print(
+                f"  {Colors.BRIGHT_YELLOW}d<index> or discard <index>{Colors.RESET} - "
+                f"Discard a card (indices 1-{len(hand.cards)})"
+            )
+            print(
+                f"    Examples: {Colors.BRIGHT_YELLOW}d2{Colors.RESET}, {Colors.BRIGHT_YELLOW}discard 2{Colors.RESET}"
+            )
+        elif hand.cards and common_view.hint_tokens >= game.settings.max_hint_tokens:
             print(f"  {Colors.BRIGHT_BLACK}discard (not available - hint tokens at maximum){Colors.RESET}")
 
         # Give a hint
-        if common_view.hintTokens > 0:
+        if common_view.hint_tokens > 0:
             if num_players == 2:
                 print(f"  {Colors.BRIGHT_CYAN}h<value>{Colors.RESET} - Give a hint to other player")
-                print(f"    Examples: {Colors.BRIGHT_CYAN}h3{Colors.RESET} (number 3), {Colors.BRIGHT_CYAN}hr{Colors.RESET} (red), {Colors.BRIGHT_CYAN}hy{Colors.RESET} (yellow)")
+                print(
+                    f"    Examples: {Colors.BRIGHT_CYAN}h3{Colors.RESET} (number 3), "
+                    f"{Colors.BRIGHT_CYAN}hr{Colors.RESET} (red), {Colors.BRIGHT_CYAN}hy{Colors.RESET} (yellow)"
+                )
             else:
-                print(f"  {Colors.BRIGHT_CYAN}h<player><value> or hint <player> <color|number> <value>{Colors.RESET}")
-                print(f"    Examples: {Colors.BRIGHT_CYAN}h23{Colors.RESET} (player 2, number 3), {Colors.BRIGHT_CYAN}h1r{Colors.RESET} (player 1, red)")
-                print(f"    Available players: {', '.join(str(i+1) for i in range(num_players) if i != player_index)}")
+                print(
+                    f"  {Colors.BRIGHT_CYAN}h<player><value> or hint <player> <color|number> "
+                    f"<value>{Colors.RESET}"
+                )
+                print(
+                    f"    Examples: {Colors.BRIGHT_CYAN}h23{Colors.RESET} (player 2, number 3), "
+                    f"{Colors.BRIGHT_CYAN}h1r{Colors.RESET} (player 1, red)"
+                )
+                print(
+                    f"    Available players: {', '.join(str(i + 1) for i in range(num_players) if i != player_index)}"
+                )
         else:
             print(f"  {Colors.BRIGHT_BLACK}hint (not available - no hint tokens){Colors.RESET}")
 
@@ -583,7 +635,7 @@ class ConsoleDisplay:
     def display_game_end(self, game: Game) -> None:
         """Display game end information with score and rating."""
         state = game.state
-        score = game.getScore()
+        score = game.get_score()
         max_score = 25  # Perfect score
 
         print("\n" + "=" * 70)
@@ -591,12 +643,14 @@ class ConsoleDisplay:
         print("=" * 70)
 
         # Determine game end reason and score comment
-        if state.commonView.liveTokens <= 0:
+        if state.common_view.live_tokens <= 0:
             end_reason = f"{Colors.BRIGHT_RED}You lost! Ran out of life tokens.{Colors.RESET}"
         elif score == max_score:
             end_reason = f"{Colors.BRIGHT_GREEN}Perfect Score! All fireworks completed!{Colors.RESET}"
-        elif game.settings.autoEndWhenNoPointsPossible and state._isNoMorePointsPossible():
-            end_reason = f"{Colors.BRIGHT_YELLOW}Game ended. No more points possible (all needed cards discarded).{Colors.RESET}"
+        elif game.settings.auto_end_when_no_points_possible and state._is_no_more_points_possible():
+            end_reason = (
+                f"{Colors.BRIGHT_YELLOW}Game ended. No more points possible (all needed cards discarded).{Colors.RESET}"
+            )
         else:
             end_reason = f"{Colors.BRIGHT_YELLOW}Game ended.{Colors.RESET}"
 
@@ -610,7 +664,7 @@ class ConsoleDisplay:
         print()
 
         # Display final fireworks
-        self._display_fireworks(state.commonView)
+        self._display_fireworks(state.common_view)
         print("=" * 70 + "\n")
 
     def _get_score_comment(self, score: int, max_score: int) -> str:
@@ -669,9 +723,7 @@ class ConsoleDisplay:
         # Filter moves that happened after the turn before the current player's last move
         # This includes the current player's own move from their previous turn
         previous_round_moves = [
-            (player_idx, move, turn_num)
-            for player_idx, move, turn_num in self._all_moves
-            if turn_num > last_turn
+            (player_idx, move, turn_num) for player_idx, move, turn_num in self._all_moves if turn_num > last_turn
         ]
 
         if not previous_round_moves:
@@ -708,12 +760,20 @@ class ConsoleDisplay:
         if isinstance(move, NumberHint):
             number = move.number.value
             cards_str = ", ".join(str(c) for c in move.cards)
-            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} number {Colors.BRIGHT_WHITE}{number}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
+            return (
+                f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} number "
+                f"{Colors.BRIGHT_WHITE}{number}{Colors.RESET} to Player {move.teammate + 1} "
+                f"(cards: {cards_str})"
+            )
         if isinstance(move, ColorHint):
             color_name = move.color.name
             color_code = self._color_map.get(move.color, Colors.BRIGHT_WHITE)
             cards_str = ", ".join(str(c) for c in move.cards)
-            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} {color_code}{color_name}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
+            return (
+                f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} "
+                f"{color_code}{color_name}{Colors.RESET} to Player {move.teammate + 1} "
+                f"(cards: {cards_str})"
+            )
         assert False, f"unexpected move type in _format_move_for_display: {type(move)}"
 
     def clear_previous_round_moves(self) -> None:
@@ -724,4 +784,3 @@ class ConsoleDisplay:
     def display_prompt(self, player_index: int) -> None:
         """Display input prompt."""
         print(f"{Colors.BRIGHT_CYAN}Player {player_index + 1}, enter your move: {Colors.RESET}", end="")
-

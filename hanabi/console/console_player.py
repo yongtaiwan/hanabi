@@ -13,13 +13,7 @@ from .console_display import ConsoleDisplay
 class ConsolePlayer(HumanPlayer):
     """Human player for console that gets moves from console input and updates display."""
 
-    def __init__(
-        self,
-        player_index: int,
-        game: Game,
-        display: ConsoleDisplay,
-        input_parser: ConsoleInput
-    ):
+    def __init__(self, player_index: int, game: Game, display: ConsoleDisplay, input_parser: ConsoleInput):
         """
         Initialize a console player.
 
@@ -45,40 +39,42 @@ class ConsolePlayer(HumanPlayer):
             The move to make
         """
         # Display game state
-        self._display.display_game_state(self._game, self.playerIndex)
+        self._display.display_game_state(self._game, self.player_index)
 
         # Display available moves
-        self._display.display_available_moves(self._game, self.playerIndex)
+        self._display.display_available_moves(self._game, self.player_index)
 
         # Get input from user (with retry loop for invalid input)
         while True:
-            self._display.display_prompt(self.playerIndex)
+            self._display.display_prompt(self.player_index)
             user_input = input().strip()
 
-            if user_input.lower() in ['quit', 'exit', 'q']:
+            if user_input.lower() in ["quit", "exit", "q"]:
                 from .console_display import Colors
+
                 print(f"\n{Colors.BRIGHT_YELLOW}Game quit by player.{Colors.RESET}")
                 raise KeyboardInterrupt("Game quit by player")
 
             # Parse the move
-            move, error_msg = self._input_parser.parse_move(self.playerIndex, user_input)
+            move, error_msg = self._input_parser.parse_move(self.player_index, user_input)
 
             if move is None:
                 # Invalid input format - show error and retry
                 from .console_display import Colors
+
                 print(f"{Colors.BRIGHT_RED}Error: {error_msg}{Colors.RESET}")
                 print(f"{Colors.BRIGHT_BLACK}Please try again.{Colors.RESET}\n")
                 continue
 
             # Validate the move against game state
             state = self._game.state
-            if not state._validate(self.playerIndex, move):
+            if not state._validate(self.player_index, move):
                 # Invalid move according to game rules - show error and retry
                 from .console_display import Colors
-                error_msg = state._get_validation_error_message(self.playerIndex, move)
+
+                error_msg = state._get_validation_error_message(self.player_index, move)
                 print(f"{Colors.BRIGHT_RED}Invalid move: {error_msg}{Colors.RESET}")
                 print(f"{Colors.BRIGHT_BLACK}Please try again.{Colors.RESET}\n")
                 continue
 
             return move
-

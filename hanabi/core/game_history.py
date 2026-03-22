@@ -4,6 +4,7 @@ Game history tracking for Hanabi game replay.
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -65,7 +66,7 @@ class GameHistory:
     def record_initial_state(self, game: Game) -> None:
         """Record the initial game state - only the deck is needed for replay."""
         state = game.state
-        deck = state.startPosition.drawDeck
+        deck = state.start_position.draw_deck
         # Store deck directly (no initial_state wrapper)
         self._deck = [self._card_to_short(card) for card in deck.cards]
 
@@ -91,15 +92,27 @@ class GameHistory:
 
     def _card_to_short(self, card) -> str:
         """Convert a card to short notation (e.g., G5)."""
-        color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y',
-                    Color.GREEN: 'G', Color.BLUE: 'B', Color.MULTI: 'M'}
+        color_map = {
+            Color.WHITE: "W",
+            Color.RED: "R",
+            Color.YELLOW: "Y",
+            Color.GREEN: "G",
+            Color.BLUE: "B",
+            Color.MULTI: "M",
+        }
         return f"{color_map.get(card.color, '?')}{card.number.value}"
 
     @staticmethod
     def _short_to_card(short: str) -> Card:
         """Convert short notation (e.g., G5) to a Card."""
-        color_map = {'W': Color.WHITE, 'R': Color.RED, 'Y': Color.YELLOW,
-                    'G': Color.GREEN, 'B': Color.BLUE, 'M': Color.MULTI}
+        color_map = {
+            "W": Color.WHITE,
+            "R": Color.RED,
+            "Y": Color.YELLOW,
+            "G": Color.GREEN,
+            "B": Color.BLUE,
+            "M": Color.MULTI,
+        }
         if len(short) < 2:
             raise ValueError(f"Invalid card notation: {short}")
         color_char = short[0]
@@ -132,7 +145,7 @@ class GameHistory:
         cmd = move_str[0].lower()
         rest = move_str[1:]
 
-        if cmd == 'p':  # play
+        if cmd == "p":  # play
             try:
                 card_index_ui = int(rest)  # 1-based
                 card_index = card_index_ui - 1  # Convert to 0-based
@@ -140,7 +153,7 @@ class GameHistory:
             except ValueError:
                 return None
 
-        elif cmd == 'd':  # discard
+        elif cmd == "d":  # discard
             try:
                 card_index_ui = int(rest)  # 1-based
                 card_index = card_index_ui - 1  # Convert to 0-based
@@ -148,7 +161,7 @@ class GameHistory:
             except ValueError:
                 return None
 
-        elif cmd == 'h':  # hint
+        elif cmd == "h":  # hint
             if not rest or len(rest) < 2:
                 return None
 
@@ -172,42 +185,64 @@ class GameHistory:
                     number = Number(number_value)
                     # Find matching cards in teammate's hand
                     state = game.state
-                    if teammate >= len(state.playerHands):
+                    if teammate >= len(state.player_hands):
                         return None
-                    teammate_hand = state.playerHands[teammate]
+                    teammate_hand = state.player_hands[teammate]
                     matching = [i for i, c in enumerate(teammate_hand.cards) if c.number == number]
                     if not matching:
                         # Log error for debugging
                         import logging
+
                         logger = logging.getLogger(__name__)
-                        hand_desc = ", ".join([f"{c.color.name[0]}{c.number.value}" for c in teammate_hand.cards]) if teammate_hand.cards else "empty"
-                        logger.error(f"Replay: Cannot create hint '{move_str}': No {number_value} cards in player {teammate + 1}'s hand. "
-                                    f"Hand ({len(teammate_hand.cards)} cards): [{hand_desc}]")
+                        hand_desc = (
+                            ", ".join([f"{c.color.name[0]}{c.number.value}" for c in teammate_hand.cards])
+                            if teammate_hand.cards
+                            else "empty"
+                        )
+                        logger.error(
+                            f"Replay: Cannot create hint '{move_str}': No {number_value} cards in "
+                            f"player {teammate + 1}'s hand. "
+                            f"Hand ({len(teammate_hand.cards)} cards): [{hand_desc}]"
+                        )
                         return None
                     return NumberHint(teammate, matching, number)
                 except (ValueError, KeyError):
                     return None
             else:
                 # Color hint: h<teammate><color>
-                color_map = {'w': Color.WHITE, 'r': Color.RED, 'y': Color.YELLOW,
-                            'g': Color.GREEN, 'b': Color.BLUE, 'm': Color.MULTI}
+                color_map = {
+                    "w": Color.WHITE,
+                    "r": Color.RED,
+                    "y": Color.YELLOW,
+                    "g": Color.GREEN,
+                    "b": Color.BLUE,
+                    "m": Color.MULTI,
+                }
                 color_char = hint_value[0].lower()
                 color = color_map.get(color_char)
                 if color is None:
                     return None
                 # Find matching cards in teammate's hand
                 state = game.state
-                if teammate >= len(state.playerHands):
+                if teammate >= len(state.player_hands):
                     return None
-                teammate_hand = state.playerHands[teammate]
+                teammate_hand = state.player_hands[teammate]
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 if not matching:
                     # Log error for debugging
                     import logging
+
                     logger = logging.getLogger(__name__)
-                    hand_desc = ", ".join([f"{c.color.name[0]}{c.number.value}" for c in teammate_hand.cards]) if teammate_hand.cards else "empty"
-                    logger.error(f"Replay: Cannot create hint '{move_str}': No {color.name.lower()} cards in player {teammate + 1}'s hand. "
-                                f"Hand ({len(teammate_hand.cards)} cards): [{hand_desc}]")
+                    hand_desc = (
+                        ", ".join([f"{c.color.name[0]}{c.number.value}" for c in teammate_hand.cards])
+                        if teammate_hand.cards
+                        else "empty"
+                    )
+                    logger.error(
+                        f"Replay: Cannot create hint '{move_str}': No {color.name.lower()} cards in "
+                        f"player {teammate + 1}'s hand. "
+                        f"Hand ({len(teammate_hand.cards)} cards): [{hand_desc}]"
+                    )
                     return None
                 return ColorHint(teammate, matching, color)
 
@@ -220,9 +255,15 @@ class GameHistory:
         if isinstance(move, Discard):
             return f"d{move.card + 1}"
         if isinstance(move, ColorHint):
-            color_map = {Color.WHITE: 'w', Color.RED: 'r', Color.YELLOW: 'y',
-                        Color.GREEN: 'g', Color.BLUE: 'b', Color.MULTI: 'm'}
-            color_char = color_map.get(move.color, 'r')
+            color_map = {
+                Color.WHITE: "w",
+                Color.RED: "r",
+                Color.YELLOW: "y",
+                Color.GREEN: "g",
+                Color.BLUE: "b",
+                Color.MULTI: "m",
+            }
+            color_char = color_map.get(move.color, "r")
             return f"h{move.teammate + 1}{color_char}"
         if isinstance(move, NumberHint):
             return f"h{move.teammate + 1}{move.number.value}"
@@ -231,65 +272,69 @@ class GameHistory:
     def _serialize_state(self, game: Game, concise: bool = False, include_deck: bool = False) -> Dict[str, Any]:
         """Serialize game state to a dictionary."""
         state = game.state
-        common_view = state.commonView
+        common_view = state.common_view
 
         if concise:
             # Concise format: use short notation and compact field names
             # Serialize player hands as short notation (e.g., ["G5", "B3", "R1"])
             player_hands = []
-            for hand in state.playerHands:
+            for hand in state.player_hands:
                 cards = [self._card_to_short(card) for card in hand.cards]
                 player_hands.append(cards)
 
             # Serialize cards played as short notation (e.g., {"G": 5, "R": 3})
             cards_played = {}
-            for color, number in common_view.cardsPlayed.items():
-                color_map = {Color.WHITE: 'W', Color.RED: 'R', Color.YELLOW: 'Y',
-                            Color.GREEN: 'G', Color.BLUE: 'B', Color.MULTI: 'M'}
-                cards_played[color_map.get(color, '?')] = number.value
+            for color, number in common_view.cards_played.items():
+                color_map = {
+                    Color.WHITE: "W",
+                    Color.RED: "R",
+                    Color.YELLOW: "Y",
+                    Color.GREEN: "G",
+                    Color.BLUE: "B",
+                    Color.MULTI: "M",
+                }
+                cards_played[color_map.get(color, "?")] = number.value
 
             # Serialize discard pile as short notation list (reconstruct from common view)
             discard_pile = []
-            for color, suit in common_view.cardsDiscarded.items():
+            for color, suit in common_view.cards_discarded.items():
                 for number, count in suit.cards.items():
                     for _ in range(count):
                         discard_pile.append(self._card_to_short(Card(color, number)))
 
             result = {
-                "current_player": game.currentPlayer,
-                "hint_tokens": common_view.hintTokens,
-                "live_tokens": common_view.liveTokens,
-                "cards_to_draw": common_view.cardsToDraw,
+                "current_player": game.current_player,
+                "hint_tokens": common_view.hint_tokens,
+                "live_tokens": common_view.live_tokens,
+                "cards_to_draw": common_view.cards_to_draw,
                 "player_hands": player_hands,
                 "cards_played": cards_played,
                 "discard_pile": discard_pile,
-                "score": game.getScore(),
-                "is_finished": game.isFinished
+                "score": game.get_score(),
+                "is_finished": game.is_finished,
             }
 
             # Include deck in initial state for replay
             if include_deck:
-                deck = state.startPosition.drawDeck
+                deck = state.start_position.draw_deck
                 result["deck"] = [self._card_to_short(card) for card in deck.cards]
 
             return result
         else:
             # Original verbose format (for backward compatibility)
             player_hands = []
-            for hand in state.playerHands:
+            for hand in state.player_hands:
                 cards = []
                 for card in hand.cards:
-                    cards.append({
-                        "color": card.color.name,
-                        "number": card.number.value
-                    })
+                    cards.append({"color": card.color.name, "number": card.number.value})
                 player_hands.append(cards)
 
             from .player import HintTrackingPlayer
+
             player_hints = []
-            for player_idx in range(game.settings.numPlayers):
+            for player_idx in range(game.settings.num_players):
                 player = game.team.players[player_idx]
-                hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
+                hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
                 hints_dict = {}
                 for card_idx, hint_data in hints.items():
                     hint_entry = {}
@@ -302,35 +347,32 @@ class GameHistory:
                 player_hints.append(hints_dict if hints_dict else {})
 
             cards_played = {}
-            for color, number in common_view.cardsPlayed.items():
+            for color, number in common_view.cards_played.items():
                 cards_played[color.name] = number.value
 
             # Reconstruct discard pile from common view
             discard_pile = []
-            for color, suit in common_view.cardsDiscarded.items():
+            for color, suit in common_view.cards_discarded.items():
                 for number, count in suit.cards.items():
                     for _ in range(count):
-                        discard_pile.append({
-                            "color": color.name,
-                            "number": number.value
-                        })
+                        discard_pile.append({"color": color.name, "number": number.value})
 
             return {
-                "current_player": game.currentPlayer,
-                "hint_tokens": common_view.hintTokens,
-                "live_tokens": common_view.liveTokens,
-                "cards_to_draw": common_view.cardsToDraw,
+                "current_player": game.current_player,
+                "hint_tokens": common_view.hint_tokens,
+                "live_tokens": common_view.live_tokens,
+                "cards_to_draw": common_view.cards_to_draw,
                 "player_hands": player_hands,
                 "player_hints": player_hints,
                 "cards_played": cards_played,
                 "discard_pile": discard_pile,
-                "score": game.getScore(),
-                "is_finished": game.isFinished
+                "score": game.get_score(),
+                "is_finished": game.is_finished,
             }
 
     def record_final_score(self, game: Game) -> None:
         """Record the final score when the game ends."""
-        self._final_score = game.getScore()
+        self._final_score = game.get_score()
 
     def save_to_file(self, filename: Optional[str] = None, final_score: Optional[int] = None) -> str:
         """
@@ -349,18 +391,18 @@ class GameHistory:
                 filename = f"hanabi_game_{timestamp}.yaml"
             else:
                 filename = f"hanabi_game_{timestamp}.json"
-        elif not filename.endswith('.yaml') and not filename.endswith('.json') and not filename.endswith('.yml'):
+        elif not filename.endswith(".yaml") and not filename.endswith(".json") and not filename.endswith(".yml"):
             # Add appropriate extension if none provided
             if YAML_AVAILABLE:
-                filename = filename + '.yaml'
+                filename = filename + ".yaml"
             else:
-                filename = filename + '.json'
-        elif filename.endswith('.json') and YAML_AVAILABLE:
+                filename = filename + ".json"
+        elif filename.endswith(".json") and YAML_AVAILABLE:
             # Convert .json to .yaml if YAML is available
-            filename = filename[:-5] + '.yaml'
-        elif (filename.endswith('.yaml') or filename.endswith('.yml')) and not YAML_AVAILABLE:
+            filename = filename[:-5] + ".yaml"
+        elif (filename.endswith(".yaml") or filename.endswith(".yml")) and not YAML_AVAILABLE:
             # Convert .yaml to .json if YAML is not available
-            filename = filename.rsplit('.', 1)[0] + '.json'
+            filename = filename.rsplit(".", 1)[0] + ".json"
 
         # Get the full path (in game_records subdirectory if not already a full path)
         filepath = self._get_file_path(filename)
@@ -370,20 +412,17 @@ class GameHistory:
 
         history_data = {
             "settings": self._settings,
-            "time": {
-                "begin": self._start_time.isoformat(),
-                "end": datetime.now().isoformat()
-            },
+            "time": {"begin": self._start_time.isoformat(), "end": datetime.now().isoformat()},
             "deck": self._deck,
             "players": self._players,
-            "moves": self._moves  # List of strings like ["p3", "d4", "h11", "h4w"]
+            "moves": self._moves,  # List of strings like ["p3", "d4", "h11", "h4w"]
         }
 
         # Add final score if available
         if score is not None:
             history_data["final_score"] = score
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             if YAML_AVAILABLE:
                 # Custom dumper to use flow style for leaf arrays (hands, card indices)
                 class FlowStyleDumper(yaml.SafeDumper):
@@ -391,13 +430,12 @@ class GameHistory:
                         # Use flow style for simple lists (leaf arrays)
                         # Check if it's a list of strings/numbers (leaf array)
                         if data and all(isinstance(x, (str, int)) for x in data):
-                            return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+                            return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
                         # Otherwise use block style
-                        return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+                        return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=False)
 
                 FlowStyleDumper.add_representer(list, FlowStyleDumper.represent_list)
-                yaml.dump(history_data, f, Dumper=FlowStyleDumper, sort_keys=False,
-                         allow_unicode=True, width=120)
+                yaml.dump(history_data, f, Dumper=FlowStyleDumper, sort_keys=False, allow_unicode=True, width=120)
             else:
                 json.dump(history_data, f, indent=2)
 
@@ -424,8 +462,8 @@ class GameHistory:
                     raise FileNotFoundError(f"Game history file not found: {filename}")
                 filepath = filename
 
-        with open(filepath, 'r') as f:
-            if (filename.endswith('.yaml') or filename.endswith('.yml')) and YAML_AVAILABLE:
+        with open(filepath, "r") as f:
+            if (filename.endswith(".yaml") or filename.endswith(".yml")) and YAML_AVAILABLE:
                 return yaml.safe_load(f)
             else:
                 # Fallback to JSON
@@ -469,7 +507,7 @@ class GameHistory:
         player_hands = []
         draw_deck_index = 0
         deck_cards = deck.cards
-        cards_per_player = settings.maxCardsInHand
+        cards_per_player = settings.max_cards_in_hand
 
         for player_idx in range(num_players):
             hand_cards = []
@@ -484,11 +522,11 @@ class GameHistory:
         # Initialize common view
         remaining_cards = len(deck_cards) - draw_deck_index
         common_view = CommonView(
-            live_tokens=settings.maxLiveTokens,
-            hint_tokens=settings.maxHintTokens,
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
             cards_to_draw=remaining_cards,
             cards_discarded={},
-            cards_played={}
+            cards_played={},
         )
 
         # Reconstruct initial game state
@@ -499,7 +537,7 @@ class GameHistory:
             draw_deck_index=draw_deck_index,
             turn_number=0,
             current_player=0,
-            turns_left=None
+            turns_left=None,
         )
 
         # Create game instance
@@ -508,4 +546,3 @@ class GameHistory:
         game._set_common_view_for_players()
 
         return game
-

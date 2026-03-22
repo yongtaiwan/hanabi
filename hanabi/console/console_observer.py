@@ -65,4 +65,3 @@ class ConsoleObserver(Observer):
             # The display will be updated by the game engine
             # This observer just tracks the move
             pass
-

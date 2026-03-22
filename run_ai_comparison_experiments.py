@@ -23,11 +23,7 @@ def create_common_sense_player(player_index: int) -> CommonSensePlayer:
     return CommonSensePlayer(player_index)
 
 
-def run_experiment_for_player_count(
-    num_players: int,
-    num_runs: int = 50,
-    random_seed: int = 42
-) -> Dict[str, any]:
+def run_experiment_for_player_count(num_players: int, num_runs: int = 50, random_seed: int = 42) -> Dict[str, any]:
     """
     Run an experiment comparing both AI types for a specific player count.
 
@@ -39,9 +35,9 @@ def run_experiment_for_player_count(
     Returns:
         Dictionary with experiment results and statistics
     """
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Running experiment for {num_players} players")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # Create game settings
     settings = create_standard_game_settings(num_players)
@@ -67,7 +63,7 @@ def run_experiment_for_player_count(
         num_runs=num_runs,
         save_records=True,
         random_seed=random_seed,
-        experiment_id=experiment_id
+        experiment_id=experiment_id,
     )
 
     # Save statistics
@@ -88,12 +84,7 @@ def run_experiment_for_player_count(
         print(f"  Average moves: {stats.average_moves:.1f}")
         print(f"  Average duration: {stats.average_duration:.3f}s")
 
-    return {
-        "num_players": num_players,
-        "experiment_id": experiment_id,
-        "results": results,
-        "stats_file": stats_file
-    }
+    return {"num_players": num_players, "experiment_id": experiment_id, "results": results, "stats_file": stats_file}
 
 
 def main():
@@ -112,11 +103,7 @@ def main():
     player_counts = [2, 3, 4, 5]
 
     for num_players in player_counts:
-        result = run_experiment_for_player_count(
-            num_players=num_players,
-            num_runs=num_runs,
-            random_seed=random_seed
-        )
+        result = run_experiment_for_player_count(num_players=num_players, num_runs=num_runs, random_seed=random_seed)
         all_results.append(result)
         # Use different seed for next experiment to ensure variety
         random_seed += 1000
@@ -141,7 +128,10 @@ def main():
         improvement = common_sense_avg - random_avg
         improvement_pct = (improvement / random_avg * 100) if random_avg > 0 else 0
 
-        print(f"{num_players:<10} {random_avg:<20.2f} {common_sense_avg:<20.2f} {improvement:+.2f} ({improvement_pct:+.1f}%)")
+        print(
+            f"{num_players:<10} {random_avg:<20.2f} {common_sense_avg:<20.2f} "
+            f"{improvement:+.2f} ({improvement_pct:+.1f}%)"
+        )
 
     print("\nWin Rates (Perfect Scores) by Player Count:")
     print("-" * 70)
@@ -183,4 +173,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

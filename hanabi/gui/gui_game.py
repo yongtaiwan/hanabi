@@ -96,7 +96,7 @@ class GUIGame:
                 widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Get the canvas frame from display
-        canvas_frame = self._display._canvas_frame if hasattr(self._display, '_canvas_frame') else None
+        canvas_frame = self._display._canvas_frame if hasattr(self._display, "_canvas_frame") else None
 
         if canvas_frame:
             # Clear any existing control frame
@@ -128,13 +128,9 @@ class GUIGame:
             hot_seat_column = tk.Frame(columns_frame, bg="#2C3E50")
             hot_seat_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
-            tk.Label(
-                hot_seat_column,
-                text="Hot Seat",
-                bg="#2C3E50",
-                fg="white",
-                font=("Arial", 14, "bold")
-            ).pack(pady=(0, 10))
+            tk.Label(hot_seat_column, text="Hot Seat", bg="#2C3E50", fg="white", font=("Arial", 14, "bold")).pack(
+                pady=(0, 10)
+            )
 
             self._player_buttons = []
             for num_players in range(2, 6):
@@ -148,7 +144,7 @@ class GUIGame:
                     padx=25,
                     pady=12,
                     width=18,
-                    highlightthickness=0
+                    highlightthickness=0,
                 )
                 btn.pack(pady=8)
                 self._player_buttons.append(btn)
@@ -158,11 +154,7 @@ class GUIGame:
             single_player_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
             tk.Label(
-                single_player_column,
-                text="Single Player",
-                bg="#2C3E50",
-                fg="white",
-                font=("Arial", 14, "bold")
+                single_player_column, text="Single Player", bg="#2C3E50", fg="white", font=("Arial", 14, "bold")
             ).pack(pady=(0, 10))
 
             # Store reference to single player column for AI type selection
@@ -181,7 +173,7 @@ class GUIGame:
                     padx=25,
                     pady=12,
                     width=18,
-                    highlightthickness=0
+                    highlightthickness=0,
                 )
                 btn.pack(pady=8)
                 self._player_buttons.append(btn)
@@ -190,13 +182,9 @@ class GUIGame:
             replay_column = tk.Frame(columns_frame, bg="#2C3E50")
             replay_column.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
-            tk.Label(
-                replay_column,
-                text="Replay",
-                bg="#2C3E50",
-                fg="white",
-                font=("Arial", 14, "bold")
-            ).pack(pady=(0, 10))
+            tk.Label(replay_column, text="Replay", bg="#2C3E50", fg="white", font=("Arial", 14, "bold")).pack(
+                pady=(0, 10)
+            )
 
             self._replay_btn = tk.Button(
                 replay_column,
@@ -208,7 +196,7 @@ class GUIGame:
                 padx=25,
                 pady=12,
                 width=18,
-                highlightthickness=0
+                highlightthickness=0,
             )
             self._replay_btn.pack(pady=8)
 
@@ -231,11 +219,7 @@ class GUIGame:
         self._ai_type_frame.pack(pady=(5, 0), fill=tk.X)
 
         tk.Label(
-            self._ai_type_frame,
-            text="Select AI type:",
-            bg="#2C3E50",
-            fg="white",
-            font=("Arial", 11, "bold")
+            self._ai_type_frame, text="Select AI type:", bg="#2C3E50", fg="white", font=("Arial", 11, "bold")
         ).pack(pady=(0, 5))
 
         button_frame = tk.Frame(self._ai_type_frame, bg="#2C3E50")
@@ -249,11 +233,11 @@ class GUIGame:
         # Use very low min_simulations to ensure time limits are respected
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(
-                min_think_time_s=0.5,   # 0.5 second minimum (very short)
-                max_think_time_s=5.0,   # 5 seconds maximum (strict limit)
-                min_simulations=1,      # Minimum 1 simulation per move (very low to respect time limits)
-                max_simulations=30,     # Cap at 30 simulations (reduced for speed)
-                rollout_mc_steps=1,     # Use MC evaluation for first step in rollout
+                min_think_time_s=0.5,  # 0.5 second minimum (very short)
+                max_think_time_s=5.0,  # 5 seconds maximum (strict limit)
+                min_simulations=1,  # Minimum 1 simulation per move (very low to respect time limits)
+                max_simulations=30,  # Cap at 30 simulations (reduced for speed)
+                rollout_mc_steps=1,  # Use MC evaluation for first step in rollout
             )
             return MonteCarloPlayer(player_index, config=config)
 
@@ -280,7 +264,7 @@ class GUIGame:
                 font=("Arial", 10, "bold"),
                 width=15,
                 padx=5,
-                pady=5
+                pady=5,
             )
             btn.pack(pady=2, fill=tk.X)
 
@@ -324,6 +308,7 @@ class GUIGame:
             # Use provided AI type or default to RandomPlayer
             if ai_player_type is None:
                 from hanabi.ai import RandomPlayer
+
                 ai_player_type = RandomPlayer
 
             # Create human player (player 0)
@@ -346,6 +331,7 @@ class GUIGame:
         if one_player_mode:
             # Create temporary placeholder players for team creation
             from hanabi.core.player import HumanPlayer
+
             placeholder_players = [HumanPlayer(i) for i in range(num_players)]
             team = PlayerTeam(placeholder_players)
         else:
@@ -365,13 +351,15 @@ class GUIGame:
             # Check if deck just became empty (old_state had cards, new_state has 0)
             old_deck_size = old_state.common_view.cards_to_draw if old_state else None
             new_deck_size = new_state.common_view.cards_to_draw if new_state else None
-            deck_just_emptied = (old_deck_size is not None and old_deck_size > 0 and
-                                new_deck_size is not None and new_deck_size == 0)
+            deck_just_emptied = (
+                old_deck_size is not None and old_deck_size > 0 and new_deck_size is not None and new_deck_size == 0
+            )
 
             # Add delay for AI players to slow down simulation
-            is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
+            is_ai_player = getattr(self, "_one_player_mode", False) and player_index > 0
             if is_ai_player:
                 import time
+
                 time.sleep(0.5)  # 0.5 second delay between AI moves
 
             # Record move in history
@@ -389,7 +377,7 @@ class GUIGame:
                 # This ensures the final state is shown after the last move
                 # In single player mode, always show human player's view (player 0)
                 # In multi-player mode, show current player's view
-                display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
+                display_player = 0 if getattr(self, "_one_player_mode", False) else self._game.current_player
                 self._display.display_game_state(self._game, display_player)
 
                 # Close action menu if it's not the GUI player's turn (AI player's turn)
@@ -400,21 +388,26 @@ class GUIGame:
                 next_player_idx = (player_index + 1) % num_players
                 next_player = self._game.team.players[next_player_idx]
                 from .gui_player import GUIPlayer
+
                 if not isinstance(next_player, GUIPlayer):
                     # Next player is AI - close any open menu
-                    if hasattr(self._display, '_close_action_menu'):
+                    if hasattr(self._display, "_close_action_menu"):
                         self._display._close_action_menu()
 
                 # Display move result in event history with correct turn number
                 # Check if this is an AI player for display purposes
-                is_ai_player = getattr(self, '_one_player_mode', False) and player_index > 0
-                self._display.display_move_result(True, move_message, player_index, is_ai_player, turn_number=move_turn_number)
+                is_ai_player = getattr(self, "_one_player_mode", False) and player_index > 0
+                self._display.display_move_result(
+                    True, move_message, player_index, is_ai_player, turn_number=move_turn_number
+                )
 
                 # If deck just became empty, add a separate message with yellow text (like game over)
                 if deck_just_emptied:
                     deck_empty_msg = "The deck is empty. Each player gets one more turn."
                     # Use game_end event type for yellow color, and start with "Deck Empty" to prevent player prefix
-                    self._display._add_event_to_history(deck_empty_msg, "game_end", player_index=None, is_ai=False, turn_number=move_turn_number)
+                    self._display._add_event_to_history(
+                        deck_empty_msg, "game_end", player_index=None, is_ai=False, turn_number=move_turn_number
+                    )
 
                 # Force immediate GUI update to ensure display refreshes right away
                 # This ensures the display updates immediately after each move, even for fast AI players
@@ -428,6 +421,7 @@ class GUIGame:
 
             # Check if we should animate this move
             from hanabi.core.moves import Play, Discard
+
             should_animate = False
             card = None
             destination = None
@@ -438,7 +432,9 @@ class GUIGame:
 
             if isinstance(move, (Play, Discard)) and old_state:
                 # Get card from old_state (before it was removed)
-                if player_index < len(old_state.player_hands) and move.card < len(old_state.player_hands[player_index].cards):
+                if player_index < len(old_state.player_hands) and move.card < len(
+                    old_state.player_hands[player_index].cards
+                ):
                     card = old_state.player_hands[player_index].cards[move.card]
                     should_animate = True
 
@@ -453,7 +449,7 @@ class GUIGame:
                             destination = "firework"
                             firework_color = card.color
                             is_invalid_play = False
-                            is_play_of_five = (card.number.value == 5)
+                            is_play_of_five = card.number.value == 5
                         else:
                             # Invalid play - goes to discard
                             destination = "discard"
@@ -480,7 +476,8 @@ class GUIGame:
 
                 # Determine edge color based on move type
                 # Use clearly distinct colors that don't match card colors:
-                # Card colors: White (#F5F5F5), Red (#DC143C), Yellow (#FFD700), Green (#228B22), Blue (#4169E1), Multi (#9370DB)
+                # Card colors: White (#F5F5F5), Red (#DC143C), Yellow (#FFD700), Green (#228B22),
+                # Blue (#4169E1), Multi (#9370DB)
                 if is_invalid_play:
                     edge_color = "#FF1493"  # Deep Pink/Magenta: invalid play (distinct from red cards #DC143C)
                 elif isinstance(move, Play) and not is_invalid_play:
@@ -509,6 +506,7 @@ class GUIGame:
 
                 # Use a variable to track when all animations are complete (blocking)
                 import tkinter as tk
+
                 animation_done = tk.BooleanVar(value=False)
 
                 # Animate the card movement, then draw animation (if needed), then update display
@@ -521,6 +519,7 @@ class GUIGame:
 
                     # If card was drawn, animate the draw
                     if card_was_drawn and drawn_card:
+
                         def draw_animation_complete():
                             # After draw animation, update display
                             update_display()
@@ -534,7 +533,7 @@ class GUIGame:
                             edge_color="#00FF00",  # Green for drawing
                             callback=draw_animation_complete,
                             old_state=old_state,
-                            new_state=new_state
+                            new_state=new_state,
                         )
                     else:
                         # No card drawn - update display and signal completion
@@ -550,7 +549,7 @@ class GUIGame:
                     color=firework_color,
                     edge_color=edge_color,
                     callback=play_discard_animation_complete,
-                    old_state=old_state
+                    old_state=old_state,
                 )
 
                 # BLOCK until all animations are complete
@@ -609,7 +608,7 @@ class GUIGame:
 
             # Print decision summary
             player = self._game.team.players[player_index]
-            if hasattr(player, 'get_decision_summary'):
+            if hasattr(player, "get_decision_summary"):
                 summary = player.get_decision_summary()
                 if summary:
                     # Get player class name for display
@@ -623,6 +622,7 @@ class GUIGame:
             # Use the provided AI player type or default to RandomPlayer
             if ai_player_type is None:
                 from hanabi.ai import RandomPlayer
+
                 ai_player_type = RandomPlayer
 
             actual_players = [self._players[0]]  # Keep the human player
@@ -646,7 +646,7 @@ class GUIGame:
 
         # Set game reference in players (needed for display updates)
         for player in self._players:
-            if hasattr(player, '_game'):
+            if hasattr(player, "_game"):
                 player._game = self._game
 
         # Set up display
@@ -657,7 +657,7 @@ class GUIGame:
         self._display.set_move_callback(self._on_move_made)
 
         # Enable home button (acts as abandon game during play)
-        if hasattr(self._display, '_home_btn'):
+        if hasattr(self._display, "_home_btn"):
             self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
 
         # Set up input handler
@@ -667,6 +667,7 @@ class GUIGame:
 
         # Start game in a separate thread (non-blocking)
         import threading
+
         self._game_thread = threading.Thread(target=self._run_game, daemon=True)
         self._game_thread.start()
 
@@ -675,12 +676,14 @@ class GUIGame:
         self._process_gui_updates()
 
         # Initialize game history
-        self._history = GameHistory({
-            "num_players": num_players,
-            "max_live_tokens": settings.max_live_tokens,
-            "max_hint_tokens": settings.max_hint_tokens,
-            "max_cards_in_hand": settings.max_cards_in_hand
-        })
+        self._history = GameHistory(
+            {
+                "num_players": num_players,
+                "max_live_tokens": settings.max_live_tokens,
+                "max_hint_tokens": settings.max_hint_tokens,
+                "max_cards_in_hand": settings.max_cards_in_hand,
+            }
+        )
         # Record initial state
         if self._game:
             self._history.record_initial_state(self._game)
@@ -688,7 +691,7 @@ class GUIGame:
         # Hide start screen buttons
         if self._control_frame:
             # Unbind the Configure event to prevent errors after frame is destroyed
-            canvas_frame = self._display._canvas_frame if hasattr(self._display, '_canvas_frame') else None
+            canvas_frame = self._display._canvas_frame if hasattr(self._display, "_canvas_frame") else None
             if canvas_frame:
                 try:
                     # Unbind all Configure handlers (we can't unbind specific ones, so we'll handle it in the callback)
@@ -735,25 +738,25 @@ class GUIGame:
         if self._display:
             self._display.clear()
             # Clear status label
-            if hasattr(self._display, '_status_label'):
+            if hasattr(self._display, "_status_label"):
                 self._display._status_label.config(text="")
             # Clear score label
-            if hasattr(self._display, '_score_label'):
+            if hasattr(self._display, "_score_label"):
                 self._display._score_label.config(text="Score: 0/25")
             # Hide last turn warning
-            if hasattr(self._display, '_last_turn_label'):
+            if hasattr(self._display, "_last_turn_label"):
                 self._display._last_turn_label.pack_forget()
             # Clear event history
-            if hasattr(self._display, '_history_text'):
+            if hasattr(self._display, "_history_text"):
                 self._display._history_text.config(state=tk.NORMAL)
                 self._display._history_text.delete("1.0", tk.END)
                 self._display._history_text.config(state=tk.DISABLED)
-            if hasattr(self._display, '_event_history'):
+            if hasattr(self._display, "_event_history"):
                 self._display._event_history.clear()
             # Clear replay-specific display state
             self._display.set_game(None)
             self._display.set_show_all_cards(False)
-            if hasattr(self._display, '_replay_player_names'):
+            if hasattr(self._display, "_replay_player_names"):
                 self._display._replay_player_names = None
 
         # Remove replay controls if any
@@ -769,17 +772,17 @@ class GUIGame:
 
         if status_frame:
             for widget in status_frame.winfo_children():
-                if isinstance(widget, tk.Frame) and hasattr(widget, '_replay_controls'):
+                if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
                     widget.destroy()
 
         # Clear replay button references to prevent stale references
-        if hasattr(self, '_replay_first_btn'):
+        if hasattr(self, "_replay_first_btn"):
             self._replay_first_btn = None
-        if hasattr(self, '_replay_prev_btn'):
+        if hasattr(self, "_replay_prev_btn"):
             self._replay_prev_btn = None
-        if hasattr(self, '_replay_next_btn'):
+        if hasattr(self, "_replay_next_btn"):
             self._replay_next_btn = None
-        if hasattr(self, '_replay_last_btn'):
+        if hasattr(self, "_replay_last_btn"):
             self._replay_last_btn = None
 
         # Hide game control buttons
@@ -788,7 +791,7 @@ class GUIGame:
             self._back_to_start_btn = None
 
         # Disable home button
-        if hasattr(self._display, '_home_btn'):
+        if hasattr(self._display, "_home_btn"):
             self._display._home_btn.config(state=tk.DISABLED, command=None)
 
         # Show start screen
@@ -797,7 +800,7 @@ class GUIGame:
         # Force a full repaint of the display
         if self._display:
             # Update the canvas frame to ensure it's visible
-            if hasattr(self._display, '_canvas_frame'):
+            if hasattr(self._display, "_canvas_frame"):
                 self._display._canvas_frame.update_idletasks()
             # Force root window update to ensure everything is repainted
             self._display.root.update_idletasks()
@@ -818,13 +821,9 @@ class GUIGame:
 
         result = [None]
 
-        tk.Label(
-            dialog,
-            text="Select number of players:",
-            font=("Arial", 12, "bold"),
-            bg="#34495E",
-            fg="white"
-        ).pack(pady=20)
+        tk.Label(dialog, text="Select number of players:", font=("Arial", 12, "bold"), bg="#34495E", fg="white").pack(
+            pady=20
+        )
 
         button_frame = tk.Frame(dialog, bg="#34495E")
         button_frame.pack(pady=10)
@@ -840,7 +839,7 @@ class GUIGame:
                 font=("Arial", 11, "bold"),
                 width=12,
                 padx=10,
-                pady=8
+                pady=8,
             )
             btn.pack(pady=5, fill=tk.X)
 
@@ -872,16 +871,22 @@ class GUIGame:
                 discarded_count = suit.cards[card.number]
 
         # Calculate maximum achievable score BEFORE this discard
-        max_score_before = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count, exclude_card_from_hands=None)
+        max_score_before = self._calculate_max_achievable_score(
+            card.color, state, card.number, discarded_count, exclude_card_from_hands=None
+        )
 
         # Calculate maximum achievable score AFTER this discard
         # Exclude the card being discarded from the in_hands count
-        max_score_after = self._calculate_max_achievable_score(card.color, state, card.number, discarded_count + 1, exclude_card_from_hands=card)
+        max_score_after = self._calculate_max_achievable_score(
+            card.color, state, card.number, discarded_count + 1, exclude_card_from_hands=card
+        )
 
         # A discard is critical if it reduces the max achievable score
         return max_score_after < max_score_before
 
-    def _calculate_max_achievable_score(self, color, state, card_number, discarded_count_for_card, exclude_card_from_hands=None) -> int:
+    def _calculate_max_achievable_score(
+        self, color, state, card_number, discarded_count_for_card, exclude_card_from_hands=None
+    ) -> int:
         """
         Calculate the maximum achievable score for a color given current state.
 
@@ -895,21 +900,17 @@ class GUIGame:
             color: The color to check
             state: Current game state
             card_number: The number of the card being discarded
-            discarded_count_for_card: How many of this card number are discarded (including the one being discarded)
-            exclude_card_from_hands: If provided, exclude this card from the in_hands count (used when calculating "after discard")
+            discarded_count_for_card: How many of this card number are discarded
+                (including the one being discarded)
+            exclude_card_from_hands: If set, exclude this card from in_hands
+                (for "after discard" calculations)
 
         Returns:
             Maximum achievable score (0-5) for this color
         """
         from hanabi.core.enums import Number
 
-        card_counts = {
-            Number.ONE: 3,
-            Number.TWO: 2,
-            Number.THREE: 2,
-            Number.FOUR: 2,
-            Number.FIVE: 1
-        }
+        card_counts = {Number.ONE: 3, Number.TWO: 2, Number.THREE: 2, Number.FOUR: 2, Number.FIVE: 1}
 
         # Check what's currently played
         cards_played = state.common_view.cards_played
@@ -944,10 +945,12 @@ class GUIGame:
                 for hand_card in hand.cards:
                     if hand_card.color == color and hand_card.number == num:
                         # Exclude exactly one instance of the card being discarded
-                        if exclude_card_from_hands is not None and \
-                           exclude_card_from_hands.color == color and \
-                           exclude_card_from_hands.number == num and \
-                           excluded_count == 0:
+                        if (
+                            exclude_card_from_hands is not None
+                            and exclude_card_from_hands.color == color
+                            and exclude_card_from_hands.number == num
+                            and excluded_count == 0
+                        ):
                             # This is the card being discarded, skip it (only once)
                             excluded_count += 1
                             continue
@@ -1094,13 +1097,13 @@ class GUIGame:
             if state.turns_left == 0:
                 # All players have taken their final turn - game is finished
                 if self._game.is_finished:
-                    if not hasattr(self, '_game_ended') or not self._game_ended:
+                    if not hasattr(self, "_game_ended") or not self._game_ended:
                         self._on_game_end()
                     return
             # If turns_left > 0, allow the move (current player still has their final turn)
         elif self._game.is_finished:
             # Game finished for other reasons (lives lost, perfect score, etc.)
-            if not hasattr(self, '_game_ended') or not self._game_ended:
+            if not hasattr(self, "_game_ended") or not self._game_ended:
                 self._on_game_end()
             return
 
@@ -1110,9 +1113,10 @@ class GUIGame:
         # Display updates are now handled by the global callback in Game
         # Only call set_move on players that have it (GUIPlayer instances)
         player = self._players[current_player]
-        assert hasattr(player, 'set_move'), \
-            f"Attempted to call set_move on {type(player).__name__} (player {current_player}), which doesn't have this method. " \
-            f"This should only be called for GUIPlayer instances."
+        assert hasattr(player, "set_move"), (
+            f"Attempted to call set_move on {type(player).__name__} (player {current_player}), "
+            f"which doesn't have this method. This should only be called for GUIPlayer instances."
+        )
         player.set_move(move)
 
     def _process_gui_updates(self):
@@ -1147,7 +1151,7 @@ class GUIGame:
 
         # In single player mode, always show human player's view (player 0)
         # In multi-player mode, show current player's view
-        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
+        display_player = 0 if getattr(self, "_one_player_mode", False) else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
     def _on_game_end(self):
@@ -1162,13 +1166,13 @@ class GUIGame:
             self._history.save_to_file(final_score=final_score)
 
         # Close any open action menu
-        if self._display and hasattr(self._display, '_close_action_menu'):
+        if self._display and hasattr(self._display, "_close_action_menu"):
             self._display._close_action_menu()
 
         # If playing with AI (one-player mode), ensure we're showing human player's view (player 0)
         # The display should already be correct from the last move update, so we just update
         # the current player reference without redrawing the entire table
-        if getattr(self, '_one_player_mode', False) and self._display and self._game:
+        if getattr(self, "_one_player_mode", False) and self._display and self._game:
             # Update current player reference without full table refresh
             # The display is already showing the correct final state from the last move
             self._display._current_player = 0
@@ -1231,7 +1235,7 @@ class GUIGame:
                 pady=3,
                 highlightthickness=0,
                 borderwidth=1,
-                relief=tk.RAISED
+                relief=tk.RAISED,
             )
             # Force text color after creation
             self._back_to_start_btn.config(fg="black")
@@ -1246,12 +1250,13 @@ class GUIGame:
         # Set initial directory to game_records if it exists
         import os
         from hanabi.core.game_history import GameHistory
+
         initial_dir = GameHistory._get_records_dir() if os.path.exists(GameHistory._get_records_dir()) else "."
 
         filename = filedialog.askopenfilename(
             title="Load Replay",
             initialdir=initial_dir,
-            filetypes=[("YAML files", "*.yaml"), ("JSON files", "*.json"), ("All files", "*.*")]
+            filetypes=[("YAML files", "*.yaml"), ("JSON files", "*.json"), ("All files", "*.*")],
         )
 
         if not filename:
@@ -1285,14 +1290,14 @@ class GUIGame:
         if self._display:
             self._display._status_label.pack(side=tk.LEFT, padx=10, pady=5)
             self._display._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
-            if hasattr(self._display, '_history_frame'):
+            if hasattr(self._display, "_history_frame"):
                 self._display._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
         # Reconstruct game from history (initial state, no moves applied yet)
         self._reconstruct_game_from_history(history_data)
 
         # Enable home button (acts as abandon/back to start during replay)
-        if hasattr(self._display, '_home_btn'):
+        if hasattr(self._display, "_home_btn"):
             self._display._home_btn.config(state=tk.NORMAL, command=self._abandon_game)
 
         # Set up replay controls
@@ -1311,11 +1316,11 @@ class GUIGame:
         self._display.set_show_all_cards(False)
 
         # Disable home button
-        if hasattr(self._display, '_home_btn'):
+        if hasattr(self._display, "_home_btn"):
             self._display._home_btn.config(state=tk.DISABLED, command=None)
 
         # Clear canvas completely
-        if hasattr(self._display, 'canvas'):
+        if hasattr(self._display, "canvas"):
             self._display.canvas.delete("all")
 
         # Remove replay controls
@@ -1331,7 +1336,7 @@ class GUIGame:
 
         if status_frame:
             for widget in status_frame.winfo_children():
-                if isinstance(widget, tk.Frame) and hasattr(widget, '_replay_controls'):
+                if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
                     widget.destroy()
 
         # Show home screen - this will create/repaint the control frame
@@ -1340,7 +1345,7 @@ class GUIGame:
         # Force a full repaint of the display
         if self._display:
             # Update the canvas frame to ensure it's visible
-            if hasattr(self._display, '_canvas_frame'):
+            if hasattr(self._display, "_canvas_frame"):
                 self._display._canvas_frame.update_idletasks()
             # Force root window update to ensure everything is repainted
             self._display.root.update_idletasks()
@@ -1371,7 +1376,7 @@ class GUIGame:
 
         # Remove existing replay controls if any
         for widget in status_frame.winfo_children():
-            if isinstance(widget, tk.Frame) and hasattr(widget, '_replay_controls'):
+            if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
                 widget.destroy()
 
         # Add replay controls to status frame
@@ -1392,7 +1397,7 @@ class GUIGame:
             bg="#95A5A6",
             fg="black",
             font=("Arial", 9),
-            highlightthickness=0
+            highlightthickness=0,
         )
         self._replay_first_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1403,7 +1408,7 @@ class GUIGame:
             bg="#95A5A6",
             fg="black",
             font=("Arial", 9),
-            highlightthickness=0
+            highlightthickness=0,
         )
         self._replay_prev_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1414,7 +1419,7 @@ class GUIGame:
             bg="#95A5A6",
             fg="black",
             font=("Arial", 9),
-            highlightthickness=0
+            highlightthickness=0,
         )
         self._replay_next_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1425,7 +1430,7 @@ class GUIGame:
             bg="#95A5A6",
             fg="black",
             font=("Arial", 9),
-            highlightthickness=0
+            highlightthickness=0,
         )
         self._replay_last_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1434,34 +1439,34 @@ class GUIGame:
 
     def _update_replay_button_states(self):
         """Update replay button states based on current position."""
-        if not hasattr(self, '_replay_history') or not self._replay_history:
+        if not hasattr(self, "_replay_history") or not self._replay_history:
             return
 
         moves = self._replay_history.get("moves", [])
         total_moves = len(moves)
-        current_index = getattr(self, '_replay_move_index', 0)
+        current_index = getattr(self, "_replay_move_index", 0)
 
         # Disable First and Prev if at start
         # Check if buttons exist and are valid widgets before configuring
-        if hasattr(self, '_replay_first_btn') and self._replay_first_btn is not None:
+        if hasattr(self, "_replay_first_btn") and self._replay_first_btn is not None:
             try:
                 self._replay_first_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 # Widget was destroyed, clear reference
                 self._replay_first_btn = None
-        if hasattr(self, '_replay_prev_btn') and self._replay_prev_btn is not None:
+        if hasattr(self, "_replay_prev_btn") and self._replay_prev_btn is not None:
             try:
                 self._replay_prev_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 self._replay_prev_btn = None
 
         # Disable Next and Last if at end
-        if hasattr(self, '_replay_next_btn') and self._replay_next_btn is not None:
+        if hasattr(self, "_replay_next_btn") and self._replay_next_btn is not None:
             try:
                 self._replay_next_btn.config(state=tk.DISABLED if current_index >= total_moves else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 self._replay_next_btn = None
-        if hasattr(self, '_replay_last_btn') and self._replay_last_btn is not None:
+        if hasattr(self, "_replay_last_btn") and self._replay_last_btn is not None:
             try:
                 self._replay_last_btn.config(state=tk.DISABLED if current_index >= total_moves else tk.NORMAL)
             except (tk.TclError, AttributeError):
@@ -1503,9 +1508,9 @@ class GUIGame:
             return
 
         # Clear event history before reconstructing
-        if hasattr(self._display, '_event_history'):
+        if hasattr(self._display, "_event_history"):
             self._display._event_history.clear()
-        if hasattr(self._display, '_history_text'):
+        if hasattr(self._display, "_history_text"):
             self._display._history_text.config(state=tk.NORMAL)
             self._display._history_text.delete("1.0", tk.END)
             self._display._history_text.config(state=tk.DISABLED)
@@ -1554,7 +1559,7 @@ class GUIGame:
 
         # Apply moves from history up to current index
         moves = self._replay_history.get("moves", [])
-        for move_str in moves[:self._replay_move_index]:
+        for move_str in moves[: self._replay_move_index]:
             # Get current player (moves are deterministic)
             current_player = self._game.current_player
 
@@ -1590,10 +1595,12 @@ class GUIGame:
             move_message = self._format_move_message(current_player, move, old_state, new_state)
             # Check if this is an AI player (based on player class names from history)
             players_list = self._replay_history.get("players", [])
-            is_ai_player = (current_player < len(players_list) and
-                          players_list[current_player] != "GUIPlayer" and
-                          players_list[current_player] != "HumanPlayer" and
-                          players_list[current_player] != "ConsolePlayer")
+            is_ai_player = (
+                current_player < len(players_list)
+                and players_list[current_player] != "GUIPlayer"
+                and players_list[current_player] != "HumanPlayer"
+                and players_list[current_player] != "ConsolePlayer"
+            )
             self._display.display_move_result(True, move_message, current_player, is_ai_player)
 
         # Update display with the reconstructed game state
@@ -1603,14 +1610,12 @@ class GUIGame:
         # Force display update
         # In single player mode, always show human player's view (player 0)
         # In replay mode, we can show any player, but for consistency use player 0 in single player mode
-        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
+        display_player = 0 if getattr(self, "_one_player_mode", False) else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
         # Update status label
-        if hasattr(self._display, '_status_label'):
-            self._display._status_label.config(
-                text=f"Replay: Move {self._replay_move_index}/{len(moves)}"
-            )
+        if hasattr(self._display, "_status_label"):
+            self._display._status_label.config(text=f"Replay: Move {self._replay_move_index}/{len(moves)}")
 
         # Force GUI update
         self._display.root.update_idletasks()
@@ -1642,36 +1647,37 @@ def play_gui_game():
 
         # Enable debug logging if --debug flag is present
         import logging
+
         if "--debug" in sys.argv or "-d" in sys.argv:
             # Configure logging to output to console (stderr)
             # Use force=True to override any existing configuration
             logging.basicConfig(
                 level=logging.DEBUG,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%H:%M:%S',
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%H:%M:%S",
                 force=True,  # Force reconfiguration if already configured
-                stream=sys.stderr  # Explicitly use stderr to ensure visibility
+                stream=sys.stderr,  # Explicitly use stderr to ensure visibility
             )
             # Set specific loggers to DEBUG level
-            logging.getLogger('hanabi.game').setLevel(logging.DEBUG)
-            logging.getLogger('hanabi.ai.monte_carlo_player').setLevel(logging.DEBUG)
+            logging.getLogger("hanabi.game").setLevel(logging.DEBUG)
+            logging.getLogger("hanabi.ai.monte_carlo_player").setLevel(logging.DEBUG)
             # Ensure root logger is at DEBUG
             logging.root.setLevel(logging.DEBUG)
             print("Debug logging enabled. Check console for detailed game state information.", file=sys.stderr)
             print("Monte Carlo player debug logs will show simulation counts and scores per move.", file=sys.stderr)
             # Test that logging works
-            test_logger = logging.getLogger('hanabi.ai.monte_carlo_player')
+            test_logger = logging.getLogger("hanabi.ai.monte_carlo_player")
             test_logger.debug("Monte Carlo debug logging is active")
 
     root = tk.Tk()
     # Start maximized
     try:
         # Try macOS/Linux way
-        root.attributes('-zoomed', True)
+        root.attributes("-zoomed", True)
     except:
         try:
             # Try Windows way
-            root.state('zoomed')
+            root.state("zoomed")
         except:
             # Fallback: set geometry to screen size
             root.update_idletasks()
@@ -1684,4 +1690,3 @@ def play_gui_game():
 
 if __name__ == "__main__":
     play_gui_game()
-

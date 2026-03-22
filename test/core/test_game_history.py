@@ -23,11 +23,7 @@ class TestGameHistory(unittest.TestCase):
         team = PlayerTeam(self.players)
         self.game = Game.create(team, self.settings)
 
-        self.history = GameHistory({
-            "num_players": 3,
-            "max_live_tokens": 3,
-            "max_hint_tokens": 8
-        })
+        self.history = GameHistory({"num_players": 3, "max_live_tokens": 3, "max_hint_tokens": 8})
         self.history.record_initial_state(self.game)
 
     def _spend_hint_if_at_max_tokens(self) -> None:
@@ -100,8 +96,7 @@ class TestGameHistory(unittest.TestCase):
 
         if teammate_hand.cards and state.common_view.hint_tokens > 0:
             color = teammate_hand.cards[0].color
-            matching_indices = [i for i, card in enumerate(teammate_hand.cards)
-                               if card.color == color]
+            matching_indices = [i for i, card in enumerate(teammate_hand.cards) if card.color == color]
             if matching_indices:
                 move = ColorHint(1, matching_indices, color)
                 try:
@@ -109,8 +104,14 @@ class TestGameHistory(unittest.TestCase):
                     self.history.record_move(0, move, "hinted", self.game)
                     self.assertEqual(len(self.history._moves), 1)
                     # Moves are now strings in short format: h<teammate><color>
-                    color_map = {Color.WHITE: 'w', Color.RED: 'r', Color.YELLOW: 'y',
-                                Color.GREEN: 'g', Color.BLUE: 'b', Color.MULTI: 'm'}
+                    color_map = {
+                        Color.WHITE: "w",
+                        Color.RED: "r",
+                        Color.YELLOW: "y",
+                        Color.GREEN: "g",
+                        Color.BLUE: "b",
+                        Color.MULTI: "m",
+                    }
                     expected = f"h2{color_map.get(color, 'r')}"  # h2 = hint player 2 (1-based), color
                     self.assertEqual(self.history._moves[0], expected)
                 except AssertionError:
@@ -123,8 +124,7 @@ class TestGameHistory(unittest.TestCase):
 
         if teammate_hand.cards and state.common_view.hint_tokens > 0:
             number = teammate_hand.cards[0].number
-            matching_indices = [i for i, card in enumerate(teammate_hand.cards)
-                               if card.number == number]
+            matching_indices = [i for i, card in enumerate(teammate_hand.cards) if card.number == number]
             if matching_indices:
                 move = NumberHint(1, matching_indices, number)
                 try:
@@ -149,7 +149,7 @@ class TestGameHistory(unittest.TestCase):
             return
 
         # Save to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             temp_filename = f.name
 
         filename = None
@@ -159,8 +159,8 @@ class TestGameHistory(unittest.TestCase):
             self.assertTrue(os.path.exists(filename))
 
             # Verify file contents
-            with open(filename, 'r') as f:
-                if filename.endswith(('.yaml', '.yml')):
+            with open(filename, "r") as f:
+                if filename.endswith((".yaml", ".yml")):
                     try:
                         import yaml
                     except ImportError:
@@ -275,11 +275,10 @@ class TestGameHistory(unittest.TestCase):
             for move_str in data["moves"]:
                 self.assertIsInstance(move_str, str, "moves should be strings in short format")
                 # Verify format: should start with p, d, or h
-                self.assertIn(move_str[0], ['p', 'd', 'h'], f"Move should start with p, d, or h: {move_str}")
+                self.assertIn(move_str[0], ["p", "d", "h"], f"Move should start with p, d, or h: {move_str}")
         finally:
             if os.path.exists(filename):
                 os.remove(filename)
-
 
     def test_replay_from_history(self):
         """Test that a game can be replayed from history."""
@@ -305,6 +304,7 @@ class TestGameHistory(unittest.TestCase):
             # Reconstruct game from history
             from hanabi.core.player import PlayerTeam
             from hanabi.core.player import HumanPlayer
+
             players = [HumanPlayer(i) for i in range(3)]
             team = PlayerTeam(players)
 
@@ -330,6 +330,5 @@ class TestGameHistory(unittest.TestCase):
                 os.remove(filename)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

@@ -13,10 +13,7 @@ from .enums import Color, Number
 
 
 def generate_all_valid_moves(
-    player_view: PlayerView,
-    common_view: CommonView,
-    game_settings: GameSettings,
-    player_index: int
+    player_view: PlayerView, common_view: CommonView, game_settings: GameSettings, player_index: int
 ) -> List[Move]:
     """
     Generate all legitimate moves for a player given their current view.
@@ -37,7 +34,7 @@ def generate_all_valid_moves(
     valid_moves: List[Move] = []
 
     # Get player's hand size from player view
-    hand_size = player_view.ownHandSize
+    hand_size = player_view.own_hand_size
 
     # ALWAYS generate play moves first (these are always valid)
     for card_index in range(hand_size):
@@ -45,7 +42,7 @@ def generate_all_valid_moves(
 
     # Generate all Discard moves (only if hint tokens are not at maximum)
     # Cannot discard if hint tokens are already at maximum
-    if common_view.hintTokens < game_settings.maxHintTokens:
+    if common_view.hint_tokens < game_settings.max_hint_tokens:
         # Can discard to gain a hint token
         for card_index in range(hand_size):
             valid_moves.append(Discard(card_index))

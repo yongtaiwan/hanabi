@@ -5,10 +5,7 @@ Tests all validation rules for Play, Discard, ColorHint, and NumberHint moves.
 """
 
 import unittest
-from hanabi.core.game import (
-    Game, GameState, create_standard_game_settings,
-    Deck, StartPosition, CommonView, Hand
-)
+from hanabi.core.game import Game, GameState, create_standard_game_settings, Deck, StartPosition, CommonView, Hand
 from hanabi.core.player import PlayerTeam, HumanPlayer
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.card import Card
@@ -64,7 +61,7 @@ class TestMoveValidation(unittest.TestCase):
             hint_tokens=max_hints,
             cards_to_draw=self.state.common_view.cards_to_draw,
             cards_discarded=self.state.common_view.cards_discarded,
-            cards_played=self.state.common_view.cards_played
+            cards_played=self.state.common_view.cards_played,
         )
 
         new_state = GameState(
@@ -74,7 +71,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         hand = new_state.player_hands[0]
@@ -102,7 +99,7 @@ class TestMoveValidation(unittest.TestCase):
             hint_tokens=0,
             cards_to_draw=self.state.common_view.cards_to_draw,
             cards_discarded=self.state.common_view.cards_discarded,
-            cards_played=self.state.common_view.cards_played
+            cards_played=self.state.common_view.cards_played,
         )
 
         new_state = GameState(
@@ -112,7 +109,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint player 1 from player 0
@@ -152,11 +149,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_color_hint_must_include_all_matching_cards(self):
         """Test that a color hint must include ALL cards of that color."""
         # Create a hand with multiple cards of the same color
-        red_cards = [
-            Card(Color.RED, Number.ONE),
-            Card(Color.RED, Number.TWO),
-            Card(Color.BLUE, Number.ONE)
-        ]
+        red_cards = [Card(Color.RED, Number.ONE), Card(Color.RED, Number.TWO), Card(Color.BLUE, Number.ONE)]
         hand = Hand(red_cards)
 
         # Create a game state with this hand for player 1
@@ -169,7 +162,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint only one red card (should fail - must hint both)
@@ -185,11 +178,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_number_hint_must_include_all_matching_cards(self):
         """Test that a number hint must include ALL cards of that number."""
         # Create a hand with multiple cards of the same number
-        one_cards = [
-            Card(Color.RED, Number.ONE),
-            Card(Color.BLUE, Number.ONE),
-            Card(Color.YELLOW, Number.TWO)
-        ]
+        one_cards = [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.ONE), Card(Color.YELLOW, Number.TWO)]
         hand = Hand(one_cards)
 
         # Create a game state with this hand for player 1
@@ -202,7 +191,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint only one "1" card (should fail - must hint both)
@@ -218,10 +207,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_color_hint_wrong_color(self):
         """Test that a color hint with wrong color fails."""
         # Create a hand with blue cards
-        blue_cards = [
-            Card(Color.BLUE, Number.ONE),
-            Card(Color.BLUE, Number.TWO)
-        ]
+        blue_cards = [Card(Color.BLUE, Number.ONE), Card(Color.BLUE, Number.TWO)]
         hand = Hand(blue_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -233,7 +219,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint red when hand has blue
@@ -244,10 +230,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_number_hint_wrong_number(self):
         """Test that a number hint with wrong number fails."""
         # Create a hand with "2" cards
-        two_cards = [
-            Card(Color.RED, Number.TWO),
-            Card(Color.BLUE, Number.TWO)
-        ]
+        two_cards = [Card(Color.RED, Number.TWO), Card(Color.BLUE, Number.TWO)]
         hand = Hand(two_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -259,7 +242,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint "1" when hand has "2"
@@ -300,7 +283,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Hint the single red card
@@ -323,7 +306,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Hint the single "1" card
@@ -334,10 +317,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_color_hint_no_matching_cards(self):
         """Test that a color hint when there are no matching cards fails."""
         # Create a hand with no red cards
-        blue_cards = [
-            Card(Color.BLUE, Number.ONE),
-            Card(Color.BLUE, Number.TWO)
-        ]
+        blue_cards = [Card(Color.BLUE, Number.ONE), Card(Color.BLUE, Number.TWO)]
         hand = Hand(blue_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -349,7 +329,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint red when there are no red cards
@@ -360,10 +340,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_number_hint_no_matching_cards(self):
         """Test that a number hint when there are no matching cards fails."""
         # Create a hand with no "1" cards
-        two_cards = [
-            Card(Color.RED, Number.TWO),
-            Card(Color.BLUE, Number.TWO)
-        ]
+        two_cards = [Card(Color.RED, Number.TWO), Card(Color.BLUE, Number.TWO)]
         hand = Hand(two_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -375,7 +352,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint "1" when there are no "1" cards
@@ -386,10 +363,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_color_hint_extra_cards(self):
         """Test that a color hint with extra non-matching cards fails."""
         # Create a hand with one red and one blue card
-        mixed_cards = [
-            Card(Color.RED, Number.ONE),
-            Card(Color.BLUE, Number.ONE)
-        ]
+        mixed_cards = [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.ONE)]
         hand = Hand(mixed_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -401,7 +375,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint red but include the blue card too
@@ -412,10 +386,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_number_hint_extra_cards(self):
         """Test that a number hint with extra non-matching cards fails."""
         # Create a hand with one "1" and one "2" card
-        mixed_cards = [
-            Card(Color.RED, Number.ONE),
-            Card(Color.BLUE, Number.TWO)
-        ]
+        mixed_cards = [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.TWO)]
         hand = Hand(mixed_cards)
 
         player_hands = [self.state.player_hands[0], hand]
@@ -427,7 +398,7 @@ class TestMoveValidation(unittest.TestCase):
             draw_deck_index=self.state.draw_deck_index,
             turn_number=self.state.turn_number,
             current_player=self.state.current_player,
-            turns_left=self.state.turns_left
+            turns_left=self.state.turns_left,
         )
 
         # Try to hint "1" but include the "2" card too
@@ -436,6 +407,5 @@ class TestMoveValidation(unittest.TestCase):
         self.assertFalse(result, "Number hint must only include matching cards")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

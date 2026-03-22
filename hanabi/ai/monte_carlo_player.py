@@ -26,7 +26,7 @@ from hanabi.core.hint_rules import is_legal_hint_against_hand_cards
 
 # Set up logger for debug output
 # Use full module path to ensure it matches the logger name set in GUI
-logger = logging.getLogger('hanabi.ai.monte_carlo_player')
+logger = logging.getLogger("hanabi.ai.monte_carlo_player")
 
 if TYPE_CHECKING:
     pass
@@ -109,9 +109,7 @@ class MCGameState:
         self._live_tokens = live_tokens
         self._hint_tokens = hint_tokens
         self._cards_played = cards_played.copy()
-        self._cards_discarded = {
-            color: counts.copy() for color, counts in cards_discarded.items()
-        }
+        self._cards_discarded = {color: counts.copy() for color, counts in cards_discarded.items()}
         self._cards_to_draw = cards_to_draw
         self._turns_left = turns_left
         self._deck_index = 0  # Track position in deck
@@ -407,12 +405,12 @@ class MonteCarloPlayer(HintTrackingPlayer):
         )
 
         # Filter to actually valid moves
-        candidate_moves = [
-            m for m in candidate_moves if self.is_move_legal(player_view, m)
-        ]
+        candidate_moves = [m for m in candidate_moves if self.is_move_legal(player_view, m)]
 
         # In Hanabi, there should always be multiple valid moves
-        assert len(candidate_moves) > 1, f"No valid moves or only one move available (impossible in Hanabi). Found {len(candidate_moves)} moves."
+        assert len(candidate_moves) > 1, (
+            f"No valid moves or only one move available (impossible in Hanabi). Found {len(candidate_moves)} moves."
+        )
 
         # Log context for debugging (use both logger and print for visibility)
         debug_msg = f"[MonteCarloPlayer {self._player_index}] Current game state:"
@@ -453,9 +451,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         return best_move
 
-    def _evaluate_moves_monte_carlo(
-        self, player_view: PlayerView, moves: List[Move]
-    ) -> Move:
+    def _evaluate_moves_monte_carlo(self, player_view: PlayerView, moves: List[Move]) -> Move:
         """
         Evaluate moves using Monte Carlo simulation.
 
@@ -542,7 +538,9 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # --- Additional worlds ---
         if additional_worlds > 0:
-            debug_msg = f"[MonteCarloPlayer {self._player_index}] Running {additional_worlds} additional world batches..."
+            debug_msg = (
+                f"[MonteCarloPlayer {self._player_index}] Running {additional_worlds} additional world batches..."
+            )
             logger.debug(debug_msg)
             if self._verbose:
                 print(debug_msg, file=sys.stderr)
@@ -550,8 +548,10 @@ class MonteCarloPlayer(HintTrackingPlayer):
             # Check time before starting each batch - don't start if we're already at or near max time
             current_elapsed = time.perf_counter() - start
             if current_elapsed >= self._config.max_think_time_s * 0.9:  # Stop if we're at 90% of max time
-                debug_msg = (f"[MonteCarloPlayer {self._player_index}] Skipping remaining batches "
-                            f"(already at {current_elapsed:.3f}s, approaching max time {self._config.max_think_time_s:.3f}s)")
+                debug_msg = (
+                    f"[MonteCarloPlayer {self._player_index}] Skipping remaining batches "
+                    f"(already at {current_elapsed:.3f}s, approaching max time {self._config.max_think_time_s:.3f}s)"
+                )
                 logger.debug(debug_msg)
                 if self._verbose:
                     print(debug_msg, file=sys.stderr)
@@ -568,9 +568,12 @@ class MonteCarloPlayer(HintTrackingPlayer):
             if current_elapsed >= self._config.max_think_time_s:
                 if current_sims_per_move >= self._config.min_simulations:
                     # Met minimum and exceeded max time - stop
-                    debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped early at world {world_num + 1}/{additional_worlds} "
-                                f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
-                                f"met min_simulations: {current_sims_per_move} >= {self._config.min_simulations})")
+                    debug_msg = (
+                        f"[MonteCarloPlayer {self._player_index}] Stopped early at world "
+                        f"{world_num + 1}/{additional_worlds} (exceeded max time: "
+                        f"{current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
+                        f"met min_simulations: {current_sims_per_move} >= {self._config.min_simulations})"
+                    )
                     logger.debug(debug_msg)
                     if self._verbose:
                         print(debug_msg, file=sys.stderr)
@@ -578,14 +581,20 @@ class MonteCarloPlayer(HintTrackingPlayer):
                 else:
                     # Haven't met minimum but exceeded max time
                     # Only continue if min_simulations is very low (1-2) and we're close
-                    if self._config.min_simulations <= 2 and current_sims_per_move >= self._config.min_simulations - 1:
+                    if (
+                        self._config.min_simulations <= 2
+                        and current_sims_per_move >= self._config.min_simulations - 1
+                    ):
                         # Very close to minimum, allow one more iteration
                         continue
                     else:
                         # Stop even if we haven't met minimum - time limit is strict
-                        debug_msg = (f"[MonteCarloPlayer {self._player_index}] Stopped at world {world_num + 1}/{additional_worlds} "
-                                    f"(exceeded max time: {current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
-                                    f"simulations: {current_sims_per_move} < {self._config.min_simulations})")
+                        debug_msg = (
+                            f"[MonteCarloPlayer {self._player_index}] Stopped at world "
+                            f"{world_num + 1}/{additional_worlds} (exceeded max time: "
+                            f"{current_elapsed:.3f}s >= {self._config.max_think_time_s:.3f}s, "
+                            f"simulations: {current_sims_per_move} < {self._config.min_simulations})"
+                        )
                         logger.debug(debug_msg)
                         if self._verbose:
                             print(debug_msg, file=sys.stderr)
@@ -615,14 +624,18 @@ class MonteCarloPlayer(HintTrackingPlayer):
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = (f"[MonteCarloPlayer {self._player_index}] Total simulations: {total_simulations} "
-                    f"(target: {target_time:.2f}s, actual: {actual_time:.3f}s)")
+        debug_msg = (
+            f"[MonteCarloPlayer {self._player_index}] Total simulations: {total_simulations} "
+            f"(target: {target_time:.2f}s, actual: {actual_time:.3f}s)"
+        )
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = (f"[MonteCarloPlayer {self._player_index}] Simulations per move: "
-                    f"pilot={evals_done // num_moves}, additional={additional_worlds}")
+        debug_msg = (
+            f"[MonteCarloPlayer {self._player_index}] Simulations per move: "
+            f"pilot={evals_done // num_moves}, additional={additional_worlds}"
+        )
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
@@ -633,8 +646,10 @@ class MonteCarloPlayer(HintTrackingPlayer):
         for move, avg_score, sim_count, total_score in sorted(move_stats, key=lambda x: x[1], reverse=True):
             move_str = str(move)
             debug_msg = f"  {move_str:30s} avg={avg_score:6.2f}  sims={sim_count:3d}  total={total_score:8.1f}"
-            logger.debug(f"[MonteCarloPlayer {self._player_index}]   {move_str:30s} "
-                        f"avg={avg_score:6.2f}  sims={sim_count:3d}  total={total_score:8.1f}")
+            logger.debug(
+                f"[MonteCarloPlayer {self._player_index}]   {move_str:30s} "
+                f"avg={avg_score:6.2f}  sims={sim_count:3d}  total={total_score:8.1f}"
+            )
             if self._verbose:
                 print(debug_msg, file=sys.stderr)
 
@@ -720,7 +735,10 @@ class MonteCarloPlayer(HintTrackingPlayer):
                 hand = sim_state._hands[self._player_index]
                 assert move.card < len(hand), f"Card index {move.card} out of range for hand size {len(hand)}"
                 card_being_played = hand[move.card]
-                debug_msg = f"[MonteCarloPlayer {self._player_index}] Evaluating {move}: playing {card_being_played} from hand {[str(c) for c in hand]}"
+                debug_msg = (
+                    f"[MonteCarloPlayer {self._player_index}] Evaluating {move}: "
+                    f"playing {card_being_played} from hand {[str(c) for c in hand]}"
+                )
                 logger.debug(debug_msg)
                 if self._verbose:
                     print(debug_msg, file=sys.stderr)
@@ -731,7 +749,9 @@ class MonteCarloPlayer(HintTrackingPlayer):
             # Debug: log score immediately after applying move (before rollout)
             score_after_move = sim_state.score()
             if isinstance(move, Play):
-                debug_msg = f"[MonteCarloPlayer {self._player_index}] After {move}, score BEFORE rollout: {score_after_move}"
+                debug_msg = (
+                    f"[MonteCarloPlayer {self._player_index}] After {move}, score BEFORE rollout: {score_after_move}"
+                )
                 logger.debug(debug_msg)
                 if self._verbose:
                     print(debug_msg, file=sys.stderr)
@@ -868,18 +888,17 @@ class MonteCarloPlayer(HintTrackingPlayer):
         # Sample in the determined order
         for pos in sampling_order:
             # Get candidates for this position (intersect with remaining multiset)
-            candidates = [
-                card
-                for card in candidate_sets[pos]
-                if remaining_multiset[card] > 0
-            ]
+            candidates = [card for card in candidate_sets[pos] if remaining_multiset[card] > 0]
 
             # In Hanabi, there should always be candidates available
             # If hints are inconsistent with available cards, this indicates a bug in hint tracking
+            turn_info = (
+                player_view.teammates.get(0, "N/A") if player_view.teammates else "N/A"
+            )
             assert len(candidates) > 0, (
                 f"No candidates for hand position {pos} (impossible in Hanabi). "
                 f"This likely indicates a bug in hint tracking - hints may be at wrong positions.\n"
-                f"Player: {self._player_index}, Turn: {player_view.teammates.get(0, 'N/A') if player_view.teammates else 'N/A'}\n"
+                f"Player: {self._player_index}, Turn: {turn_info}\n"
                 f"Hand size: {hand_size}\n"
                 f"Remaining multiset: {dict(remaining_multiset)}\n"
                 f"Candidate set for position {pos}: {candidate_sets[pos]}\n"
@@ -1004,7 +1023,9 @@ class MonteCarloPlayer(HintTrackingPlayer):
             Best move according to fast MC evaluation
         """
         # In Hanabi, there should always be multiple valid moves
-        assert len(valid_moves) > 1, f"Only one valid move in rollout (impossible in Hanabi). Found {len(valid_moves)} moves."
+        assert len(valid_moves) > 1, (
+            f"Only one valid move in rollout (impossible in Hanabi). Found {len(valid_moves)} moves."
+        )
 
         # Sample one world (the current state is already determinized, so we just use it)
         # For each move, clone state, apply move, do a quick random rollout, get score
@@ -1105,4 +1126,3 @@ class MonteCarloPlayer(HintTrackingPlayer):
             return is_legal_hint_against_hand_cards(move, teammate_hand)
 
         return False
-

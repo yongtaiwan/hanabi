@@ -26,7 +26,7 @@ def is_move_legal_from_view(
     Uses the same card-index, discard, and hint rules as the engine, excluding
     turn order and end-of-game checks.
     """
-    hand_size = player_view.ownHandSize
+    hand_size = player_view.own_hand_size
 
     if isinstance(move, Play):
         return 0 <= move.card < hand_size
@@ -34,10 +34,10 @@ def is_move_legal_from_view(
     if isinstance(move, Discard):
         if move.card < 0 or move.card >= hand_size:
             return False
-        return common_view.hintTokens < game_settings.maxHintTokens
+        return common_view.hint_tokens < game_settings.max_hint_tokens
 
     if isinstance(move, (ColorHint, NumberHint)):
-        if common_view.hintTokens <= 0:
+        if common_view.hint_tokens <= 0:
             return False
         if move.teammate not in player_view.teammates:
             return False

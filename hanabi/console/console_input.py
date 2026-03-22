@@ -58,7 +58,7 @@ class ConsoleInput:
             return self._parse_hint(player_index, parts)
 
         # Single-letter simplified: p1, d2, h3, hr, ...
-        if len(input_str) >= 2 and input_str[0] in ['p', 'd', 'h']:
+        if len(input_str) >= 2 and input_str[0] in ["p", "d", "h"]:
             return self._parse_simplified(player_index, input_str)
 
         if command in ["p"]:
@@ -75,7 +75,7 @@ class ConsoleInput:
         cmd = input_str[0]
         rest = input_str[1:]
 
-        if cmd == 'p':  # play
+        if cmd == "p":  # play
             try:
                 card_index_ui = int(rest) if rest else None
                 if card_index_ui is None:
@@ -85,12 +85,15 @@ class ConsoleInput:
                 state = self._game.state
                 hand = state.player_hands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
-                    return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
+                    return (
+                        None,
+                        f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})",
+                    )
                 return Play(card_index), None
             except ValueError:
                 return None, f"Invalid card index: {rest}"
 
-        elif cmd == 'd':  # discard
+        elif cmd == "d":  # discard
             try:
                 card_index_ui = int(rest) if rest else None
                 if card_index_ui is None:
@@ -100,12 +103,15 @@ class ConsoleInput:
                 state = self._game.state
                 hand = state.player_hands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
-                    return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
+                    return (
+                        None,
+                        f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})",
+                    )
                 return Discard(card_index), None
             except ValueError:
                 return None, f"Invalid card index: {rest}"
 
-        elif cmd == 'h':  # hint
+        elif cmd == "h":  # hint
             return self._parse_simplified_hint(player_index, rest)
 
         return None, f"Unknown command: {cmd}"
@@ -126,7 +132,10 @@ class ConsoleInput:
                     teammate_idx = int(rest[0]) - 1
                     rest = rest[1:]
                     if teammate_idx < 0 or teammate_idx >= num_players or teammate_idx == self._player_index:
-                        return None, f"Invalid player. Valid players: {', '.join(str(i+1) for i in range(num_players) if i != self._player_index)}"
+                        valid = ", ".join(
+                            str(i + 1) for i in range(num_players) if i != self._player_index
+                        )
+                        return (None, f"Invalid player. Valid players: {valid}")
                 except ValueError:
                     return None, "Invalid player number"
             else:
@@ -153,12 +162,18 @@ class ConsoleInput:
 
         # Try to parse as color (single letter)
         color_map = {
-            'r': Color.RED, 'red': Color.RED,
-            'b': Color.BLUE, 'blue': Color.BLUE,
-            'g': Color.GREEN, 'green': Color.GREEN,
-            'y': Color.YELLOW, 'yellow': Color.YELLOW,
-            'w': Color.WHITE, 'white': Color.WHITE,
-            'm': Color.MULTI, 'multi': Color.MULTI
+            "r": Color.RED,
+            "red": Color.RED,
+            "b": Color.BLUE,
+            "blue": Color.BLUE,
+            "g": Color.GREEN,
+            "green": Color.GREEN,
+            "y": Color.YELLOW,
+            "yellow": Color.YELLOW,
+            "w": Color.WHITE,
+            "white": Color.WHITE,
+            "m": Color.MULTI,
+            "multi": Color.MULTI,
         }
 
         if rest.lower() in color_map:
@@ -294,4 +309,3 @@ class ConsoleInput:
 
         except (ValueError, IndexError) as e:
             return None, f"Invalid hint format: {str(e)}"
-

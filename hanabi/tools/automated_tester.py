@@ -32,6 +32,7 @@ class GameStateValidator:
         state = self.game.state
 
         from hanabi.core.player import HintTrackingPlayer
+
         for player_idx in range(self.game.settings.num_players):
             hand = state.player_hands[player_idx]
             player = self.game.team.players[player_idx]
@@ -46,7 +47,7 @@ class GameStateValidator:
                 color_hint = hint.get("color")
                 if color_hint and card.color != color_hint:
                     self.errors.append(
-                        f"BUG: Player {player_idx}, card at index {card_idx} (1-based: {card_idx+1}) "
+                        f"BUG: Player {player_idx}, card at index {card_idx} (1-based: {card_idx + 1}) "
                         f"has color hint {color_hint.name} but card is {card.color.name}. "
                         f"Card: {card}"
                     )
@@ -55,7 +56,7 @@ class GameStateValidator:
                 number_hint = hint.get("number")
                 if number_hint and card.number != number_hint:
                     self.errors.append(
-                        f"BUG: Player {player_idx}, card at index {card_idx} (1-based: {card_idx+1}) "
+                        f"BUG: Player {player_idx}, card at index {card_idx} (1-based: {card_idx + 1}) "
                         f"has number hint {number_hint.value} but card is {number_hint.value}. "
                         f"Card: {card}"
                     )
@@ -71,10 +72,7 @@ class GameStateValidator:
             # Check hand size is correct
             expected_size = self.game.settings.max_cards_in_hand
             if len(hand.cards) > expected_size:
-                self.errors.append(
-                    f"BUG: Player {player_idx} has {len(hand.cards)} cards, "
-                    f"but max is {expected_size}"
-                )
+                self.errors.append(f"BUG: Player {player_idx} has {len(hand.cards)} cards, but max is {expected_size}")
 
     def validate_hint_persistence(self) -> None:
         """Validate that hints persist correctly across moves."""
@@ -83,6 +81,7 @@ class GameStateValidator:
         state = self.game.state
 
         from hanabi.core.player import HintTrackingPlayer
+
         for player_idx in range(self.game.settings.num_players):
             player = self.game.team.players[player_idx]
             hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
@@ -119,12 +118,7 @@ class AutomatedGamePlayer:
         move_count = 0
         max_moves = 200  # Prevent infinite loops
 
-        game_log = {
-            "moves": [],
-            "errors": [],
-            "final_score": 0,
-            "finished": False
-        }
+        game_log = {"moves": [], "errors": [], "final_score": 0, "finished": False}
 
         while not game.is_finished and move_count < max_moves:
             current_player = game.current_player
@@ -133,9 +127,7 @@ class AutomatedGamePlayer:
             # Validate state before move
             errors_before = validator.validate_all()
             if errors_before:
-                game_log["errors"].extend([
-                    f"Before move {move_count + 1}: {err}" for err in errors_before
-                ])
+                game_log["errors"].extend([f"Before move {move_count + 1}: {err}" for err in errors_before])
 
             # Make a move
             move = self._make_move(game, current_player)
@@ -151,24 +143,27 @@ class AutomatedGamePlayer:
                 validator = GameStateValidator(game)  # Recreate validator with new state
                 errors_after = validator.validate_all()
                 if errors_after:
-                    game_log["errors"].extend([
-                        f"After move {move_count} (player {current_player}, {move}): {err}"
-                        for err in errors_after
-                    ])
-                    game_log["moves"].append({
-                        "move": move_count,
-                        "player": current_player,
-                        "move_type": type(move).__name__,
-                        "result": result_msg,
-                        "errors": errors_after.copy()
-                    })
+                    game_log["errors"].extend(
+                        [f"After move {move_count} (player {current_player}, {move}): {err}" for err in errors_after]
+                    )
+                    game_log["moves"].append(
+                        {
+                            "move": move_count,
+                            "player": current_player,
+                            "move_type": type(move).__name__,
+                            "result": result_msg,
+                            "errors": errors_after.copy(),
+                        }
+                    )
                 else:
-                    game_log["moves"].append({
-                        "move": move_count,
-                        "player": current_player,
-                        "move_type": type(move).__name__,
-                        "result": result_msg
-                    })
+                    game_log["moves"].append(
+                        {
+                            "move": move_count,
+                            "player": current_player,
+                            "move_type": type(move).__name__,
+                            "result": result_msg,
+                        }
+                    )
             except AssertionError as e:
                 # Illegal move or invariant failure (bug in automated player / engine)
                 game_log["errors"].append(f"Invalid move or assertion: {e}")
@@ -232,12 +227,14 @@ class AutomatedGamePlayer:
 
             if game_log["errors"]:
                 games_with_errors += 1
-                all_errors.append({
-                    "game": game_num + 1,
-                    "errors": game_log["errors"],
-                    "final_score": game_log["final_score"],
-                    "moves": len(game_log["moves"])
-                })
+                all_errors.append(
+                    {
+                        "game": game_num + 1,
+                        "errors": game_log["errors"],
+                        "final_score": game_log["final_score"],
+                        "moves": len(game_log["moves"]),
+                    }
+                )
                 print(f"❌ Found {len(game_log['errors'])} errors")
             else:
                 print(f"✓ Score: {game_log['final_score']}")
@@ -246,7 +243,7 @@ class AutomatedGamePlayer:
             "total_games": self.max_games,
             "games_with_errors": games_with_errors,
             "total_errors": sum(len(g["errors"]) for g in all_errors),
-            "error_details": all_errors
+            "error_details": all_errors,
         }
 
 
@@ -269,12 +266,12 @@ def main():
     print(f"Total errors found: {results['total_errors']}")
     print()
 
-    if results['error_details']:
+    if results["error_details"]:
         print("Error Details:")
         print("-" * 70)
-        for game_info in results['error_details'][:10]:  # Show first 10 games with errors
+        for game_info in results["error_details"][:10]:  # Show first 10 games with errors
             print(f"\nGame {game_info['game']} (Score: {game_info['final_score']}, Moves: {game_info['moves']}):")
-            for error in game_info['errors'][:5]:  # Show first 5 errors per game
+            for error in game_info["errors"][:5]:  # Show first 5 errors per game
                 print(f"  - {error}")
     else:
         print("✓ No errors found! Game appears to be bug-free.")
@@ -282,4 +279,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

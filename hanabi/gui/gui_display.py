@@ -63,7 +63,9 @@ class GUIDisplay:
         # UI components
         self._canvas: Optional[tk.Canvas] = None
         self._card_widgets: Dict[Tuple[int, int], int] = {}  # (player_idx, card_idx) -> widget_id
-        self._card_positions: Dict[Tuple[int, int], Tuple[int, int, int, int]] = {}  # (player_idx, card_idx) -> (x1, y1, x2, y2)
+        self._card_positions: Dict[
+            Tuple[int, int], Tuple[int, int, int, int]
+        ] = {}  # (player_idx, card_idx) -> (x1, y1, x2, y2)
         self._firework_widgets: Dict[Color, List[int]] = {}  # Color -> list of widget IDs
         self._token_widgets: Dict[str, List[int]] = {}  # "hint" or "life" -> list of widget IDs
         self._status_label: Optional[tk.Label] = None
@@ -119,7 +121,7 @@ class GUIDisplay:
             fg="black",
             font=("Arial", 9, "bold"),
             highlightthickness=0,
-            state=tk.DISABLED  # Disabled until game starts
+            state=tk.DISABLED,  # Disabled until game starts
         )
         self._home_btn.pack(side=tk.LEFT, padx=10, pady=5)
 
@@ -127,11 +129,7 @@ class GUIDisplay:
         self._status_frame = status_frame
 
         self._status_label = tk.Label(
-            status_frame,
-            text="Hanabi - Fireworks Game",
-            bg="#34495E",
-            fg="white",
-            font=("Arial", 14, "bold")
+            status_frame, text="Hanabi - Fireworks Game", bg="#34495E", fg="white", font=("Arial", 14, "bold")
         )
         self._status_label.pack(side=tk.LEFT, padx=10, pady=5)
 
@@ -143,17 +141,11 @@ class GUIDisplay:
             fg="white",
             font=("Arial", 12, "bold"),
             padx=15,
-            pady=3
+            pady=3,
         )
         # Will be packed when needed
 
-        self._score_label = tk.Label(
-            status_frame,
-            text="Score: 0/25",
-            bg="#34495E",
-            fg="#FFD700",
-            font=("Arial", 12)
-        )
+        self._score_label = tk.Label(status_frame, text="Score: 0/25", bg="#34495E", fg="#FFD700", font=("Arial", 12))
         self._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
 
         # Main content area: canvas on left, history panel on right
@@ -167,7 +159,7 @@ class GUIDisplay:
         self._canvas = tk.Canvas(
             self._canvas_frame,
             bg="#1A252F",  # Darker background for table
-            highlightthickness=0
+            highlightthickness=0,
         )
         self._canvas.pack(fill=tk.BOTH, expand=True)
         self._canvas.bind("<Configure>", self._on_canvas_resize)
@@ -181,11 +173,7 @@ class GUIDisplay:
 
         # History label
         history_label = tk.Label(
-            self._history_frame,
-            text="Game Events",
-            bg="#34495E",
-            fg="white",
-            font=("Arial", 12, "bold")
+            self._history_frame, text="Game Events", bg="#34495E", fg="white", font=("Arial", 12, "bold")
         )
         history_label.pack(pady=5)
 
@@ -201,15 +189,11 @@ class GUIDisplay:
             wrap=tk.WORD,
             state=tk.DISABLED,  # Make read-only
             selectbackground="#3498DB",
-            selectforeground="white"
+            selectforeground="white",
         )
         self._history_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self._history_scrollbar = ttk.Scrollbar(
-            listbox_frame,
-            orient=tk.VERTICAL,
-            command=self._history_text.yview
-        )
+        self._history_scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self._history_text.yview)
         self._history_text.config(yscrollcommand=self._history_scrollbar.set)
         self._history_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -241,12 +225,12 @@ class GUIDisplay:
                 return
 
         # Delegate to input handler if available
-        if self._input_handler and hasattr(self._input_handler, '_on_canvas_click'):
+        if self._input_handler and hasattr(self._input_handler, "_on_canvas_click"):
             self._input_handler._on_canvas_click(event)
         else:
             # Fallback: close action menu if clicking outside cards
             clicked_card = None
-            if hasattr(self, '_card_positions') and self._card_positions:
+            if hasattr(self, "_card_positions") and self._card_positions:
                 for (player_idx, card_idx), position in self._card_positions.items():
                     if len(position) != 4:
                         continue
@@ -269,23 +253,32 @@ class GUIDisplay:
             self._action_menu = None
             self._action_menu_context = None
 
-    def _add_event_to_history(self, message: str, event_type: str = "info", player_index: int = None, is_ai: bool = False, turn_number: int = None):
+    def _add_event_to_history(
+        self,
+        message: str,
+        event_type: str = "info",
+        player_index: int = None,
+        is_ai: bool = False,
+        turn_number: int = None,
+    ):
         """Add an event to the history panel (concise format)."""
         # Make message concise
         concise_message = message
 
         # Simplify common patterns
         import re
+
         # Format hint messages: "hints player 2: white at 2, 4, 5. hint tokens: X"
         # -> "P1 hints P2: white at 2, 4, 5"
         # Also remove hint token information from all messages
-        hint_pattern = r'hints player (\d+): (\w+) at ([^.]+)\.'
+        hint_pattern = r"hints player (\d+): (\w+) at ([^.]+)\."
+
         def format_hint(match):
             target_player = match.group(1)
             value = match.group(2).lower()  # color name or number
             indices_str = match.group(3)  # "2, 4, 5"
             # Clean up indices: remove extra spaces and split
-            indices = [idx.strip() for idx in indices_str.split(',')]
+            indices = [idx.strip() for idx in indices_str.split(",")]
             # Use provided player_index or try to get from engine
             if player_index is not None:
                 player_num = player_index + 1
@@ -299,13 +292,17 @@ class GUIDisplay:
         concise_message = re.sub(hint_pattern, format_hint, concise_message)
 
         # Remove hint token information from all messages (e.g., "hint tokens: 5" or "hint tokens: 5/8")
-        concise_message = re.sub(r'\.?\s*hint tokens?:\s*\d+(?:/\d+)?', '', concise_message, flags=re.IGNORECASE)
+        concise_message = re.sub(r"\.?\s*hint tokens?:\s*\d+(?:/\d+)?", "", concise_message, flags=re.IGNORECASE)
 
         # Add player prefix if message doesn't start with P\d+
         # Messages from engine are like "plays red 1" or "hints player 2: ..."
         # We need to add "P1 " prefix (or "P1 (AI) " for AI players)
         # BUT: Don't add prefix for "Game Over" or "The deck is empty" messages
-        if not re.match(r'^P\d+', concise_message) and not concise_message.lower().startswith("game over") and not concise_message.lower().startswith("the deck is empty"):
+        if (
+            not re.match(r"^P\d+", concise_message)
+            and not concise_message.lower().startswith("game over")
+            and not concise_message.lower().startswith("the deck is empty")
+        ):
             if player_index is not None:
                 player_num = player_index + 1
                 ai_suffix = " (AI)" if is_ai else ""
@@ -316,7 +313,7 @@ class GUIDisplay:
                 concise_message = f"P{player_num}{ai_suffix} {concise_message}"
 
         # Remove duplicate player references at start (e.g., "P1 P1 hints" -> "P1 hints")
-        concise_message = re.sub(r'^(P\d+)\s+\1\s+', r'\1 ', concise_message)
+        concise_message = re.sub(r"^(P\d+)\s+\1\s+", r"\1 ", concise_message)
 
         # Simplify "plays COLOR NUMBER" format (already lowercase from engine)
         # Handle "plays red 1" -> "plays red 1" (already correct)
@@ -329,7 +326,7 @@ class GUIDisplay:
         if turn_number is not None:
             # Use provided turn number (from callback)
             pass
-        elif hasattr(self, '_replay_turn_numbers') and self._replay_turn_numbers:
+        elif hasattr(self, "_replay_turn_numbers") and self._replay_turn_numbers:
             # Use stored turn number for this specific move in replay
             move_index = len(self._event_history)  # Current move index
             if move_index < len(self._replay_turn_numbers):
@@ -354,10 +351,10 @@ class GUIDisplay:
         # Get timestamp - generate for live play, use replay timestamp if in replay mode
         timestamp = None
         # Check if we're in replay mode (has _replay_turn_numbers attribute)
-        is_replay_mode = hasattr(self, '_replay_turn_numbers') and self._replay_turn_numbers
+        is_replay_mode = hasattr(self, "_replay_turn_numbers") and self._replay_turn_numbers
         if is_replay_mode:
             # Replay mode: use timestamp from replay history if available
-            if hasattr(self, '_replay_timestamps') and self._replay_timestamps:
+            if hasattr(self, "_replay_timestamps") and self._replay_timestamps:
                 move_index = len(self._event_history)  # Current move index
                 if move_index < len(self._replay_timestamps):
                     timestamp = self._replay_timestamps[move_index]
@@ -375,7 +372,7 @@ class GUIDisplay:
 
         # Track turn number for this move (for live play, if not in replay mode)
         # This ensures we can look up the correct turn number even if the game state changes
-        if not hasattr(self, '_replay_turn_numbers') or not self._replay_turn_numbers:
+        if not hasattr(self, "_replay_turn_numbers") or not self._replay_turn_numbers:
             # Only track if not in replay mode (replay mode uses _replay_turn_numbers)
             self._live_turn_numbers.append(turn_number)
 
@@ -403,10 +400,10 @@ class GUIDisplay:
         import re
 
         # Extract timestamp
-        timestamp_match = re.match(r'\[([^\]]+)\]', message)
+        timestamp_match = re.match(r"\[([^\]]+)\]", message)
         if timestamp_match:
             timestamp = timestamp_match.group(1)
-            message_after_timestamp = message[len(f"[{timestamp}]"):].strip()
+            message_after_timestamp = message[len(f"[{timestamp}]") :].strip()
             # Insert timestamp in grey
             self._history_text.insert(tk.END, f"[{timestamp}] ", "timestamp")
         else:
@@ -426,7 +423,7 @@ class GUIDisplay:
             "yellow": "color_yellow",
             "green": "color_green",
             "blue": "color_blue",
-            "multi": "color_multi"
+            "multi": "color_multi",
         }
 
         for i, word in enumerate(words):
@@ -442,11 +439,11 @@ class GUIDisplay:
                 tag = color_tags[word.lower()]
                 self._history_text.insert(tk.END, word, tag)
             # Check if word is a number (standalone or with trailing punctuation like "1.")
-            elif word.rstrip('.,;:!?').isdigit():
+            elif word.rstrip(".,;:!?").isdigit():
                 # Extract the number part and any trailing punctuation
-                number_part = word.rstrip('.,;:!?')
-                punctuation = word[len(number_part):]
-                # Check if previous word was a color - if so, use that color tag (color both "yellow" and "1" in "yellow 1")
+                number_part = word.rstrip(".,;:!?")
+                punctuation = word[len(number_part) :]
+                # If previous word was a color, use that tag (e.g. color both "yellow" and "1" in "yellow 1")
                 if i > 0 and words[i - 1].lower() in color_tags:
                     prev_color = words[i - 1].lower()
                     tag = color_tags[prev_color]
@@ -462,11 +459,11 @@ class GUIDisplay:
             elif len(word) > 1:
                 # Try to split color and number
                 for color_name in ["white", "red", "yellow", "green", "blue", "multi"]:
-                    if word.lower().startswith(color_name) and word[len(color_name):].isdigit():
+                    if word.lower().startswith(color_name) and word[len(color_name) :].isdigit():
                         # Split and colorize separately - both parts get the same color tag
                         tag = color_tags[color_name]
-                        self._history_text.insert(tk.END, word[:len(color_name)], tag)
-                        self._history_text.insert(tk.END, word[len(color_name):], tag)  # Number also gets color tag
+                        self._history_text.insert(tk.END, word[: len(color_name)], tag)
+                        self._history_text.insert(tk.END, word[len(color_name) :], tag)  # Number also gets color tag
                         break
                 else:
                     # Not a color+number combo, insert as-is
@@ -522,6 +519,7 @@ class GUIDisplay:
             return False
 
         from .gui_player import GUIPlayer
+
         current_player = self._game.team.players[current_player_idx]
         return isinstance(current_player, GUIPlayer)
 
@@ -567,8 +565,8 @@ class GUIDisplay:
         # After redrawing, ensure animated cards and explosions are still on top
         if self._active_animations:
             for animation in self._active_animations:
-                if animation.get('widget_ids'):
-                    for widget_id in animation['widget_ids']:
+                if animation.get("widget_ids"):
+                    for widget_id in animation["widget_ids"]:
                         try:
                             self._canvas.lift(widget_id)
                         except:
@@ -577,8 +575,8 @@ class GUIDisplay:
         # Ensure explosions are on top
         if self._active_explosions:
             for explosion in self._active_explosions:
-                if explosion.get('widget_ids'):
-                    for widget_id in explosion['widget_ids']:
+                if explosion.get("widget_ids"):
+                    for widget_id in explosion["widget_ids"]:
                         try:
                             self._canvas.lift(widget_id)
                         except:
@@ -624,7 +622,7 @@ class GUIDisplay:
             center_y + table_radius,
             fill="#3D4A5C",
             outline="#5A6B7D",
-            width=3
+            width=3,
         )
 
     def _draw_center_area(self):
@@ -717,7 +715,9 @@ class GUIDisplay:
                 row_height = card_height + 5  # Space between rows
 
                 # Calculate width for each row
-                bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                bottom_row_width = (
+                    (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                )
                 top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
                 max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
 
@@ -730,7 +730,9 @@ class GUIDisplay:
                     horizontal_overlap = max(5, int(horizontal_overlap * scale))
                     card_width = max(25, int(card_width * scale))
                     # Recalculate row widths
-                    bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                    bottom_row_width = (
+                        (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                    )
                     top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
                     max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
 
@@ -762,13 +764,15 @@ class GUIDisplay:
                     else:
                         # Top row: remaining cards after bottom_row_cards
                         row = 1
-                        col_from_right = position_in_initial_deck - bottom_row_cards  # Position within top row (0 = rightmost)
+                        col_from_right = (
+                            position_in_initial_deck - bottom_row_cards
+                        )  # Position within top row (0 = rightmost)
 
                     card_positions.append((original_index, card, row, col_from_right))
 
                 # Sort by position (left to right, bottom to top) so we draw left cards first
                 # This ensures right cards are drawn last and appear on top (z-order)
-                # Sort by row (ascending), then by -col_from_right (descending) so right cards (lower col) are drawn last
+                # Sort by row (asc), then -col_from_right (desc) so right cards (lower col) draw last
                 card_positions.sort(key=lambda x: (x[2], -x[3]))  # Sort by row, then -col (descending)
 
                 # Track top row rightmost position for label placement
@@ -794,11 +798,13 @@ class GUIDisplay:
                         color_code = "#808080"  # Gray
 
                     self._canvas.create_rectangle(
-                        card_x, card_y - card_height // 2,
-                        card_x + card_width, card_y + card_height // 2,
+                        card_x,
+                        card_y - card_height // 2,
+                        card_x + card_width,
+                        card_y + card_height // 2,
                         fill=color_code,
                         outline="#000000",
-                        width=1
+                        width=1,
                     )
                     # Draw number or "?" on top left
                     if self._show_all_cards:
@@ -809,11 +815,12 @@ class GUIDisplay:
                         number_text = "?"
 
                     self._canvas.create_text(
-                        card_x + 8, card_y - card_height // 2 + 8,
+                        card_x + 8,
+                        card_y - card_height // 2 + 8,
                         text=number_text,
                         fill="#000000",
                         font=("Arial", 10, "bold"),
-                        anchor="nw"
+                        anchor="nw",
                     )
 
                 # Draw count label to the right of top row (if there are cards)
@@ -838,11 +845,12 @@ class GUIDisplay:
 
                 # Always show count label
                 self._canvas.create_text(
-                    label_x, label_y,
+                    label_x,
+                    label_y,
                     text=f"{deck_count}",
                     fill="white",
                     font=("Arial", 11, "bold"),
-                    anchor="w"  # Left-aligned
+                    anchor="w",  # Left-aligned
                 )
             else:
                 # No cards left (draw_deck_index >= total_deck_size), show count at expected position
@@ -861,7 +869,9 @@ class GUIDisplay:
                 row_height = 55  # card_height + 5
                 card_width = 35
                 horizontal_overlap = 15
-                bottom_row_width = (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                bottom_row_width = (
+                    (bottom_row_cards - 1) * horizontal_overlap + card_width if bottom_row_cards > 0 else 0
+                )
                 top_row_width = (top_row_cards - 1) * horizontal_overlap + card_width
                 max_row_width = max(bottom_row_width, top_row_width) if bottom_row_width > 0 else top_row_width
 
@@ -872,11 +882,12 @@ class GUIDisplay:
                 label_y = start_y - (row_height if num_rows > 1 else 0)
 
                 self._canvas.create_text(
-                    label_x, label_y,
+                    label_x,
+                    label_y,
                     text=f"{deck_count}",
                     fill="white",
                     font=("Arial", 11, "bold"),
-                    anchor="w"  # Left-aligned
+                    anchor="w",  # Left-aligned
                 )
 
     def _draw_tokens(self, center_x: int, y: int):
@@ -903,11 +914,7 @@ class GUIDisplay:
 
         # Draw hint tokens (blue clock tokens)
         self._canvas.create_text(
-            center_x - 50, y - 20,
-            text="Hints",
-            fill="white",
-            font=("Arial", 11, "bold"),
-            anchor="center"
+            center_x - 50, y - 20, text="Hints", fill="white", font=("Arial", 11, "bold"), anchor="center"
         )
 
         hint_widgets = []
@@ -918,22 +925,14 @@ class GUIDisplay:
 
             color = "#4169E1" if i < hint_tokens else "#1A1A3E"
             widget = self._canvas.create_oval(
-                x, token_y,
-                x + token_size, token_y + token_size,
-                fill=color,
-                outline="#87CEEB",
-                width=2
+                x, token_y, x + token_size, token_y + token_size, fill=color, outline="#87CEEB", width=2
             )
             hint_widgets.append(widget)
         self._token_widgets["hint"] = hint_widgets
 
         # Draw life tokens (red/orange fuse tokens)
         self._canvas.create_text(
-            center_x + 50, y - 20,
-            text="Lives",
-            fill="white",
-            font=("Arial", 11, "bold"),
-            anchor="center"
+            center_x + 50, y - 20, text="Lives", fill="white", font=("Arial", 11, "bold"), anchor="center"
         )
 
         life_widgets = []
@@ -949,11 +948,7 @@ class GUIDisplay:
                 color = "#000000"  # Black for lost lives
 
             widget = self._canvas.create_oval(
-                x, token_y,
-                x + token_size, token_y + token_size,
-                fill=color,
-                outline="#654321",
-                width=2
+                x, token_y, x + token_size, token_y + token_size, fill=color, outline="#654321", width=2
             )
             life_widgets.append(widget)
         self._token_widgets["life"] = life_widgets
@@ -991,28 +986,27 @@ class GUIDisplay:
                 cards = []
                 for n in range(1, number + 1):
                     card_y = y - (number - n) * 3  # Stack effect
-                    card_widget = self._create_card_widget(
-                        x, card_y,
-                        color, Number(n),
-                        show_front=True
-                    )
+                    card_widget = self._create_card_widget(x, card_y, color, Number(n), show_front=True)
                     cards.append(card_widget)
                 self._firework_widgets[color] = cards
             else:
                 # Draw empty firework slot
                 self._canvas.create_rectangle(
-                    x - card_width // 2, y - card_height // 2,
-                    x + card_width // 2, y + card_height // 2,
+                    x - card_width // 2,
+                    y - card_height // 2,
+                    x + card_width // 2,
+                    y + card_height // 2,
                     fill="#2C3E50",
                     outline=self.COLOR_COLORS.get(color, "#FFFFFF"),
                     width=2,
-                    dash=(5, 5)
+                    dash=(5, 5),
                 )
                 self._canvas.create_text(
-                    x, y,
+                    x,
+                    y,
                     text=self.COLOR_NAMES.get(color, "?")[0],
                     fill=self.COLOR_COLORS.get(color, "#FFFFFF"),
-                    font=("Arial", 10)
+                    font=("Arial", 10),
                 )
                 self._firework_widgets[color] = []
 
@@ -1046,22 +1040,19 @@ class GUIDisplay:
         if not discard_pile:
             # Draw label and empty message
             self._canvas.create_text(
-                label_x, y,
+                label_x,
+                y,
                 text="Discard:",
                 fill="white",
                 font=("Arial", 11, "bold"),
-                anchor="w"  # Left-aligned so text starts at label_x
+                anchor="w",  # Left-aligned so text starts at label_x
             )
-            self._canvas.create_text(
-                center_x, y + 10,
-                text="(empty)",
-                fill="#888888",
-                font=("Arial", 10)
-            )
+            self._canvas.create_text(center_x, y + 10, text="(empty)", fill="#888888", font=("Arial", 10))
             return
 
         # Group by color AND number (to overlap same color+number cards vertically)
         from collections import defaultdict
+
         # Group by (color, number) to count duplicates
         color_number_groups = defaultdict(list)
         for card in discard_pile:
@@ -1128,11 +1119,12 @@ class GUIDisplay:
         # Draw "Discard:" label at fixed position (left edge of table)
         # label_x is already calculated above
         self._canvas.create_text(
-            label_x, y,
+            label_x,
+            y,
             text="Discard:",
             fill="white",
             font=("Arial", 11, "bold"),
-            anchor="w"  # Left-aligned so text starts at label_x
+            anchor="w",  # Left-aligned so text starts at label_x
         )
 
         # Center the cards in the remaining space (after label)
@@ -1164,28 +1156,33 @@ class GUIDisplay:
                     # Draw card with slight offset for depth
                     offset = 2
                     self._canvas.create_rectangle(
-                        card_x - card_width // 2 + offset, card_y - card_height // 2 + offset,
-                        card_x + card_width // 2 + offset, card_y + card_height // 2 + offset,
+                        card_x - card_width // 2 + offset,
+                        card_y - card_height // 2 + offset,
+                        card_x + card_width // 2 + offset,
+                        card_y + card_height // 2 + offset,
                         fill="#1A1A1A",  # Shadow
                         outline="",
-                        width=0
+                        width=0,
                     )
                     self._canvas.create_rectangle(
-                        card_x - card_width // 2, card_y - card_height // 2,
-                        card_x + card_width // 2, card_y + card_height // 2,
+                        card_x - card_width // 2,
+                        card_y - card_height // 2,
+                        card_x + card_width // 2,
+                        card_y + card_height // 2,
                         fill=self.COLOR_COLORS.get(color, "#FFFFFF"),
                         outline="#000000",
-                        width=2
+                        width=2,
                     )
                     # Position number in top left corner (like playing cards) - smaller font, always black
                     number_x = card_x - card_width // 2 + 4  # Left edge + small margin
                     number_y = card_y - card_height // 2 + 4  # Top edge + small margin
                     self._canvas.create_text(
-                        number_x, number_y,
+                        number_x,
+                        number_y,
                         text=str(num),
                         fill="#000000",
                         font=("Arial", 10, "bold"),
-                        anchor="nw"  # Top-left anchor
+                        anchor="nw",  # Top-left anchor
                     )
             # Move to next color position
             x += color_width + color_spacing
@@ -1234,7 +1231,7 @@ class GUIDisplay:
         vertical_margin = 120  # Extra space for popup menus at top and bottom
         max_vertical_distance = min(
             center_y - vertical_margin - card_height // 2,  # Top constraint
-            height - center_y - vertical_margin - card_height // 2  # Bottom constraint
+            height - center_y - vertical_margin - card_height // 2,  # Bottom constraint
         )
         # Limit hand_radius to ensure hands don't get too close to edges
         hand_radius = min(hand_radius, max_vertical_distance)
@@ -1259,7 +1256,7 @@ class GUIDisplay:
 
             # Draw player hand
             hand = state.player_hands[i]
-            is_current_player = (i == self._current_player)
+            is_current_player = i == self._current_player
 
             # Draw player label - always on top of hand
             label_offset = 60
@@ -1274,12 +1271,12 @@ class GUIDisplay:
                 # Check if game is over by checking turns left or status label
                 if self._game.state.turns_left == 0:
                     game_is_over = True
-                elif hasattr(self, '_status_label'):
+                elif hasattr(self, "_status_label"):
                     status_text = self._status_label.cget("text")
                     if "Game Over" in status_text:
                         game_is_over = True
 
-            if hasattr(self, '_replay_player_names') and self._replay_player_names:
+            if hasattr(self, "_replay_player_names") and self._replay_player_names:
                 if i < len(self._replay_player_names):
                     player_type = self._replay_player_names[i]
                     # Remove "Player" suffix if present (e.g., "GUIPlayer" -> "GUI")
@@ -1293,6 +1290,7 @@ class GUIDisplay:
                     player = self._game.team.players[i]
                     # Check if player is RandomPlayer from hanabi.ai
                     from hanabi.ai.random_player import RandomPlayer
+
                     if isinstance(player, RandomPlayer):
                         player_name = f"Player {i + 1} (AI: Random)"
                     elif is_current_player:
@@ -1301,10 +1299,11 @@ class GUIDisplay:
                     player_name += " (You)"
 
             self._canvas.create_text(
-                x, label_y,
+                x,
+                label_y,
                 text=player_name,
                 fill="white" if is_current_player else "#CCCCCC",
-                font=("Arial", 12, "bold" if is_current_player else "normal")
+                font=("Arial", 12, "bold" if is_current_player else "normal"),
             )
 
             # Draw cards in hand
@@ -1328,13 +1327,15 @@ class GUIDisplay:
                 # For front-facing cards (other players), hints are shown on the card
                 # For back-facing cards (current player), hints are shown in boxes outside
                 widget = self._create_card_widget(
-                    card_x, card_y,
-                    card.color, card.number,
+                    card_x,
+                    card_y,
+                    card.color,
+                    card.number,
                     show_front=show_front,
                     hints=card_hints,  # Always pass hints - card and hints are a unit
                     clickable=True,  # All cards clickable for action menu
                     player_idx=i,
-                    card_idx=card_idx
+                    card_idx=card_idx,
                 )
                 self._card_widgets[(i, card_idx)] = widget
                 # Store card position for click detection
@@ -1342,19 +1343,21 @@ class GUIDisplay:
                     card_x - card_width // 2,
                     card_y - card_height // 2,
                     card_x + card_width // 2,
-                    card_y + card_height // 2
+                    card_y + card_height // 2,
                 )
 
     def _create_card_widget(
         self,
-        x: int, y: int,
-        color: Color, number: Number,
+        x: int,
+        y: int,
+        color: Color,
+        number: Number,
         show_front: bool = True,
         hints: Dict[str, any] = None,
         clickable: bool = False,
         player_idx: int = None,
         card_idx: int = None,
-        selected: bool = False
+        selected: bool = False,
     ) -> int:
         """Create a card widget on the canvas."""
         hints = hints or {}
@@ -1366,20 +1369,18 @@ class GUIDisplay:
             text_color = "#000000"  # Use black for all numbers on cards
 
             widget = self._canvas.create_rectangle(
-                x - card_width // 2, y - card_height // 2,
-                x + card_width // 2, y + card_height // 2,
+                x - card_width // 2,
+                y - card_height // 2,
+                x + card_width // 2,
+                y + card_height // 2,
                 fill=bg_color,
                 outline="#000000",  # Normal black outline
                 width=2,
-                tags=("card", f"player_{player_idx}_card_{card_idx}") if clickable else ("card",)
+                tags=("card", f"player_{player_idx}_card_{card_idx}") if clickable else ("card",),
             )
 
             self._canvas.create_text(
-                x, y,
-                text=str(number.value),
-                fill=text_color,
-                font=("Arial", 24, "bold"),
-                tags=("card",)
+                x, y, text=str(number.value), fill=text_color, font=("Arial", 24, "bold"), tags=("card",)
             )
 
             # Add hint indicator boxes outside bottom of card if card has hints
@@ -1389,7 +1390,6 @@ class GUIDisplay:
             has_any_hints = color_hint is not None or number_hint is not None
 
             if has_any_hints:
-
                 # Calculate position for boxes outside bottom of card
                 box_height = 18
                 box_width = 22
@@ -1402,12 +1402,14 @@ class GUIDisplay:
                     hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
                     color_box_x = x - (box_width + box_spacing) // 2
                     self._canvas.create_rectangle(
-                        color_box_x - box_width // 2, bottom_y,
-                        color_box_x + box_width // 2, bottom_y + box_height,
+                        color_box_x - box_width // 2,
+                        bottom_y,
+                        color_box_x + box_width // 2,
+                        bottom_y + box_height,
                         fill=hint_color,
                         outline="#000000",
                         width=1,
-                        tags=("card",)
+                        tags=("card",),
                     )
 
                 # Draw number hint (right side, no box - just white text on dark background)
@@ -1415,11 +1417,12 @@ class GUIDisplay:
                     number_box_x = x + (box_width + box_spacing) // 2
                     # No box - just white text on the dark background
                     self._canvas.create_text(
-                        number_box_x, bottom_y + box_height // 2,
+                        number_box_x,
+                        bottom_y + box_height // 2,
                         text=str(number_hint.value),
                         fill="white",
                         font=("Arial", 12, "bold"),
-                        tags=("card",)
+                        tags=("card",),
                     )
         else:
             bg_color = "#2C3E50"
@@ -1427,47 +1430,45 @@ class GUIDisplay:
             outline_width = 3 if clickable else 2
 
             widget = self._canvas.create_rectangle(
-                x - card_width // 2, y - card_height // 2,
-                x + card_width // 2, y + card_height // 2,
+                x - card_width // 2,
+                y - card_height // 2,
+                x + card_width // 2,
+                y + card_height // 2,
                 fill=bg_color,
                 outline=outline_color,
                 width=outline_width,
-                tags=("card", f"player_{player_idx}_card_{card_idx}") if clickable else ("card",)
+                tags=("card", f"player_{player_idx}_card_{card_idx}") if clickable else ("card",),
             )
 
             color_hint = hints.get("color")
             number_hint = hints.get("number")
 
             # For current player's cards, always show "?" (hints shown in boxes outside)
-            is_current_player_card = (player_idx == self._current_player)
+            is_current_player_card = player_idx == self._current_player
 
             if is_current_player_card:
                 # Always show "?" for current player's cards
-                self._canvas.create_text(
-                    x, y,
-                    text="?",
-                    fill="#888888",
-                    font=("Arial", 24, "bold"),
-                    tags=("card",)
-                )
+                self._canvas.create_text(x, y, text="?", fill="#888888", font=("Arial", 24, "bold"), tags=("card",))
             else:
                 # For other players' cards, show hints on the card itself
                 if color_hint and number_hint:
                     hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
                     text_color = "white"
                     self._canvas.create_text(
-                        x, y - 10,
+                        x,
+                        y - 10,
                         text=self.COLOR_NAMES.get(color_hint, "?")[0],
                         fill=hint_color,
                         font=("Arial", 20, "bold"),
-                        tags=("card",)
+                        tags=("card",),
                     )
                     self._canvas.create_text(
-                        x, y + 10,
+                        x,
+                        y + 10,
                         text=str(number_hint.value),
                         fill=text_color,
                         font=("Arial", 18, "bold"),
-                        tags=("card",)
+                        tags=("card",),
                     )
                 elif color_hint:
                     # Only color hint: show "?" with background color set to hint color
@@ -1475,29 +1476,20 @@ class GUIDisplay:
                     # Update background color to hint color
                     self._canvas.itemconfig(widget, fill=hint_color)
                     self._canvas.create_text(
-                        x, y,
+                        x,
+                        y,
                         text="?",
                         fill="#000000",  # Black text on colored background
                         font=("Arial", 24, "bold"),
-                        tags=("card",)
+                        tags=("card",),
                     )
                 elif number_hint:
                     text_color = "white"
                     self._canvas.create_text(
-                        x, y,
-                        text=str(number_hint.value),
-                        fill=text_color,
-                        font=("Arial", 24, "bold"),
-                        tags=("card",)
+                        x, y, text=str(number_hint.value), fill=text_color, font=("Arial", 24, "bold"), tags=("card",)
                     )
                 else:
-                    self._canvas.create_text(
-                        x, y,
-                        text="?",
-                        fill="#888888",
-                        font=("Arial", 24, "bold"),
-                        tags=("card",)
-                    )
+                    self._canvas.create_text(x, y, text="?", fill="#888888", font=("Arial", 24, "bold"), tags=("card",))
 
             # Add hint indicator boxes outside bottom of card for current player's cards
             if player_idx is not None and card_idx is not None and player_idx == self._current_player:
@@ -1519,12 +1511,14 @@ class GUIDisplay:
                     hint_color = self.COLOR_COLORS.get(color_hint, "#FFFFFF")
                     color_box_x = x - (box_width + box_spacing) // 2
                     self._canvas.create_rectangle(
-                        color_box_x - box_width // 2, bottom_y,
-                        color_box_x + box_width // 2, bottom_y + box_height,
+                        color_box_x - box_width // 2,
+                        bottom_y,
+                        color_box_x + box_width // 2,
+                        bottom_y + box_height,
                         fill=hint_color,
                         outline="#000000",
                         width=1,
-                        tags=("card",)
+                        tags=("card",),
                     )
 
                 # Draw number hint (right side, no box - just white text on dark background)
@@ -1532,11 +1526,12 @@ class GUIDisplay:
                     number_box_x = x + (box_width + box_spacing) // 2
                     # No box - just white text on the dark background
                     self._canvas.create_text(
-                        number_box_x, bottom_y + box_height // 2,
+                        number_box_x,
+                        bottom_y + box_height // 2,
                         text=str(number_hint.value),
                         fill="white",
                         font=("Arial", 12, "bold"),
-                        tags=("card",)
+                        tags=("card",),
                     )
 
         return widget
@@ -1569,12 +1564,9 @@ class GUIDisplay:
         self._action_menu.attributes("-topmost", True)
 
         # Store context
-        self._action_menu_context = {
-            "player_idx": player_idx,
-            "card_idx": card_idx
-        }
+        self._action_menu_context = {"player_idx": player_idx, "card_idx": card_idx}
 
-        is_own_card = (player_idx == self._current_player)
+        is_own_card = player_idx == self._current_player
         state = self._game.state
         common_view = state.common_view
 
@@ -1594,7 +1586,7 @@ class GUIDisplay:
                 activeforeground="black",
                 highlightthickness=0,
                 borderwidth=1,
-                relief=tk.RAISED
+                relief=tk.RAISED,
             )
             # Force text color after creation
             play_btn.config(fg="black")
@@ -1616,7 +1608,7 @@ class GUIDisplay:
                     activeforeground="black",
                     highlightthickness=0,
                     borderwidth=1,
-                    relief=tk.RAISED
+                    relief=tk.RAISED,
                 )
                 # Force text color after creation
                 discard_btn.config(fg="black")
@@ -1633,7 +1625,7 @@ class GUIDisplay:
                     justify=tk.LEFT,
                     anchor="w",
                     padx=5,
-                    pady=3
+                    pady=3,
                 )
                 # Force update to ensure color is applied
                 explanation.config(fg="black")
@@ -1653,7 +1645,7 @@ class GUIDisplay:
                     pady=3,
                     activebackground="#7F8C8D",
                     activeforeground="black",
-                    highlightthickness=0
+                    highlightthickness=0,
                 )
                 number_hint_btn.pack(pady=2)
 
@@ -1669,7 +1661,7 @@ class GUIDisplay:
                     pady=3,
                     activebackground="#7F8C8D",
                     activeforeground="black",
-                    highlightthickness=0
+                    highlightthickness=0,
                 )
                 color_hint_btn.pack(pady=2)
             else:
@@ -1684,7 +1676,7 @@ class GUIDisplay:
                     justify=tk.LEFT,
                     anchor="w",
                     padx=5,
-                    pady=3
+                    pady=3,
                 )
                 # Force update to ensure color is applied
                 explanation.config(fg="black")
@@ -1739,6 +1731,7 @@ class GUIDisplay:
                 return
             if teammate_idx == current_player:
                 from hanabi.core.moves import Play
+
                 move = Play(card_idx)
                 self._move_callback(move)
         elif action == "discard":
@@ -1746,6 +1739,7 @@ class GUIDisplay:
                 return
             if teammate_idx == current_player:
                 from hanabi.core.moves import Discard
+
                 move = Discard(card_idx)
                 self._move_callback(move)
         elif action == "color_hint":
@@ -1755,9 +1749,11 @@ class GUIDisplay:
             if teammate_idx != current_player:
                 state = self._game.state
                 # Validate teammate index - must be different from current player
-                if (0 <= teammate_idx < len(state.player_hands) and
-                    teammate_idx != current_player and
-                    teammate_idx is not None):
+                if (
+                    0 <= teammate_idx < len(state.player_hands)
+                    and teammate_idx != current_player
+                    and teammate_idx is not None
+                ):
                     hand = state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
@@ -1777,9 +1773,11 @@ class GUIDisplay:
             if teammate_idx != current_player:
                 state = self._game.state
                 # Validate teammate index - must be different from current player
-                if (0 <= teammate_idx < len(state.player_hands) and
-                    teammate_idx != current_player and
-                    teammate_idx is not None):
+                if (
+                    0 <= teammate_idx < len(state.player_hands)
+                    and teammate_idx != current_player
+                    and teammate_idx is not None
+                ):
                     hand = state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
@@ -1800,13 +1798,19 @@ class GUIDisplay:
         """Set callback for when a move is made."""
         self._move_callback = callback
 
-    def display_move_result(self, success: bool, message: str, player_index: int, is_ai: bool = False, turn_number: int = None) -> None:
+    def display_move_result(
+        self, success: bool, message: str, player_index: int, is_ai: bool = False, turn_number: int = None
+    ) -> None:
         """Display the result of a move in history panel."""
         if success:
             # Format message - pass player_index for hint formatting
             formatted_msg = message
             # If player_index is provided and message doesn't start with player info, add it
-            if player_index is not None and not formatted_msg.startswith("Player ") and not formatted_msg.startswith("P"):
+            if (
+                player_index is not None
+                and not formatted_msg.startswith("Player ")
+                and not formatted_msg.startswith("P")
+            ):
                 formatted_msg = f"P{player_index + 1} {formatted_msg}"
             self._add_event_to_history(formatted_msg, "success", player_index, is_ai, turn_number=turn_number)
         else:
@@ -1818,7 +1822,7 @@ class GUIDisplay:
             return
 
         state = self._game.state
-        deck_empty = (state.common_view.cards_to_draw == 0)
+        deck_empty = state.common_view.cards_to_draw == 0
 
         if deck_empty:
             # Show warning banner
@@ -1886,11 +1890,11 @@ class GUIDisplay:
     def _cancel_all_animations(self) -> None:
         """Cancel all active animations."""
         for anim in self._active_animations[:]:
-            if anim.get('after_id'):
-                self.root.after_cancel(anim['after_id'])
+            if anim.get("after_id"):
+                self.root.after_cancel(anim["after_id"])
             # Remove animated widgets from canvas
-            if anim.get('widget_ids') and self._canvas:
-                for widget_id in anim['widget_ids']:
+            if anim.get("widget_ids") and self._canvas:
+                for widget_id in anim["widget_ids"]:
                     try:
                         self._canvas.delete(widget_id)
                     except:
@@ -1901,10 +1905,10 @@ class GUIDisplay:
 
         # Cancel all explosions
         for explosion in self._active_explosions[:]:
-            if explosion.get('after_id'):
-                self.root.after_cancel(explosion['after_id'])
-            if explosion.get('widget_ids') and self._canvas:
-                for widget_id in explosion['widget_ids']:
+            if explosion.get("after_id"):
+                self.root.after_cancel(explosion["after_id"])
+            if explosion.get("widget_ids") and self._canvas:
+                for widget_id in explosion["widget_ids"]:
                     try:
                         self._canvas.delete(widget_id)
                     except:
@@ -1913,7 +1917,12 @@ class GUIDisplay:
 
     def has_pending_animations(self) -> bool:
         """Check if there are any pending animations (queued or active)."""
-        return len(self._animation_queue) > 0 or len(self._active_animations) > 0 or len(self._active_explosions) > 0 or self._is_animating
+        return (
+            len(self._animation_queue) > 0
+            or len(self._active_animations) > 0
+            or len(self._active_explosions) > 0
+            or self._is_animating
+        )
 
     def _get_firework_position(self, color: Color) -> Optional[Tuple[int, int]]:
         """Get the center position of a firework stack for a given color."""
@@ -2036,7 +2045,9 @@ class GUIDisplay:
 
         return (card_x + card_width // 2, card_y)
 
-    def _get_card_position_in_hand(self, player_index: int, card_index: int, state: GameState) -> Optional[Tuple[int, int]]:
+    def _get_card_position_in_hand(
+        self, player_index: int, card_index: int, state: GameState
+    ) -> Optional[Tuple[int, int]]:
         """Calculate the position of a card in a player's hand based on the game state."""
         if not self._canvas or player_index >= len(state.player_hands):
             return None
@@ -2063,8 +2074,7 @@ class GUIDisplay:
         hand_radius = table_radius + max_half_width + padding
         vertical_margin = 120
         max_vertical_distance = min(
-            center_y - vertical_margin - card_height // 2,
-            height - center_y - vertical_margin - card_height // 2
+            center_y - vertical_margin - card_height // 2, height - center_y - vertical_margin - card_height // 2
         )
         hand_radius = min(hand_radius, max_vertical_distance)
 
@@ -2107,12 +2117,14 @@ class GUIDisplay:
             base_radius = 20 + i * 15
             colors = ["#FF0000", "#FF4500", "#FFA500"]  # Red, Orange, Yellow
             circle = self._canvas.create_oval(
-                x - base_radius, y - base_radius,
-                x + base_radius, y + base_radius,
+                x - base_radius,
+                y - base_radius,
+                x + base_radius,
+                y + base_radius,
                 fill=colors[i % len(colors)],
                 outline=colors[i % len(colors)],
                 width=2,
-                tags=("explosion",)
+                tags=("explosion",),
             )
             explosion_widgets.append(circle)
 
@@ -2127,12 +2139,7 @@ class GUIDisplay:
             y1 = y + start_radius * math.sin(rad)
             x2 = x + end_radius * math.cos(rad)
             y2 = y + end_radius * math.sin(rad)
-            particle = self._canvas.create_line(
-                x1, y1, x2, y2,
-                fill="#FF0000",
-                width=3,
-                tags=("explosion",)
-            )
+            particle = self._canvas.create_line(x1, y1, x2, y2, fill="#FF0000", width=3, tags=("explosion",))
             explosion_widgets.append(particle)
 
         # Raise explosion above everything
@@ -2140,13 +2147,13 @@ class GUIDisplay:
 
         # Create explosion animation
         explosion = {
-            'widget_ids': explosion_widgets,
-            'current_frame': 0,
-            'total_frames': total_frames,
-            'center_x': x,
-            'center_y': y,
-            'base_radius': 20,
-            'after_id': None
+            "widget_ids": explosion_widgets,
+            "current_frame": 0,
+            "total_frames": total_frames,
+            "center_x": x,
+            "center_y": y,
+            "base_radius": 20,
+            "after_id": None,
         }
 
         self._active_explosions.append(explosion)
@@ -2157,13 +2164,13 @@ class GUIDisplay:
         if explosion not in self._active_explosions:
             return  # Explosion was cancelled
 
-        current_frame = explosion['current_frame']
-        total_frames = explosion['total_frames']
+        current_frame = explosion["current_frame"]
+        total_frames = explosion["total_frames"]
 
         if current_frame >= total_frames:
             # Explosion complete - remove widgets
-            if explosion.get('widget_ids') and self._canvas:
-                for widget_id in explosion['widget_ids']:
+            if explosion.get("widget_ids") and self._canvas:
+                for widget_id in explosion["widget_ids"]:
                     try:
                         self._canvas.delete(widget_id)
                     except:
@@ -2179,20 +2186,18 @@ class GUIDisplay:
         expansion_factor = 1.0 + progress * 2.0  # Expand to 3x size
         opacity = 1.0 - progress  # Fade out
 
-        if explosion.get('widget_ids') and self._canvas:
-            center_x = explosion['center_x']
-            center_y = explosion['center_y']
-            base_radius = explosion['base_radius']
+        if explosion.get("widget_ids") and self._canvas:
+            center_x = explosion["center_x"]
+            center_y = explosion["center_y"]
+            base_radius = explosion["base_radius"]
 
             # Update circles (first 3 widgets)
-            for i, widget_id in enumerate(explosion['widget_ids'][:3]):
+            for i, widget_id in enumerate(explosion["widget_ids"][:3]):
                 try:
                     radius = (base_radius + i * 15) * expansion_factor
                     # Update circle size
                     self._canvas.coords(
-                        widget_id,
-                        center_x - radius, center_y - radius,
-                        center_x + radius, center_y + radius
+                        widget_id, center_x - radius, center_y - radius, center_x + radius, center_y + radius
                     )
                     # Fade out by changing opacity (tkinter doesn't support alpha directly,
                     # so we'll use stipple pattern or just delete when fully faded)
@@ -2203,8 +2208,8 @@ class GUIDisplay:
                     pass
 
             # Update particle lines (remaining widgets)
-            num_particles = len(explosion['widget_ids']) - 3
-            for i, widget_id in enumerate(explosion['widget_ids'][3:]):
+            num_particles = len(explosion["widget_ids"]) - 3
+            for i, widget_id in enumerate(explosion["widget_ids"][3:]):
                 try:
                     angle = (360 / num_particles) * i
                     rad = math.radians(angle)
@@ -2219,12 +2224,9 @@ class GUIDisplay:
                     pass
 
         # Schedule next frame
-        explosion['current_frame'] += 1
+        explosion["current_frame"] += 1
         frame_delay_ms = int(1000 / self._animation_fps)
-        explosion['after_id'] = self.root.after(
-            frame_delay_ms,
-            lambda: self._animate_explosion(explosion)
-        )
+        explosion["after_id"] = self.root.after(frame_delay_ms, lambda: self._animate_explosion(explosion))
 
     def animate_card_move(
         self,
@@ -2235,7 +2237,7 @@ class GUIDisplay:
         color: Optional[Color] = None,  # Required if destination is "firework"
         edge_color: str = "#FF0000",  # Edge color for the animated card
         callback: Optional[Callable] = None,
-        old_state: Optional[GameState] = None  # Old state to freeze during animation
+        old_state: Optional[GameState] = None,  # Old state to freeze during animation
     ) -> None:
         """
         Animate a card moving from its current position to a destination.
@@ -2301,17 +2303,17 @@ class GUIDisplay:
 
         # Create animation request object
         animation_request = {
-            'player_index': player_index,
-            'card_index': card_index,
-            'card': card,
-            'source_x': source_x,
-            'source_y': source_y,
-            'dest_x': dest_x,
-            'dest_y': dest_y,
-            'destination': destination,
-            'color': color,
-            'edge_color': edge_color,
-            'callback': callback
+            "player_index": player_index,
+            "card_index": card_index,
+            "card": card,
+            "source_x": source_x,
+            "source_y": source_y,
+            "dest_x": dest_x,
+            "dest_y": dest_y,
+            "destination": destination,
+            "color": color,
+            "edge_color": edge_color,
+            "callback": callback,
         }
 
         # Add to queue
@@ -2350,7 +2352,7 @@ class GUIDisplay:
         edge_color: str = "#00FF00",  # Green for drawing
         callback: Optional[Callable] = None,
         old_state: Optional[GameState] = None,  # Old state to get deck position
-        new_state: Optional[GameState] = None  # New state to get hand position
+        new_state: Optional[GameState] = None,  # New state to get hand position
     ) -> None:
         """
         Animate a card being drawn from the deck to a player's hand.
@@ -2399,17 +2401,17 @@ class GUIDisplay:
 
         # Create animation request object
         animation_request = {
-            'player_index': player_index,
-            'card_index': 0,  # New card always goes to position 0
-            'card': card,
-            'source_x': source_x,
-            'source_y': source_y,
-            'dest_x': dest_x,
-            'dest_y': dest_y,
-            'destination': 'hand',
-            'color': None,
-            'edge_color': edge_color,
-            'callback': callback
+            "player_index": player_index,
+            "card_index": 0,  # New card always goes to position 0
+            "card": card,
+            "source_x": source_x,
+            "source_y": source_y,
+            "dest_x": dest_x,
+            "dest_y": dest_y,
+            "destination": "hand",
+            "color": None,
+            "edge_color": edge_color,
+            "callback": callback,
         }
 
         # Add to queue (will play after current animation completes)
@@ -2440,10 +2442,10 @@ class GUIDisplay:
         # Make it slightly larger and more visible
         card_width = 55
         card_height = 77
-        bg_color = self.COLOR_COLORS.get(request['card'].color, "#FFFFFF")
+        bg_color = self.COLOR_COLORS.get(request["card"].color, "#FFFFFF")
 
         # Get edge color from request (default to red if not specified)
-        edge_color = request.get('edge_color', "#FF0000")
+        edge_color = request.get("edge_color", "#FF0000")
 
         widget_ids = []
 
@@ -2451,17 +2453,19 @@ class GUIDisplay:
         if edge_color == "#FFD700":  # Gold
             # Create a slightly larger outer rectangle for glow effect
             glow_rect = self._canvas.create_rectangle(
-                request['source_x'] - card_width // 2 - 2, request['source_y'] - card_height // 2 - 2,
-                request['source_x'] + card_width // 2 + 2, request['source_y'] + card_height // 2 + 2,
+                request["source_x"] - card_width // 2 - 2,
+                request["source_y"] - card_height // 2 - 2,
+                request["source_x"] + card_width // 2 + 2,
+                request["source_y"] + card_height // 2 + 2,
                 fill="",
                 outline="#FFA500",  # Orange glow
                 width=2,
-                tags=("animated_card",)
+                tags=("animated_card",),
             )
             widget_ids.append(glow_rect)
 
         # For draw animations (destination='hand'), show "?" instead of actual card
-        is_draw_animation = request.get('destination') == 'hand'
+        is_draw_animation = request.get("destination") == "hand"
 
         # Use gray background for draw animations (unknown card)
         if is_draw_animation:
@@ -2469,26 +2473,29 @@ class GUIDisplay:
             display_text = "?"
         else:
             display_bg_color = bg_color
-            display_text = str(request['card'].number.value)
+            display_text = str(request["card"].number.value)
 
         # Create card rectangle with colored outline based on move type
         card_rect = self._canvas.create_rectangle(
-            request['source_x'] - card_width // 2, request['source_y'] - card_height // 2,
-            request['source_x'] + card_width // 2, request['source_y'] + card_height // 2,
+            request["source_x"] - card_width // 2,
+            request["source_y"] - card_height // 2,
+            request["source_x"] + card_width // 2,
+            request["source_y"] + card_height // 2,
             fill=display_bg_color,
             outline=edge_color,
             width=4,  # Thicker outline for visibility
-            tags=("animated_card",)
+            tags=("animated_card",),
         )
         widget_ids.append(card_rect)
 
         # Create card number text (slightly larger)
         card_text = self._canvas.create_text(
-            request['source_x'], request['source_y'],
+            request["source_x"],
+            request["source_y"],
             text=display_text,
             fill="#000000",
             font=("Arial", 26, "bold"),
-            tags=("animated_card",)
+            tags=("animated_card",),
         )
         widget_ids.append(card_text)
 
@@ -2503,15 +2510,15 @@ class GUIDisplay:
         total_frames = int((self._animation_duration_ms / 1000.0) * self._animation_fps)
         frame_delay_ms = int(1000 / self._animation_fps)
 
-        dx = (request['dest_x'] - request['source_x']) / total_frames
-        dy = (request['dest_y'] - request['source_y']) / total_frames
+        dx = (request["dest_x"] - request["source_x"]) / total_frames
+        dy = (request["dest_y"] - request["source_y"]) / total_frames
 
         # Create animation object with callback to process next in queue
         def animation_complete():
             # The animation is still in _active_animations at this point
             # Call original callback if provided (this updates event history, doesn't update game state)
-            if request.get('callback'):
-                request['callback']()
+            if request.get("callback"):
+                request["callback"]()
 
             # Mark as not animating AFTER callback
             self._is_animating = False
@@ -2524,13 +2531,13 @@ class GUIDisplay:
             self.root.after(50, self._process_animation_queue)
 
         animation = {
-            'widget_ids': widget_ids,
-            'current_frame': 0,
-            'total_frames': total_frames,
-            'dx': dx,
-            'dy': dy,
-            'callback': animation_complete,
-            'after_id': None
+            "widget_ids": widget_ids,
+            "current_frame": 0,
+            "total_frames": total_frames,
+            "dx": dx,
+            "dy": dy,
+            "callback": animation_complete,
+            "after_id": None,
         }
 
         self._active_animations.append(animation)
@@ -2543,14 +2550,14 @@ class GUIDisplay:
         if animation not in self._active_animations:
             return  # Animation was cancelled
 
-        current_frame = animation['current_frame']
-        total_frames = animation['total_frames']
+        current_frame = animation["current_frame"]
+        total_frames = animation["total_frames"]
 
         if current_frame >= total_frames:
             # Animation complete
             # Remove widgets
-            if animation.get('widget_ids') and self._canvas:
-                for widget_id in animation['widget_ids']:
+            if animation.get("widget_ids") and self._canvas:
+                for widget_id in animation["widget_ids"]:
                     try:
                         self._canvas.delete(widget_id)
                     except:
@@ -2558,8 +2565,8 @@ class GUIDisplay:
 
             # Call callback BEFORE removing from active animations
             # This ensures the check in display_game_state still sees the animation as active
-            if animation.get('callback'):
-                animation['callback']()
+            if animation.get("callback"):
+                animation["callback"]()
 
             # Remove from active animations AFTER callback completes
             # This ensures display_game_state won't update until animation is fully done
@@ -2589,22 +2596,19 @@ class GUIDisplay:
             return
 
         # Move widgets
-        if animation.get('widget_ids') and self._canvas:
-            for widget_id in animation['widget_ids']:
+        if animation.get("widget_ids") and self._canvas:
+            for widget_id in animation["widget_ids"]:
                 try:
-                    self._canvas.move(widget_id, animation['dx'], animation['dy'])
+                    self._canvas.move(widget_id, animation["dx"], animation["dy"])
                     # Keep animated card on top after each move
                     self._canvas.lift(widget_id)
                 except:
                     pass
 
         # Schedule next frame
-        animation['current_frame'] += 1
+        animation["current_frame"] += 1
         frame_delay_ms = int(1000 / self._animation_fps)
-        animation['after_id'] = self.root.after(
-            frame_delay_ms,
-            lambda: self._animate_frame(animation)
-        )
+        animation["after_id"] = self.root.after(frame_delay_ms, lambda: self._animate_frame(animation))
 
     def update_hints_from_move(self, player_index: int, move: Move, old_state=None, new_state=None) -> None:
         """
@@ -2649,10 +2653,14 @@ class GUIDisplay:
             # If hand size stayed the same, a card was drawn
             card_was_drawn = True  # Default assumption
             if old_state is not None and new_state is not None:
-                old_hand_size = len(old_state.player_hands[player_index].cards) if player_index < len(old_state.player_hands) else 0
-                new_hand_size = len(new_state.player_hands[player_index].cards) if player_index < len(new_state.player_hands) else 0
+                old_hand_size = (
+                    len(old_state.player_hands[player_index].cards) if player_index < len(old_state.player_hands) else 0
+                )
+                new_hand_size = (
+                    len(new_state.player_hands[player_index].cards) if player_index < len(new_state.player_hands) else 0
+                )
                 # If hand size decreased, no card was drawn
-                card_was_drawn = (new_hand_size == old_hand_size)
+                card_was_drawn = new_hand_size == old_hand_size
 
             # Remove hints for the card being played/discarded
             if player_index in self._hints and card_index in self._hints[player_index]:
@@ -2668,7 +2676,7 @@ class GUIDisplay:
                         # 2. A new card is inserted at position 0 (all cards shift right by 1)
                         # Net effect:
                         # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
-                        # - Cards at indices > card_index: no net change (left by 1 from removal, right by 1 from insertion)
+                        # - Cards at indices > card_index: no net change (left 1, then right 1 from insertion)
                         if old_idx < card_index:
                             # Card shifted right by 1 due to new card insertion at position 0
                             new_hints[old_idx + 1] = hint_data

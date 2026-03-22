@@ -133,24 +133,16 @@ class BasePlayer(Observer, Player):
             case _:
                 assert_never(m)
 
-    def observe_play_move(
-        self, player_index: int, move: Play, observer_view: PlayerView
-    ) -> None:
+    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
         """Hook: a player played a card. Default does nothing."""
 
-    def observe_discard_move(
-        self, player_index: int, move: Discard, observer_view: PlayerView
-    ) -> None:
+    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
         """Hook: a player discarded a card. Default does nothing."""
 
-    def observe_color_hint_move(
-        self, player_index: int, move: ColorHint, observer_view: PlayerView
-    ) -> None:
+    def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         """Hook: a color hint was given. Default does nothing."""
 
-    def observe_number_hint_move(
-        self, player_index: int, move: NumberHint, observer_view: PlayerView
-    ) -> None:
+    def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         """Hook: a number hint was given. Default does nothing."""
 
     @abstractmethod
@@ -180,30 +172,22 @@ class HintTrackingPlayer(BasePlayer):
         super().__init__(player_index)
         self._hints: Dict[int, Dict[str, Optional[Union[Color, Number]]]] = {}
 
-    def observe_play_move(
-        self, player_index: int, move: Play, observer_view: PlayerView
-    ) -> None:
+    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
         if player_index == self._player_index:
             self._update_hints_from_card_move(move)
 
-    def observe_discard_move(
-        self, player_index: int, move: Discard, observer_view: PlayerView
-    ) -> None:
+    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         if player_index == self._player_index:
             self._update_hints_from_card_move(move)
 
-    def observe_color_hint_move(
-        self, player_index: int, move: ColorHint, observer_view: PlayerView
-    ) -> None:
+    def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
             self._update_hints_from_hint(move)
 
-    def observe_number_hint_move(
-        self, player_index: int, move: NumberHint, observer_view: PlayerView
-    ) -> None:
+    def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
             self._update_hints_from_hint(move)
@@ -241,8 +225,10 @@ class HintTrackingPlayer(BasePlayer):
         # 2. A new card is drawn and inserted at position 0 (all cards shift right by 1)
         # Net effect:
         # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
-        # - Cards at indices > card_index: shift left by 1 (from removal), then right by 1 (from insertion) = no net change
-        # Special case: when card_index = 0, card removed and new card fills position 0, so no net change for other cards
+        # - Cards at indices > card_index: shift left by 1 (from removal), then right by 1
+        #   (from insertion) = no net change
+        # Special case: when card_index = 0, card removed and new card fills position 0,
+        # so no net change for other cards
         new_hints = {}
         for old_idx, hint_data in self._hints.items():
             if old_idx < card_index:
@@ -261,13 +247,7 @@ class HintTrackingPlayer(BasePlayer):
         Returns:
             Dictionary mapping card index to hint data (color and/or number)
         """
-        return {
-            idx: {
-                "color": h.get("color"),
-                "number": h.get("number")
-            }
-            for idx, h in self._hints.items()
-        }
+        return {idx: {"color": h.get("color"), "number": h.get("number")} for idx, h in self._hints.items()}
 
 
 class HumanPlayer(HintTrackingPlayer):
@@ -304,6 +284,7 @@ class HumanPlayer(HintTrackingPlayer):
             "human decision" for human players
         """
         return "human decision"
+
 
 class StrategyAlphaPlayer(BasePlayer):
     """Strategy player implementing Alpha strategy."""
@@ -360,4 +341,3 @@ class PlayerTeam:
 
     def __repr__(self) -> str:
         return f"PlayerTeam(players={len(self._players)})"
-

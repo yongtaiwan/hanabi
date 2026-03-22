@@ -62,7 +62,7 @@ class RecommendationPlayer(BasePlayer):
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
-        return game_settings.numPlayers == NUM_PLAYERS_FOR_RECOMMENDATION
+        return game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION
 
     def __init__(self, player_index: int):
         super().__init__(player_index)
@@ -74,26 +74,20 @@ class RecommendationPlayer(BasePlayer):
         self._my_decoded_recommendation: Optional[int] = None
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
-        assert game_settings.numPlayers == NUM_PLAYERS_FOR_RECOMMENDATION, (
+        assert game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION, (
             "RecommendationPlayer requires 5-player games"
         )
         super().set_game_settings(game_settings)
 
-    def observe_play_move(
-        self, player_index: int, move: Play, observer_view: PlayerView
-    ) -> None:
+    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
         self._plays_since_hint += 1
 
-    def observe_color_hint_move(
-        self, player_index: int, move: ColorHint, observer_view: PlayerView
-    ) -> None:
+    def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=4)
 
-    def observe_number_hint_move(
-        self, player_index: int, move: NumberHint, observer_view: PlayerView
-    ) -> None:
+    def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=0)
 
@@ -109,12 +103,11 @@ class RecommendationPlayer(BasePlayer):
         pos = (move.teammate - player_index - 1) % NUM_PLAYERS_FOR_RECOMMENDATION
         self._last_hint_value = hint_value_base + pos
         self._plays_since_hint = 0
-        if self._player_index != player_index:
-            self._my_decoded_recommendation = self._decode_recommendation_with_view(
-                observer_view, self._last_hint_value, self._last_hinter
-            )
-        else:
-            self._my_decoded_recommendation = None
+        self._my_decoded_recommendation = (
+            None
+            if self._player_index == player_index
+            else (self._decode_recommendation_with_view(observer_view, self._last_hint_value, self._last_hinter))
+        )
 
     def _decode_recommendation_with_view(
         self, player_view: PlayerView, hint_value: int, hinter: Optional[int]
@@ -122,11 +115,11 @@ class RecommendationPlayer(BasePlayer):
         """
         Decode my recommendation from hint value.
 
-        Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.commonView`
+        Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.common_view`
         for shared piles and tokens (no access to full :class:`~hanabi.core.game.Game`).
         """
-        common = self.commonView
-        settings = self.gameSettings
+        common = self.common_view
+        settings = self.game_settings
         others_sum = 0
         for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
             if p == self._player_index:
@@ -140,19 +133,21 @@ class RecommendationPlayer(BasePlayer):
         if hinter is not None and hinter in player_view.teammates:
             rec_hinter = self._get_recommendation_for_hand(
                 player_view.teammates[hinter].cards,
-                common, settings,
+                common,
+                settings,
             )
         return (hint_value - others_sum + rec_hinter) % 8
 
     def _get_my_recommendation(self, player_view: PlayerView) -> Optional[int]:
-        """Return my recommendation: use decoded value from hint time if set, else decode from current view (may be wrong after other moves)."""
+        """Return my recommendation from hint-time decode if set, else from current view.
+
+        The fallback can be wrong after intervening moves.
+        """
         if self._my_decoded_recommendation is not None:
             return self._my_decoded_recommendation
         if self._last_hint_value is None or self._last_hinter is None:
             return None
-        return self._decode_recommendation_with_view(
-            player_view, self._last_hint_value, self._last_hinter
-        )
+        return self._decode_recommendation_with_view(player_view, self._last_hint_value, self._last_hinter)
 
     def _get_recommendation_for_hand(
         self,
@@ -165,33 +160,24 @@ class RecommendationPlayer(BasePlayer):
 
         for idx in order_c1_first:
             card = hand_cards[idx]
-            if (
-                card.number == Number.FIVE
-                and common_view.cardKind(card, settings)
-                == CardKind.PLAYABLE
-            ):
+            if card.number == Number.FIVE and common_view.card_kind(card, settings) == CardKind.PLAYABLE:
                 return (hand_size - 1) - idx
         playable = [
             (idx, hand_cards[idx].number.value)
             for idx in order_c1_first
-            if common_view.cardKind(hand_cards[idx], settings)
-            == CardKind.PLAYABLE
+            if common_view.card_kind(hand_cards[idx], settings) == CardKind.PLAYABLE
         ]
         if playable:
             playable.sort(key=lambda x: (x[1], x[0]))
             idx = playable[0][0]
             return (hand_size - 1) - idx
         for idx in order_c1_first:
-            if (
-                common_view.cardKind(hand_cards[idx], settings)
-                == CardKind.USELESS
-            ):
+            if common_view.card_kind(hand_cards[idx], settings) == CardKind.USELESS:
                 return 4 + ((hand_size - 1) - idx)
         dispensable = [
             (idx, hand_cards[idx].number.value)
             for idx in order_c1_first
-            if common_view.cardKind(hand_cards[idx], settings)
-            == CardKind.DISPENSABLE
+            if common_view.card_kind(hand_cards[idx], settings) == CardKind.DISPENSABLE
         ]
         if dispensable:
             dispensable.sort(key=lambda x: (-x[1], x[0]))
@@ -200,17 +186,15 @@ class RecommendationPlayer(BasePlayer):
         return 4 + (hand_size - 1)
 
     def play(self, player_view: PlayerView) -> Move:
-        common = self.commonView
-        settings = self.gameSettings
-        hand_size = player_view.ownHandSize
+        common = self.common_view
+        settings = self.game_settings
+        hand_size = player_view.own_hand_size
         assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
-        errors = settings.maxLiveTokens - common.liveTokens
+        errors = settings.max_live_tokens - common.live_tokens
 
         # Get my decoded recommendation
         my_rec = self._get_my_recommendation(player_view)
-        valid_moves = generate_all_valid_moves(
-            player_view, common, settings, self._player_index
-        )
+        valid_moves = generate_all_valid_moves(player_view, common, settings, self._player_index)
         valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
 
         if not valid_moves:
@@ -243,7 +227,7 @@ class RecommendationPlayer(BasePlayer):
                     return Play(play_idx)
 
         # 3) If hint token available, give hint
-        if common.hintTokens > 0:
+        if common.hint_tokens > 0:
             hint_move = self._compute_hint(player_view)
             if hint_move is not None:
                 self._my_decoded_recommendation = None  # we are giving the hint; no recommendation for us from it
@@ -265,9 +249,7 @@ class RecommendationPlayer(BasePlayer):
         if my_rec is not None and 4 <= my_rec <= 7:
             discard_idx = rec_to_discard_index(my_rec, hand_size)
             if discard_idx is not None:
-                if any(
-                    isinstance(m, Discard) and m.card == discard_idx for m in valid_moves
-                ):
+                if any(isinstance(m, Discard) and m.card == discard_idx for m in valid_moves):
                     slot = _slot_name(discard_idx, hand_size)
                     self._last_decision_summary = (
                         f"Discard {slot}: decoded recommendation={my_rec} (discard) → follow recommendation"
@@ -298,8 +280,8 @@ class RecommendationPlayer(BasePlayer):
 
     def _compute_hint(self, player_view: PlayerView) -> Optional[Move]:
         """Compute hint that encodes sum of recommendations mod 8."""
-        common = self.commonView
-        settings = self.gameSettings
+        common = self.common_view
+        settings = self.game_settings
         total = 0
         for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
             if p == self._player_index:

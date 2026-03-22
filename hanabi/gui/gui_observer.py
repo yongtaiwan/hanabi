@@ -64,4 +64,3 @@ class GUIObserver(Observer):
             # Update display when a move is observed
             # The display will handle the rendering
             pass
-
