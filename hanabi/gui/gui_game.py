@@ -257,11 +257,17 @@ class GUIGame:
             )
             return MonteCarloPlayer(player_index, config=config)
 
+        settings = create_standard_game_settings(num_players)
+        option_list = [
+            ("Random", RandomPlayer, RandomPlayer),
+            ("CommonSense", CommonSensePlayer, CommonSensePlayer),
+            ("Recommendation", RecommendationPlayer, RecommendationPlayer),
+            ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
+        ]
         ai_types = [
-            ("Random", RandomPlayer),
-            ("CommonSense", CommonSensePlayer),
-            ("Recommendation", RecommendationPlayer),
-            ("MonteCarlo", create_monte_carlo_player),
+            (name, factory)
+            for name, factory, support_cls in option_list
+            if support_cls.supports_game_settings(settings)
         ]
 
         for name, ai_class in ai_types:

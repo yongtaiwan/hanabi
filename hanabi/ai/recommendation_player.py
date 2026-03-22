@@ -9,23 +9,17 @@ a value 0-7 that allows every other player to decode their personal recommendati
 (play C1-C4 or discard C1-C4). Card positions follow the paper: C1 = leftmost (oldest),
 C4 = rightmost (newest). In this codebase, index 0 = newest (C4), index hand_size-1 = oldest (C1).
 
-This encoding only supports 4 card positions (0-3 play, 4-7 discard). Standard Hanabi
-uses 4 cards per hand for 4-5 players and 5 cards for 2-3 players. Therefore the
-recommendation strategy is only applied in 4- or 5-player games; in 2- or 3-player
-games the player falls back to a simple heuristic (hint when possible, else discard
-oldest, else play).
+This encoding only supports 4 card positions (0-3 play, 4-7 discard). This player is
+only supported for standard 5-player games (4 cards per hand).
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional
 from collections import Counter
 
-logger = logging.getLogger(__name__)
-
-# Recommendation encoding 0-7 only covers 4 card slots (C1-C4). Standard rules
-# give 4 cards per hand for 4-5 players and 5 cards for 2-3 players.
+# Recommendation encoding 0-7 only covers 4 card slots (C1-C4). Used with standard
+# 5-player rules (4 cards per hand).
 HAND_SIZE_FOR_RECOMMENDATION = 4
 
 from hanabi.core.player import BasePlayer
@@ -34,10 +28,6 @@ from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
 from hanabi.core.move_generation import generate_all_valid_moves
-
-if TYPE_CHECKING:
-    from hanabi.core.game import GameSettings
-
 
 # Recommendation encoding (paper): 0=Play C1, 1=Play C2, 2=Play C3, 3=Play C4,
 # 4=Discard C1, 5=Discard C2, 6=Discard C3, 7=Discard C4.
@@ -77,9 +67,12 @@ class RecommendationPlayer(BasePlayer):
     """
     Recommendation strategy from Cox et al. (paper Strategy 1).
 
-    Only fully applied when hand size is 4 (i.e. 4- or 5-player games).
-    For 2-3 players (5 cards per hand), falls back to a simple heuristic.
+    Only for standard 5-player games (4 cards per hand).
     """
+
+    @classmethod
+    def supports_game_settings(cls, game_settings: GameSettings) -> bool:
+        return game_settings.numPlayers == 5
 
     def __init__(self, player_index: int):
         super().__init__(player_index)
@@ -87,12 +80,12 @@ class RecommendationPlayer(BasePlayer):
         self._last_hinter: Optional[int] = None
         self._last_hint_move: Optional[Move] = None
         self._plays_since_hint: int = 0
-        self._fallback_warned: bool = False
         self._last_decision_summary: Optional[str] = None
         # Decoded recommendation at hint time (state when hint was given); used until next hint.
         self._my_decoded_recommendation: Optional[int] = None
 
     def observe(self, player_index: int, move: Move, **kwargs) -> None:
+        assert self.gameSettings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
         super().observe(player_index, move, **kwargs)
         if isinstance(move, (ColorHint, NumberHint)):
             self._last_hinter = player_index
@@ -105,7 +98,7 @@ class RecommendationPlayer(BasePlayer):
             self._plays_since_hint = 0
             # Decode our recommendation using state at hint time (critical: hands unchanged yet).
             game = kwargs.get("game")
-            if game is not None and self._player_index != player_index and self.gameSettings.maxCardsInHand == HAND_SIZE_FOR_RECOMMENDATION:
+            if game is not None and self._player_index != player_index:
                 view_at_hint = game._getPlayerView(self._player_index)
                 self._my_decoded_recommendation = self._decode_recommendation_with_view(
                     view_at_hint, self._last_hint_value, self._last_hinter
@@ -228,65 +221,13 @@ class RecommendationPlayer(BasePlayer):
             return 4 + ((hand_size - 1) - idx)
         return 4 + (hand_size - 1)
 
-    def _play_fallback(self, player_view: PlayerView) -> Move:
-        """Simple fallback when hand size is not 4 (2-3 players). Recommendation encoding 0-7 only covers C1-C4."""
-        if not self._fallback_warned:
-            logger.warning(
-                "RecommendationPlayer: hand size is %s (2-3 player game). "
-                "Strategy is defined for 4 cards per hand (4-5 players). Using simple fallback.",
-                player_view.ownHandSize,
-            )
-            self._fallback_warned = True
-        common = self.commonView
-        settings = self.gameSettings
-        hand_size = player_view.ownHandSize
-        valid_moves = generate_all_valid_moves(
-            player_view, common, settings, self._player_index
-        )
-        valid_moves = [m for m in valid_moves if self._is_move_valid(m, player_view)]
-        if not valid_moves:
-            self._last_decision_summary = "Fallback: no valid moves; play or discard index 0"
-            return Play(0) if hand_size > 0 else Discard(0)
-        # Prefer: hint if tokens available, else discard oldest (C1), else play
-        if common.hintTokens > 0:
-            for m in valid_moves:
-                if isinstance(m, (ColorHint, NumberHint)):
-                    if isinstance(m, ColorHint):
-                        self._last_decision_summary = (
-                            f"Fallback (2–3p): hint color {m.color.name.lower()} to P{m.teammate + 1} "
-                            f"(strategy only defined for 4 cards per hand)"
-                        )
-                    else:
-                        self._last_decision_summary = (
-                            f"Fallback (2–3p): hint number {m.number.value} to P{m.teammate + 1} "
-                            f"(strategy only defined for 4 cards per hand)"
-                        )
-                    return m
-        if common.hintTokens < settings.maxHintTokens:
-            for m in valid_moves:
-                if isinstance(m, Discard) and m.card == hand_size - 1:
-                    self._last_decision_summary = (
-                        "Fallback (2–3p): discard oldest card (C1) to gain hint token"
-                    )
-                    return m
-        for m in valid_moves:
-            if isinstance(m, Play):
-                self._last_decision_summary = (
-                    f"Fallback (2–3p): play card at index {m.card} (no hint/defer; strategy for 4p only)"
-                )
-                return m
-        self._last_decision_summary = "Fallback: first valid move"
-        return valid_moves[0]
-
     def play(self, player_view: PlayerView) -> Move:
         common = self.commonView
         settings = self.gameSettings
         hand_size = player_view.ownHandSize
-        num_players = settings.numPlayers
+        assert settings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
+        assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
         errors = settings.maxLiveTokens - common.liveTokens
-
-        if hand_size != HAND_SIZE_FOR_RECOMMENDATION:
-            return self._play_fallback(player_view)
 
         # Get my decoded recommendation
         my_rec = self._get_my_recommendation(player_view)

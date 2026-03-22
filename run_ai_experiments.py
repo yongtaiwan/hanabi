@@ -1,8 +1,8 @@
 """
 Run AI comparison experiments for different player counts.
 
-This script compares RandomPlayer, CommonSensePlayer, RecommendationPlayer,
-and MonteCarloPlayer on the same decks for 2/3/4/5-player games.
+This script compares RandomPlayer, CommonSensePlayer, MonteCarloPlayer, and (for
+5-player games only) RecommendationPlayer on the same decks for 2/3/4/5-player games.
 
 Folder layout:
 
@@ -66,7 +66,7 @@ def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
 
 
 def create_recommendation_player(player_index: int) -> RecommendationPlayer:
-    """Factory for RecommendationPlayer (Cox et al. strategy; best with 4–5 players)."""
+    """Factory for RecommendationPlayer (Cox et al. strategy; 5-player games only)."""
     return RecommendationPlayer(player_index)
 
 
@@ -103,13 +103,14 @@ def run_experiments(
         # Create GameField with a reproducible starting position
         game_field = GameField.create_from_settings(settings, seed=base_seed)
 
-        # Define AI factories
+        # Define AI factories (RecommendationPlayer only participates in 5-player games)
         ai_factories = {
             "RandomPlayer": create_random_player,
             "CommonSensePlayer": create_common_sense_player,
-            "RecommendationPlayer": create_recommendation_player,
             "MonteCarloPlayer": create_monte_carlo_player,
         }
+        if RecommendationPlayer.supports_game_settings(settings):
+            ai_factories["RecommendationPlayer"] = create_recommendation_player
 
         # Use an experiment id that encodes timestamp and player count so we
         # can group all player counts under the same timestamp:
@@ -179,7 +180,10 @@ def run_experiments(
     lines.append(f"- Player counts: {', '.join(str(p) + 'p' for p in player_counts)}")
     lines.append(f"- Runs per configuration: {num_runs}")
     lines.append(f"- Base seed: {base_seed}")
-    lines.append(f"- AIs compared: RandomPlayer, CommonSensePlayer, RecommendationPlayer, MonteCarloPlayer")
+    lines.append(
+        "- AIs compared: RandomPlayer, CommonSensePlayer, MonteCarloPlayer; "
+        "RecommendationPlayer only for 5-player games"
+    )
     lines.append("")
 
     # Add comparison table across all player counts

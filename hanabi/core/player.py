@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .game import GameSettings, CommonView
 
 from .observer import Observer
-from .game import PlayerView
+from .game import PlayerView, GameSettings
 from .moves import Move, Play, Discard, ColorHint, NumberHint, CardMove, Hint
 from .enums import Color, Number
 
@@ -77,6 +77,11 @@ class BasePlayer(Observer, Player):
     def set_common_view(self, common_view: CommonView) -> None:
         """Set the common view (all players share the same reference)."""
         self._common_view = common_view
+
+    @classmethod
+    def supports_game_settings(cls, game_settings: GameSettings) -> bool:
+        """Return whether this player type is valid for the given game configuration."""
+        return True
 
     def observe(self, player_index: int, move: Move, **kwargs) -> None:
         """
