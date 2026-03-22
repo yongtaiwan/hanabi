@@ -35,16 +35,6 @@ from hanabi.core.move_generation import generate_all_valid_moves
 # 4-7 = suit hint to position 1-4.
 
 
-def idx_to_rec_play(internal_idx: int, hand_size: int) -> int:
-    """Map internal index to recommendation 0-3 (Play C1-C4)."""
-    return (hand_size - 1) - internal_idx
-
-
-def idx_to_rec_discard(internal_idx: int, hand_size: int) -> int:
-    """Map internal index to recommendation 4-7 (Discard C1-C4)."""
-    return 4 + ((hand_size - 1) - internal_idx)
-
-
 def rec_to_play_index(rec: int, hand_size: int) -> Optional[int]:
     if 0 <= rec <= 3:
         return (hand_size - 1) - rec
