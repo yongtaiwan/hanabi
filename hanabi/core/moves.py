@@ -147,6 +147,8 @@ class Discard(CardMove):
 # ``typing.assert_never`` (or a final ``case _: assert False``) so new move kinds are caught.
 ConcreteMove: TypeAlias = Play | Discard | ColorHint | NumberHint
 
+HintMove: TypeAlias = ColorHint | NumberHint
+
 
 def ensure_concrete_move(move: Move) -> ConcreteMove:
     """Return ``move`` narrowed to the closed set of concrete move classes."""

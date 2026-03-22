@@ -21,7 +21,7 @@ NUM_PLAYERS_FOR_RECOMMENDATION = 5
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
+from hanabi.core.moves import HintMove, Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
 
@@ -114,6 +114,27 @@ class RecommendationPlayer(BasePlayer):
             else self._decode_recommendation_with_view(observer_view, self._last_hint_value, player_index)
         )
 
+    def _sum_peer_recommendations(
+        self, player_view: PlayerView, *, exclude_index: Optional[int] = None
+    ) -> int:
+        """
+        Sum paper recommendations for every visible teammate except ``self``.
+
+        Encoding uses the sum over all such players; decoding excludes the hinter via
+        ``exclude_index``.
+        """
+        return sum(
+            self._get_recommendation_for_hand(
+                player_view.teammates[p].cards,
+                self.common_view,
+                self.game_settings,
+            )
+            for p in range(NUM_PLAYERS_FOR_RECOMMENDATION)
+            if p != self._player_index
+            and p in player_view.teammates
+            and (exclude_index is None or p != exclude_index)
+        )
+
     def _decode_recommendation_with_view(
         self, player_view: PlayerView, hint_value: int, hinter: int
     ) -> int:
@@ -123,15 +144,7 @@ class RecommendationPlayer(BasePlayer):
         Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.common_view`
         for shared piles and tokens (no access to full :class:`~hanabi.core.game.Game`).
         """
-        others_sum = sum(
-            self._get_recommendation_for_hand(
-                player_view.teammates[p].cards,
-                self.common_view,
-                self.game_settings,
-            )
-            for p in range(NUM_PLAYERS_FOR_RECOMMENDATION)
-            if p != self._player_index and p != hinter and p in player_view.teammates
-        )
+        others_sum = self._sum_peer_recommendations(player_view, exclude_index=hinter)
         return (hint_value - others_sum) % 8
 
     def _get_my_recommendation(self) -> Optional[int]:
@@ -321,7 +334,7 @@ class RecommendationPlayer(BasePlayer):
         )
         return Discard(3)
 
-    def _compute_hint(self, player_view: PlayerView) -> Move:
+    def _compute_hint(self, player_view: PlayerView) -> HintMove:
         """
         Build the rank or color hint that encodes (sum of others' recommendations) mod 8.
 
@@ -329,18 +342,7 @@ class RecommendationPlayer(BasePlayer):
         Hands are never empty in supported games; a legal rank or color hint always exists
         on a standard deck.
         """
-        total = 0
-        for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
-            if p == self._player_index:
-                continue
-            if p not in player_view.teammates:
-                continue
-            hand = player_view.teammates[p].cards
-            rec = self._get_recommendation_for_hand(
-                hand, self.common_view, self.game_settings
-            )
-            total += rec
-        value = total % 8
+        value = self._sum_peer_recommendations(player_view) % 8
         pos_0, is_number = (value, True) if value < 4 else (value - 4, False)
         target = (self._player_index + 1 + pos_0) % NUM_PLAYERS_FOR_RECOMMENDATION
         assert target in player_view.teammates, (
@@ -356,8 +358,6 @@ class RecommendationPlayer(BasePlayer):
             assert False, "non-empty hand has a rank; encoding rank hint should exist"
 
         for color in Color:
-            if Color.MULTI == color:
-                continue
             indices = [i for i, c in enumerate(hand.cards) if color == c.color]
             if indices:
                 return ColorHint(target, indices, color)
