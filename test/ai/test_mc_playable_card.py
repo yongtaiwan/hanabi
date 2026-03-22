@@ -58,22 +58,20 @@ class TestPlayableCardPreference(unittest.TestCase):
         if playable_color is None:
             self.skipTest("No playable color available - all colors already started")
 
+        player_view = game._getPlayerView(0)
         # Give player hints that card 0 is this playable color and number 1
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
 
         # Observe the hints
-        player.observe(0, color_hint)
-        player.observe(0, number_hint)
+        player.observe(0, color_hint, player_view)
+        player.observe(0, number_hint, player_view)
 
         # Verify hints are tracked
         hints = player.getHints()
         self.assertIn(0, hints)
         self.assertEqual(hints[0]["color"], playable_color)
         self.assertEqual(hints[0]["number"], Number.ONE)
-
-        # Get player view
-        player_view = game._getPlayerView(0)
 
         # Make the player choose a move
         # The player should prefer playing card 0 over discarding it
@@ -121,13 +119,12 @@ class TestPlayableCardPreference(unittest.TestCase):
         if playable_color is None:
             self.skipTest("No playable color available")
 
+        player_view = game._getPlayerView(0)
         # Give hints
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-        player.observe(0, color_hint)
-        player.observe(0, number_hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, color_hint, player_view)
+        player.observe(0, number_hint, player_view)
 
         # Sample a determinized state
         # With hints, card 0 should always be the playable card
@@ -175,11 +172,10 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
+        player_view = game._getPlayerView(0)
         # Give color hint
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
-        player.observe(0, hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, hint, player_view)
 
         # Sample multiple times - card 0 should always be red
         for _ in range(20):
@@ -198,11 +194,10 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
+        player_view = game._getPlayerView(0)
         # Give number hint
         hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-        player.observe(0, hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, hint, player_view)
 
         # Sample multiple times - card 0 should always be number 1
         for _ in range(20):
@@ -221,13 +216,12 @@ class TestHintConstraintCorrectness(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
+        player_view = game._getPlayerView(0)
         # Give both hints
         color_hint = ColorHint(teammate=0, color=Color.BLUE, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.TWO, cards=[0])
-        player.observe(0, color_hint)
-        player.observe(0, number_hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, color_hint, player_view)
+        player.observe(0, number_hint, player_view)
 
         # Sample multiple times - card 0 should always be Blue 2
         for _ in range(20):

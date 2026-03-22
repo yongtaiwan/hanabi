@@ -23,7 +23,7 @@ from collections import Counter
 HAND_SIZE_FOR_RECOMMENDATION = 4
 
 from hanabi.core.player import BasePlayer
-from hanabi.core.game import PlayerView, CommonView, GameSettings
+from hanabi.core.game import CommonView, GameSettings, PlayerView
 from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
@@ -74,9 +74,14 @@ class RecommendationPlayer(BasePlayer):
         # Decoded recommendation at hint time (state when hint was given); used until next hint.
         self._my_decoded_recommendation: Optional[int] = None
 
-    def observe(self, player_index: int, move: Move, **kwargs) -> None:
+    def observe(
+        self,
+        player_index: int,
+        move: Move,
+        observer_view: PlayerView,
+    ) -> None:
         assert self.gameSettings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
-        super().observe(player_index, move, **kwargs)
+        super().observe(player_index, move, observer_view)
 
         if isinstance(move, Play):
             self._plays_since_hint += 1
@@ -98,12 +103,10 @@ class RecommendationPlayer(BasePlayer):
             assert isinstance(move, ColorHint)
             self._last_hint_value = 4 + pos
         self._plays_since_hint = 0
-        # Decode using state at hint time (hands unchanged yet).
-        game = kwargs.get("game")
-        if game is not None and self._player_index != player_index:
-            view_at_hint = game._getPlayerView(self._player_index)
+        # Decode using teammate hands from observer_view; shared piles/tokens from self.commonView (BasePlayer).
+        if self._player_index != player_index:
             self._my_decoded_recommendation = self._decode_recommendation_with_view(
-                view_at_hint, self._last_hint_value, self._last_hinter
+                observer_view, self._last_hint_value, self._last_hinter
             )
             return
         if player_index == self._player_index:
@@ -112,7 +115,12 @@ class RecommendationPlayer(BasePlayer):
     def _decode_recommendation_with_view(
         self, player_view: PlayerView, hint_value: int, hinter: Optional[int]
     ) -> Optional[int]:
-        """Decode my recommendation from hint value using the given view (must be state at hint time)."""
+        """
+        Decode my recommendation from hint value.
+
+        Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.commonView`
+        for shared piles and tokens (no access to full :class:`~hanabi.core.game.Game`).
+        """
         common = self.commonView
         settings = self.gameSettings
         n = settings.numPlayers

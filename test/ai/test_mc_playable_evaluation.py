@@ -49,11 +49,12 @@ def test_playable_card_scores_higher():
 
     print(f"Using playable color: {playable_color}")
 
+    player_view = game._getPlayerView(0)
     # Give hints that card 0 is this playable color and number 1
     color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
     number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-    player.observe(0, color_hint)
-    player.observe(0, number_hint)
+    player.observe(0, color_hint, player_view)
+    player.observe(0, number_hint, player_view)
 
     # Verify hints
     hints = player.getHints()
@@ -63,7 +64,6 @@ def test_playable_card_scores_higher():
     assert hints[0]["number"] == Number.ONE
 
     # Verify hint constraint works
-    player_view = game._getPlayerView(0)
     print("\nSampling determinized states to verify hint constraint...")
     for i in range(10):
         world = player._sample_determinized_state(player_view)

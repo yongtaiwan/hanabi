@@ -4,7 +4,7 @@ Console Observer implementation for Hanabi game.
 
 from typing import Optional
 from hanabi.core.observer import Observer
-from hanabi.core.game import GameSettings, CommonView
+from hanabi.core.game import GameSettings, CommonView, PlayerView
 from hanabi.core.moves import Move
 from .console_display import ConsoleDisplay
 
@@ -47,13 +47,19 @@ class ConsoleObserver(Observer):
         """Set the ConsoleDisplay instance."""
         self._display = display
 
-    def observe(self, player_index: int, move: Move, **kwargs) -> None:
+    def observe(
+        self,
+        player_index: int,
+        move: Move,
+        observer_view: PlayerView,
+    ) -> None:
         """
         Observe a move made by a player and update the display.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
+            observer_view: This observer's view after the move (from the engine).
         """
         if self._display:
             # The display will be updated by the game engine

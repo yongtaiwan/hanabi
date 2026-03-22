@@ -81,14 +81,19 @@ class BasePlayer(Observer, Player):
         """Return whether this player type is valid for the given game configuration."""
         return True
 
-    def observe(self, player_index: int, move: Move, **kwargs) -> None:
+    def observe(
+        self,
+        player_index: int,
+        move: Move,
+        observer_view: PlayerView,
+    ) -> None:
         """
         Observe a move made by a player.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
-            **kwargs: Optional context (e.g. game= for strategies that need hint-time state)
+            observer_view: This player's view after the move (from the engine).
         """
         # Base implementation - can be overridden by subclasses
         pass
@@ -120,15 +125,21 @@ class HintTrackingPlayer(BasePlayer):
         super().__init__(player_index)
         self._hints: Dict[int, Dict[str, Optional[Union[Color, Number]]]] = {}
 
-    def observe(self, player_index: int, move: Move, **kwargs) -> None:
+    def observe(
+        self,
+        player_index: int,
+        move: Move,
+        observer_view: PlayerView,
+    ) -> None:
         """
         Observe a move and update hint tracking if it affects this player.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
+            observer_view: This player's view after the move (from the engine).
         """
-        super().observe(player_index, move, **kwargs)
+        super().observe(player_index, move, observer_view)
 
         # If this player received a hint
         if isinstance(move, Hint) and move.teammate == self._player_index:

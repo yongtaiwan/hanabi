@@ -34,7 +34,8 @@ class TestHintConstraints(unittest.TestCase):
 
         # Give player a hint
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0, 1])
-        player.observe(0, hint)
+        dummy_view = PlayerView({}, self.settings.maxCardsInHand)
+        player.observe(0, hint, dummy_view)
 
         # Check that hints are tracked
         hints = player.getHints()
@@ -54,11 +55,9 @@ class TestHintConstraints(unittest.TestCase):
         game = Game.create(team=team, settings=self.settings)
 
         # Give player a hint that card 0 is red
-        hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
-        player.observe(0, hint)
-
-        # Get player view
         player_view = game._getPlayerView(0)
+        hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
+        player.observe(0, hint, player_view)
 
         # Sample multiple determinized states
         # All should have card 0 as red
@@ -80,11 +79,10 @@ class TestHintConstraints(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
+        player_view = game._getPlayerView(0)
         # Give player a hint that card 0 is number 1
         hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-        player.observe(0, hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, hint, player_view)
 
         # Sample multiple determinized states
         for _ in range(20):
@@ -103,13 +101,12 @@ class TestHintConstraints(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
+        player_view = game._getPlayerView(0)
         # Give player hints: card 0 is red 1
         color_hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-        player.observe(0, color_hint)
-        player.observe(0, number_hint)
-
-        player_view = game._getPlayerView(0)
+        player.observe(0, color_hint, player_view)
+        player.observe(0, number_hint, player_view)
 
         # Sample multiple determinized states
         for _ in range(20):
@@ -222,14 +219,12 @@ class TestMonteCarloEvaluation(unittest.TestCase):
         if playable_color is None:
             self.skipTest("No playable color available in test setup")
 
+        player_view = game._getPlayerView(0)
         # Give hint that card 0 is this color and number 1
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
-        player.observe(0, color_hint)
-        player.observe(0, number_hint)
-
-        # Get player view
-        player_view = game._getPlayerView(0)
+        player.observe(0, color_hint, player_view)
+        player.observe(0, number_hint, player_view)
 
         # Generate candidate moves
         from hanabi.core.move_generation import generate_all_valid_moves

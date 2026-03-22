@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .game import GameSettings, CommonView
+    from .game import GameSettings, CommonView, PlayerView
     from .moves import Move
 
 
@@ -16,14 +16,20 @@ class Observer(ABC):
     """Observer interface for observing game state."""
 
     @abstractmethod
-    def observe(self, player_index: int, move: Move, **kwargs) -> None:
+    def observe(
+        self,
+        player_index: int,
+        move: Move,
+        observer_view: PlayerView,
+    ) -> None:
         """
         Observe a move made by a player.
 
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
-            **kwargs: Optional context (e.g. game= for RecommendationPlayer to decode hints at hint-time state)
+            observer_view: This observer's :class:`PlayerView` after the move (same model as
+                :meth:`Player.play`). Observers that do not use it may ignore the argument.
         """
         pass
 

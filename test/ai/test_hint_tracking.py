@@ -6,7 +6,7 @@ Tests verify that hints are correctly tracked and shifted when cards are played/
 
 import unittest
 from hanabi.core.player import HumanPlayer
-from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import create_standard_game_settings, PlayerView
 from hanabi.core.moves import ColorHint, NumberHint, Play, Discard
 from hanabi.core.enums import Color, Number
 
@@ -18,6 +18,7 @@ class TestHintTracking(unittest.TestCase):
         """Set up test fixtures."""
         self.player = HumanPlayer(0)
         self.player.set_game_settings(create_standard_game_settings(3))
+        self._observer_view = PlayerView({}, self.player.gameSettings.maxCardsInHand)
 
     def test_receive_color_hint(self):
         """Test receiving a color hint."""
@@ -211,14 +212,14 @@ class TestHintTracking(unittest.TestCase):
         """Test that observe() only tracks hints for this player."""
         # Hint for this player (player 0)
         hint_for_me = ColorHint(teammate=0, color=Color.RED, cards=[0])
-        self.player.observe(1, hint_for_me)  # Player 1 gives hint to player 0
+        self.player.observe(1, hint_for_me, self._observer_view)  # Player 1 gives hint to player 0
 
         hints = self.player.getHints()
         self.assertEqual(hints[0]["color"], Color.RED)
 
         # Hint for another player (player 1)
         hint_for_other = ColorHint(teammate=1, color=Color.BLUE, cards=[0])
-        self.player.observe(2, hint_for_other)  # Player 2 gives hint to player 1
+        self.player.observe(2, hint_for_other, self._observer_view)  # Player 2 gives hint to player 1
 
         # Should not affect this player's hints
         hints = self.player.getHints()
@@ -234,7 +235,7 @@ class TestHintTracking(unittest.TestCase):
         }
 
         # Another player plays a card
-        self.player.observe(1, Play(0))  # Player 1 plays their card 0
+        self.player.observe(1, Play(0), self._observer_view)  # Player 1 plays their card 0
 
         # Should not affect this player's hints
         hints = self.player.getHints()
@@ -242,7 +243,7 @@ class TestHintTracking(unittest.TestCase):
         self.assertEqual(hints[1]["color"], Color.BLUE)
 
         # This player plays a card
-        self.player.observe(0, Play(0))  # Player 0 plays their card 0
+        self.player.observe(0, Play(0), self._observer_view)  # Player 0 plays their card 0
 
         # RED hint at 0 is removed, new card fills position 0, so BLUE hint stays at 1
         hints = self.player.getHints()
