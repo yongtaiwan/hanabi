@@ -173,7 +173,6 @@ class RecommendationPlayer(BasePlayer):
         self,
         player_view: PlayerView,
         recommendation: Optional[int],
-        *,
         plays_since_hint: int,
         errors: int,
     ) -> Optional[Move]:
@@ -269,12 +268,7 @@ class RecommendationPlayer(BasePlayer):
         recommendation = self._get_my_recommendation()
 
         move = (
-            self._try_follow_play_recommendation(
-                player_view,
-                recommendation,
-                plays_since_hint=self._plays_since_hint,
-                errors=errors,
-            )
+            self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_discard_recommendation(player_view, recommendation)
             or self._try_discard_c1(player_view)
