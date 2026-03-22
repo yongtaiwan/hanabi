@@ -67,12 +67,13 @@ class ConsolePlayer(HumanPlayer):
                 continue
 
             # Validate the move against game state
-            state = self._game.state
-            if not state._validate(self.player_index, move):
+            if not self._game.state._validate(self.player_index, move):
                 # Invalid move according to game rules - show error and retry
                 from .console_display import Colors
 
-                error_msg = state._get_validation_error_message(self.player_index, move)
+                error_msg = self._game.state._get_validation_error_message(
+                    self.player_index, move
+                )
                 print(f"{Colors.BRIGHT_RED}Invalid move: {error_msg}{Colors.RESET}")
                 print(f"{Colors.BRIGHT_BLACK}Please try again.{Colors.RESET}\n")
                 continue

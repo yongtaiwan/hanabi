@@ -29,13 +29,12 @@ class TestCriticalDiscard(unittest.TestCase):
 
     def test_discard_one_when_others_exist(self):
         """Test that discarding a 1 is not critical when other 1s exist."""
-        state = self.game.state
         red_one = Card(Color.RED, Number.ONE)
 
         # There should be 3 red 1s total
         # If we discard one and there are 0 already discarded, we should have 2 remaining
         # This should NOT be critical (doesn't reduce max score)
-        is_critical = self.gui_game._is_critical_discard(red_one, state)
+        is_critical = self.gui_game._is_critical_discard(red_one, self.game.state)
         self.assertFalse(is_critical, "Discarding a 1 when others exist should not be critical")
 
     def test_discard_last_five(self):
@@ -56,8 +55,6 @@ class TestCriticalDiscard(unittest.TestCase):
         Discarding a 1, 2, or 3 should be safe (max score already capped at 3).
         Only discarding the last 4 would be critical (reduces max from 3 to 2).
         """
-        state = self.game.state
-
         # Simulate: All 5s of red are discarded, and we've played red 1, 2, 3
         # We can't easily manipulate the state, but we can test the logic by
         # checking the max score calculation
@@ -77,14 +74,13 @@ class TestCriticalDiscard(unittest.TestCase):
         Scenario: All 5s of a color are discarded (max score is 4), but later
         the last 4 is discarded. This reduces max score from 4 to 3, so it's critical.
         """
-        state = self.game.state
         red_four = Card(Color.RED, Number.FOUR)
 
         # If we discard the last 4, max score for red goes from 4 to 3
         # This should be critical
         # Note: This test assumes no 4s are already discarded, so it's the last one
         # In a real scenario, we'd need to set up state where all 5s are discarded first
-        is_critical = self.gui_game._is_critical_discard(red_four, state)
+        self.gui_game._is_critical_discard(red_four, self.game.state)
         # Should be True if it's the last 4 (reduces max from 4 to 3)
         # But if other 4s exist, it's not critical
         # This test verifies the logic works, but exact result depends on game state
@@ -92,10 +88,10 @@ class TestCriticalDiscard(unittest.TestCase):
 
     def test_calculate_max_score_basic(self):
         """Test max score calculation for basic scenarios."""
-        state = self.game.state
-
         # Test max score for a color with nothing played and nothing discarded
-        max_score = self.gui_game._calculate_max_achievable_score(Color.RED, state, Number.ONE, 0)
+        max_score = self.gui_game._calculate_max_achievable_score(
+            Color.RED, self.game.state, Number.ONE, 0
+        )
         self.assertEqual(max_score, 5, "Max score should be 5 when nothing is played/discarded")
 
     def test_calculate_max_score_with_played_cards(self):
@@ -111,8 +107,6 @@ class TestCriticalDiscard(unittest.TestCase):
 
     def test_calculate_max_score_with_discarded_fives(self):
         """Test max score when all 5s are discarded."""
-        state = self.game.state
-
         # If all 5s of red are discarded, max score should be 4
         # We'd need to set up state where all 5s are discarded
         # This is complex to test without state manipulation

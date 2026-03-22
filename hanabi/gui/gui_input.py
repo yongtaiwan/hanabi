@@ -47,10 +47,9 @@ class GUIInput:
         # If game is finished, ignore all clicks
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
-            state = self._game.state
-            if state.turns_left is not None:
+            if self._game.state.turns_left is not None:
                 # Deck is exhausted - only ignore if turns_left == 0
-                if state.turns_left == 0 and self._game.is_finished:
+                if self._game.state.turns_left == 0 and self._game.is_finished:
                     return
             elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)

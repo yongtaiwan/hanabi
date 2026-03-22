@@ -215,10 +215,9 @@ class GUIDisplay:
         # If game is finished, ignore all clicks
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
-            state = self._game.state
-            if state.turns_left is not None:
+            if self._game.state.turns_left is not None:
                 # Deck is exhausted - only ignore if turns_left == 0
-                if state.turns_left == 0 and self._game.is_finished:
+                if self._game.state.turns_left == 0 and self._game.is_finished:
                     return
             elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
@@ -649,15 +648,15 @@ class GUIDisplay:
 
         # Draw deck cards with fixed grid layout: cards maintain positions as they're drawn
         # Show all remaining cards (with "?" during play, actual cards in replay)
-        # Use frozen OLD state during animation, otherwise use current state
+        # Deck counts: use frozen snapshot during animation, else live game state.
         if self._frozen_state is not None:
-            state = self._frozen_state
+            deck_count = self._frozen_state.common_view.cards_to_draw
+            draw_deck_index = self._frozen_state.draw_deck_index
         elif self._game:
-            state = self._game.state
+            deck_count = self._game.state.common_view.cards_to_draw
+            draw_deck_index = self._game.state.draw_deck_index
         else:
             return
-        deck_count = state.common_view.cards_to_draw
-        draw_deck_index = state.draw_deck_index
 
         # Draw deck label and cards (with more spacing from discard pile)
         deck_y = center_y + 180
@@ -892,22 +891,20 @@ class GUIDisplay:
 
     def _draw_tokens(self, center_x: int, y: int):
         """Draw hint and life tokens on top of table."""
-        # Use frozen OLD state during animation, otherwise use current state
+        # Token counts: frozen snapshot during animation, else live.
         if self._frozen_state is not None:
-            state = self._frozen_state
+            hint_tokens = self._frozen_state.common_view.hint_tokens
+            life_tokens = self._frozen_state.common_view.live_tokens
         elif self._game:
-            state = self._game.state
+            hint_tokens = self._game.state.common_view.hint_tokens
+            life_tokens = self._game.state.common_view.live_tokens
         else:
             return
-        # Always use current game for settings (settings don't change)
         if not self._game:
             return
-        settings = self._game.settings
 
-        hint_tokens = state.common_view.hint_tokens
-        life_tokens = state.common_view.live_tokens
-        max_hints = settings.max_hint_tokens
-        max_lives = settings.max_live_tokens
+        max_hints = self._game.settings.max_hint_tokens
+        max_lives = self._game.settings.max_live_tokens
 
         token_size = 18
         token_spacing = 4
@@ -955,16 +952,13 @@ class GUIDisplay:
 
     def _draw_fireworks_row(self, center_x: int, y: int):
         """Draw fireworks (played cards) in a horizontal row, centered."""
-        # Use frozen OLD state during animation, otherwise use current state
-        # This ensures fireworks don't update until animation completes
+        # Fireworks: frozen snapshot during animation, else live.
         if self._frozen_state is not None:
-            # Use the frozen old state directly
-            state = self._frozen_state
+            cards_played = self._frozen_state.common_view.cards_played
         elif self._game:
-            state = self._game.state
+            cards_played = self._game.state.common_view.cards_played
         else:
             return
-        cards_played = state.common_view.cards_played
 
         colors = [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
         card_width = 50
@@ -1023,16 +1017,15 @@ class GUIDisplay:
         label_padding = 10  # Small padding from the edge
         label_x = table_left_edge + label_padding
 
-        # Reconstruct discard pile from common view
-        # Use frozen OLD state during animation, otherwise use current state
+        # Reconstruct discard pile from common view (frozen vs live).
         if self._frozen_state is not None:
-            state = self._frozen_state
+            discarded = self._frozen_state.common_view.cards_discarded
         elif self._game:
-            state = self._game.state
+            discarded = self._game.state.common_view.cards_discarded
         else:
             return
         discard_pile = []
-        for color, suit in state.common_view.cards_discarded.items():
+        for color, suit in discarded.items():
             for number, count in suit.cards.items():
                 for _ in range(count):
                     discard_pile.append(Card(color, number))
@@ -1189,11 +1182,11 @@ class GUIDisplay:
 
     def _draw_player_hands(self):
         """Draw all player hands in a circle with current player at bottom (270°)."""
-        # Use frozen OLD state during animation, otherwise use current state
+        # Hands layout: frozen snapshot during animation, else live.
         if self._frozen_state is not None:
-            state = self._frozen_state
+            paint_state = self._frozen_state
         elif self._game:
-            state = self._game.state
+            paint_state = self._game.state
         else:
             return
 
@@ -1204,7 +1197,7 @@ class GUIDisplay:
         center_y = height // 2
         # Make table smaller (was // 3, now // 4)
         table_radius = min(width, height) // 4
-        num_players = len(state.player_hands)
+        num_players = len(paint_state.player_hands)
 
         # Calculate card dimensions
         card_width = 50
@@ -1212,7 +1205,11 @@ class GUIDisplay:
         spacing = 10
 
         # Find the maximum number of cards in any hand to ensure all hands are outside the table
-        max_cards = max(len(hand.cards) for hand in state.player_hands) if state.player_hands else 5
+        max_cards = (
+            max(len(hand.cards) for hand in paint_state.player_hands)
+            if paint_state.player_hands
+            else 5
+        )
         max_hand_width = max_cards * (card_width + spacing) - spacing
         max_half_width = max_hand_width // 2
 
@@ -1255,7 +1252,7 @@ class GUIDisplay:
             y = center_y + hand_radius * sin(angle_rad)
 
             # Draw player hand
-            hand = state.player_hands[i]
+            hand = paint_state.player_hands[i]
             is_current_player = i == self._current_player
 
             # Draw player label - always on top of hand
@@ -1567,8 +1564,6 @@ class GUIDisplay:
         self._action_menu_context = {"player_idx": player_idx, "card_idx": card_idx}
 
         is_own_card = player_idx == self._current_player
-        state = self._game.state
-        common_view = state.common_view
 
         if is_own_card:
             # Own card: Play/Discard options - use grey buttons with black text for consistency
@@ -1593,7 +1588,7 @@ class GUIDisplay:
             play_btn.pack(pady=2)
 
             # Discard button (if hint tokens not at max)
-            if common_view.hint_tokens < self._game.settings.max_hint_tokens:
+            if self._game.state.common_view.hint_tokens < self._game.settings.max_hint_tokens:
                 discard_btn = tk.Button(
                     self._action_menu,
                     text="Discard",
@@ -1632,7 +1627,7 @@ class GUIDisplay:
                 explanation.pack(pady=2, fill=tk.X)
         else:
             # Other player's card: Hint options (Number first, then Color - Number closer to cursor)
-            if common_view.hint_tokens > 0:
+            if self._game.state.common_view.hint_tokens > 0:
                 number_hint_btn = tk.Button(
                     self._action_menu,
                     text="Number Hint",
@@ -1694,12 +1689,11 @@ class GUIDisplay:
             return
 
         # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
-        state = self._game.state
         # If deck is exhausted, check turns_left - game should only end when turns_left == 0
         # (meaning all players have taken their final turn)
-        if state.turns_left is not None:
+        if self._game.state.turns_left is not None:
             # Deck is exhausted - game ends only when turns_left == 0
-            if state.turns_left == 0:
+            if self._game.state.turns_left == 0:
                 # All players have taken their final turn - game is finished
                 if self._game.is_finished:
                     self._close_action_menu()
@@ -1718,7 +1712,6 @@ class GUIDisplay:
         if teammate_idx is None or card_idx is None:
             return
 
-        # Get the current player (who is making the move) - refresh from game state
         current_player = self._game.current_player
 
         # Safety check: ensure we're not trying to hint ourselves
@@ -1747,14 +1740,13 @@ class GUIDisplay:
             if not self._move_callback:
                 return
             if teammate_idx != current_player:
-                state = self._game.state
                 # Validate teammate index - must be different from current player
                 if (
-                    0 <= teammate_idx < len(state.player_hands)
+                    0 <= teammate_idx < len(self._game.state.player_hands)
                     and teammate_idx != current_player
                     and teammate_idx is not None
                 ):
-                    hand = state.player_hands[teammate_idx]
+                    hand = self._game.state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
                         matching = [i for i, c in enumerate(hand.cards) if c.color == card.color]
@@ -1771,14 +1763,13 @@ class GUIDisplay:
             if not self._move_callback:
                 return
             if teammate_idx != current_player:
-                state = self._game.state
                 # Validate teammate index - must be different from current player
                 if (
-                    0 <= teammate_idx < len(state.player_hands)
+                    0 <= teammate_idx < len(self._game.state.player_hands)
                     and teammate_idx != current_player
                     and teammate_idx is not None
                 ):
-                    hand = state.player_hands[teammate_idx]
+                    hand = self._game.state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
                         matching = [i for i, c in enumerate(hand.cards) if c.number == card.number]
@@ -1821,8 +1812,7 @@ class GUIDisplay:
         if not self._game:
             return
 
-        state = self._game.state
-        deck_empty = state.common_view.cards_to_draw == 0
+        deck_empty = self._game.state.common_view.cards_to_draw == 0
 
         if deck_empty:
             # Show warning banner

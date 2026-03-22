@@ -28,20 +28,19 @@ class TestGameHistory(unittest.TestCase):
 
     def _spend_hint_if_at_max_tokens(self) -> None:
         """Discard is illegal when hint tokens are at maximum; spend one if needed."""
-        state = self.game.state
-        if state.common_view.hint_tokens < self.settings.max_hint_tokens:
+        if self.game.state.common_view.hint_tokens < self.settings.max_hint_tokens:
             return
         cp = self.game.current_player
         for tgt in range(self.settings.num_players):
             if tgt == cp:
                 continue
-            th = state.player_hands[tgt]
+            th = self.game.state.player_hands[tgt]
             if not th.cards:
                 continue
             col = th.cards[0].color
             matching = [i for i, c in enumerate(th.cards) if c.color == col]
             move = ColorHint(tgt, matching, col)
-            if state._validate(cp, move):
+            if self.game.state._validate(cp, move):
                 self.game._process_move(cp, move)
                 self.game._advance_turn()
                 return
@@ -61,8 +60,7 @@ class TestGameHistory(unittest.TestCase):
 
     def test_record_play_move(self):
         """Test recording a play move."""
-        state = self.game.state
-        hand = state.player_hands[0]
+        hand = self.game.state.player_hands[0]
 
         if hand.cards:
             move = Play(0)
@@ -91,10 +89,9 @@ class TestGameHistory(unittest.TestCase):
 
     def test_record_color_hint(self):
         """Test recording a color hint."""
-        state = self.game.state
-        teammate_hand = state.player_hands[1]
+        teammate_hand = self.game.state.player_hands[1]
 
-        if teammate_hand.cards and state.common_view.hint_tokens > 0:
+        if teammate_hand.cards and self.game.state.common_view.hint_tokens > 0:
             color = teammate_hand.cards[0].color
             matching_indices = [i for i, card in enumerate(teammate_hand.cards) if card.color == color]
             if matching_indices:
@@ -119,10 +116,9 @@ class TestGameHistory(unittest.TestCase):
 
     def test_record_number_hint(self):
         """Test recording a number hint."""
-        state = self.game.state
-        teammate_hand = state.player_hands[1]
+        teammate_hand = self.game.state.player_hands[1]
 
-        if teammate_hand.cards and state.common_view.hint_tokens > 0:
+        if teammate_hand.cards and self.game.state.common_view.hint_tokens > 0:
             number = teammate_hand.cards[0].number
             matching_indices = [i for i, card in enumerate(teammate_hand.cards) if card.number == number]
             if matching_indices:

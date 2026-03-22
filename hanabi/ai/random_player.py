@@ -82,9 +82,8 @@ class RandomPlayer(BasePlayer):
         # Only do a final check for hint moves to ensure tokens are still available
         # This is the only case where state can change between validation and selection
         if isinstance(selected, (ColorHint, NumberHint)):
-            # Read hint_tokens directly from common_view RIGHT NOW
-            tokens = self.common_view.hint_tokens
-            if tokens <= 0:
+            # Re-read hint tokens at selection time (state may have changed since validation).
+            if self.common_view.hint_tokens <= 0:
                 # Tokens are 0 - find another valid move from our list
                 # Prefer non-play moves if available
                 other_moves = [m for m in valid_moves if not isinstance(m, (ColorHint, NumberHint))]
@@ -112,13 +111,9 @@ class RandomPlayer(BasePlayer):
         Returns:
             List of all potential moves (game will validate them)
         """
-        # Use the utility function to generate moves
-        common_view = self.common_view
-        game_settings = self.game_settings
-
         return generate_all_valid_moves(
             player_view=player_view,
-            common_view=common_view,
-            game_settings=game_settings,
+            common_view=self.common_view,
+            game_settings=self.game_settings,
             player_index=self._player_index,
         )

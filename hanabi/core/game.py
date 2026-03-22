@@ -1098,9 +1098,8 @@ class Game:
         # Set common view - players need the current state's common_view
         # Note: Each GameState has its own CommonView, so we must update players' references
         # after each state transition to ensure they see current values
-        common_view = self.state.common_view
         for player in self._team.players:
-            player.set_common_view(common_view)
+            player.set_common_view(self.state.common_view)
 
     def _notify_players(self, player_index: int, move: Move) -> None:
         """Notify all players about a move (all players observe all moves)."""
@@ -1156,18 +1155,20 @@ class Game:
             f"player_index {player_index} out of range [0, {len(self._team.players)})"
         )
 
-        current_state = self.state
+        # Snapshot before appending to history (callback needs pre-move state; self.state changes after append).
+        state_before_move = self.state
         logger.debug(
             f"[process_move] Processing move: player={player_index}, move={move}, "
-            f"turn_number={current_state.turn_number}, current_player={current_state.current_player}, "
-            f"turns_left={current_state.turns_left}, cards_to_draw={current_state.common_view.cards_to_draw}"
+            f"turn_number={state_before_move.turn_number}, current_player={state_before_move.current_player}, "
+            f"turns_left={state_before_move.turns_left}, "
+            f"cards_to_draw={state_before_move.common_view.cards_to_draw}"
         )
 
         # Validate the move (callers must supply legal moves; illegal = bug)
         assert self.state._validate(player_index, move), self.state._get_validation_error_message(player_index, move)
 
         # Clone the current state and update it in-place
-        new_state = copy.copy(current_state)
+        new_state = copy.copy(state_before_move)
         new_state._turn_number += 1  # Increment turn number (0-based)
         logger.debug(f"[process_move] After cloning: new turn_number={new_state._turn_number}")
 
@@ -1194,7 +1195,7 @@ class Game:
 
         # Notify global callback with old and new state (for display, logging, etc.)
         if self._on_move is not None:
-            self._on_move(player_index, move, current_state, new_state)
+            self._on_move(player_index, move, state_before_move, new_state)
 
     def _advance_turn(self) -> None:
         """Advance to the next player's turn (internal method)."""
@@ -1233,18 +1234,17 @@ class Game:
         """
         assert self._turns, "Game not initialized. No turns yet."
         while not self.is_finished:
-            current_player = self.state.current_player
-            player = self._team.players[current_player]
+            player = self._team.players[self.state.current_player]
 
             # Get player view
-            player_view = self._get_player_view(current_player)
+            player_view = self._get_player_view(self.state.current_player)
 
             # Get move from player (must be legal; illegal moves are bugs in the player / UI)
             move = player.play(player_view)
 
             # Process the move; _process_move asserts move legality
             # Note: _process_move calls _notify_players internally before the callback
-            self._process_move(current_player, move)
+            self._process_move(self.state.current_player, move)
 
             # Advance turn
             self._advance_turn()

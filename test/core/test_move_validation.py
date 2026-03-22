@@ -83,8 +83,7 @@ class TestMoveValidation(unittest.TestCase):
     def test_discard_when_hints_not_full(self):
         """Test that discarding when hint tokens are not at maximum passes."""
         # Ensure hint tokens are not at maximum
-        common_view = self.state.common_view
-        if common_view.hint_tokens < self.state.settings.max_hint_tokens:
+        if self.state.common_view.hint_tokens < self.state.settings.max_hint_tokens:
             hand = self.state.player_hands[0]
             if len(hand.cards) > 0:
                 move = Discard(0)

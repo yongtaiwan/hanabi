@@ -13,7 +13,7 @@ from typing import List, Set, Dict, Optional, TYPE_CHECKING
 from collections import Counter
 
 from hanabi.core.player import HintTrackingPlayer
-from hanabi.core.game import PlayerView
+from hanabi.core.game import CommonView, PlayerView
 from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
@@ -85,9 +85,8 @@ class CommonSensePlayer(HintTrackingPlayer):
     def _get_all_possible_cards(self) -> List[Card]:
         """Get all possible cards in the game from settings."""
         if not self._all_possible_cards:
-            settings = self.game_settings
             cards = []
-            for color, suit in settings.cards.items():
+            for color, suit in self.game_settings.cards.items():
                 for number, quantity in suit.cards.items():
                     for _ in range(quantity):
                         cards.append(Card(color, number))
@@ -96,15 +95,13 @@ class CommonSensePlayer(HintTrackingPlayer):
 
     def _update_seen_cards(self, player_view: PlayerView) -> None:
         """Update the set of cards we've seen."""
-        common_view = self.common_view
-
         # Add all cards from teammates' hands
         for teammate_idx, hand in player_view.teammates.items():
             for card in hand.cards:
                 self._seen_cards.add(card)
 
         # Add all discarded cards (reconstruct from cards_discarded structure)
-        for color, suit in common_view.cards_discarded.items():
+        for color, suit in self.common_view.cards_discarded.items():
             # Suit.cards is a Dict[Number, int] mapping number to count
             for number, count in suit.cards.items():
                 for _ in range(count):
@@ -186,18 +183,18 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         return possible
 
-    def _is_card_playable(self, card: Card, common_view) -> bool:
+    def _is_card_playable(self, card: Card, view: CommonView) -> bool:
         """
         Check if a card is playable given the current game state.
 
         Args:
             card: The card to check
-            common_view: The common view of the game
+            view: Shared common view of the game
 
         Returns:
             True if the card is playable
         """
-        cards_played = common_view.cards_played
+        cards_played = view.cards_played
 
         if card.color not in cards_played:
             # Color not started - need a 1
@@ -219,11 +216,10 @@ class CommonSensePlayer(HintTrackingPlayer):
             True if playing this card could lose a life
         """
         possible_cards = self._get_possible_cards_for_position(position, player_view)
-        common_view = self.common_view
 
         # If ANY possible card is not playable, we could lose a life
         for card in possible_cards:
-            if not self._is_card_playable(card, common_view):
+            if not self._is_card_playable(card, self.common_view):
                 return True
 
         return False
@@ -243,11 +239,9 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.common_view
-
         # All possible cards must be playable
         for card in possible_cards:
-            if not self._is_card_playable(card, common_view):
+            if not self._is_card_playable(card, self.common_view):
                 return False
 
         return True
@@ -270,11 +264,9 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.common_view
-
         # Check if ANY possible card is playable
         for card in possible_cards:
-            if self._is_card_playable(card, common_view):
+            if self._is_card_playable(card, self.common_view):
                 return True
 
         return False
@@ -294,17 +286,14 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return False
 
-        common_view = self.common_view
-        cards_played = common_view.cards_played
-
         # Check if all possible cards are 5s that finish suits
         for card in possible_cards:
             if card.number != Number.FIVE:
                 return False
             # Check if this 5 would finish the suit (4 is already played)
-            if card.color not in cards_played:
+            if card.color not in self.common_view.cards_played:
                 return False
-            if cards_played[card.color].value != 4:
+            if self.common_view.cards_played[card.color].value != 4:
                 return False
 
         return True
@@ -328,7 +317,6 @@ class CommonSensePlayer(HintTrackingPlayer):
             return 0
 
         teammate_hand = player_view.teammates[teammate_idx]
-        common_view = self.common_view
 
         # Count cards that would be identified as playable by this hint
         count = 0
@@ -338,7 +326,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             card = teammate_hand.cards[card_idx]
 
             # Check if this card is playable
-            if self._is_card_playable(card, common_view):
+            if self._is_card_playable(card, self.common_view):
                 # Check if teammate already knows this card is playable
                 # (We can't know for sure, but we can estimate)
                 # For now, assume any playable card identified is "new"
@@ -395,9 +383,6 @@ class CommonSensePlayer(HintTrackingPlayer):
         if not possible_cards:
             return 0.0  # Unknown card, medium risk
 
-        common_view = self.common_view
-        cards_played = common_view.cards_played
-
         # Calculate risk based on:
         # - Cards that are needed to finish suits (especially 5s)
         # - Cards that are the last copy of a needed number
@@ -406,8 +391,8 @@ class CommonSensePlayer(HintTrackingPlayer):
         for card in possible_cards:
             # High risk if it's a 5 that's needed
             if card.number == Number.FIVE:
-                if card.color in cards_played:
-                    if cards_played[card.color].value == 4:
+                if card.color in self.common_view.cards_played:
+                    if self.common_view.cards_played[card.color].value == 4:
                         risk += 10.0  # This 5 is needed to finish the suit
                 else:
                     # Suit not started, but 5s are always valuable
@@ -415,8 +400,8 @@ class CommonSensePlayer(HintTrackingPlayer):
 
             # Medium risk if it's a 4 and we need it
             elif card.number == Number.FOUR:
-                if card.color in cards_played:
-                    if cards_played[card.color].value == 3:
+                if card.color in self.common_view.cards_played:
+                    if self.common_view.cards_played[card.color].value == 3:
                         risk += 3.0
 
         # Normalize by number of possible cards
@@ -494,12 +479,10 @@ class CommonSensePlayer(HintTrackingPlayer):
         self._update_seen_cards(player_view)
 
         # Generate all valid moves
-        common_view = self.common_view
-        game_settings = self.game_settings
         valid_moves = generate_all_valid_moves(
             player_view=player_view,
-            common_view=common_view,
-            game_settings=game_settings,
+            common_view=self.common_view,
+            game_settings=self.game_settings,
             player_index=self._player_index,
         )
 
@@ -556,7 +539,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Rule 4: Hint that identifies most new playable cards, tiebreak by player playing soon
         # Avoid duplicate hints (don't give hints teammates already have)
         hint_moves = [m for m in valid_moves if isinstance(m, (ColorHint, NumberHint))]
-        if hint_moves and common_view.hint_tokens > 0:
+        if hint_moves and self.common_view.hint_tokens > 0:
             # Filter out duplicate hints
             non_duplicate_hints = []
             for hint in hint_moves:
@@ -569,7 +552,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             # Score hints by number of new playable cards
             best_hint = None
             best_score = -1
-            num_players = game_settings.num_players
+            num_players = self.game_settings.num_players
 
             for hint in hints_to_consider:
                 playable_count = self._count_new_playable_cards_from_hint(hint, player_view)
@@ -601,7 +584,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         # NEVER discard a card that is definitely playable
         # NEVER discard a card that we have hints about AND could be playable
         # (If teammate hinted us about a card, they likely want us to play it)
-        if common_view.hint_tokens < game_settings.max_hint_tokens:
+        if self.common_view.hint_tokens < self.game_settings.max_hint_tokens:
             discard_moves = [m for m in valid_moves if isinstance(m, Discard)]
             # Filter out playable cards - never discard cards we know are playable
             safe_discard_moves = []
@@ -639,7 +622,7 @@ class CommonSensePlayer(HintTrackingPlayer):
 
         # Rule 6: Give hint that covers most cards, tiebreak by player playing soon
         # Avoid duplicate hints
-        if hint_moves and common_view.hint_tokens > 0:
+        if hint_moves and self.common_view.hint_tokens > 0:
             # Filter out duplicate hints
             non_duplicate_hints = []
             for hint in hint_moves:
@@ -651,7 +634,7 @@ class CommonSensePlayer(HintTrackingPlayer):
 
             best_hint = None
             best_score = -1
-            num_players = game_settings.num_players
+            num_players = self.game_settings.num_players
 
             for hint in hints_to_consider:
                 card_count = self._get_hint_card_count(hint, player_view)

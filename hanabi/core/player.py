@@ -301,10 +301,8 @@ class StrategyAlphaPlayer(BasePlayer):
         """
         # Placeholder for Alpha strategy implementation
         # This would contain the actual strategy logic
-        common_view = self.common_view
-
         # Simple strategy: try to play if we have hint tokens, otherwise discard
-        if common_view.hint_tokens < self.game_settings.max_hint_tokens:
+        if self.common_view.hint_tokens < self.game_settings.max_hint_tokens:
             # Prefer discarding to gain hint tokens
             return Discard(0)  # Simplified - would need actual strategy
         else:

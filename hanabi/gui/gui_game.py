@@ -640,9 +640,8 @@ class GUIGame:
             for player in actual_players:
                 player.set_game_settings(settings)
             # Update common view for AI players
-            common_view = self._game.state.common_view
             for player in actual_players:
-                player.set_common_view(common_view)
+                player.set_common_view(self._game.state.common_view)
 
         # Set game reference in players (needed for display updates)
         for player in self._players:
@@ -1091,10 +1090,9 @@ class GUIGame:
         assert self._game is not None, "No game is active."
 
         # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
-        state = self._game.state
-        if state.turns_left is not None:
+        if self._game.state.turns_left is not None:
             # Deck is exhausted - game ends only when turns_left == 0
-            if state.turns_left == 0:
+            if self._game.state.turns_left == 0:
                 # All players have taken their final turn - game is finished
                 if self._game.is_finished:
                     if not hasattr(self, "_game_ended") or not self._game_ended:
@@ -1107,15 +1105,14 @@ class GUIGame:
                 self._on_game_end()
             return
 
-        current_player = self._game.current_player
-
         # Set the move on the current player (this will unblock player.play())
         # Display updates are now handled by the global callback in Game
         # Only call set_move on players that have it (GUIPlayer instances)
-        player = self._players[current_player]
+        player = self._players[self._game.current_player]
         assert hasattr(player, "set_move"), (
-            f"Attempted to call set_move on {type(player).__name__} (player {current_player}), "
-            f"which doesn't have this method. This should only be called for GUIPlayer instances."
+            f"Attempted to call set_move on {type(player).__name__} "
+            f"(player {self._game.current_player}), which doesn't have this method. "
+            f"This should only be called for GUIPlayer instances."
         )
         player.set_move(move)
 
@@ -1569,7 +1566,7 @@ class GUIGame:
                 logger.warning(f"Replay: Failed to parse move '{move_str}'")
                 continue  # Skip invalid moves
 
-            # Get state before move
+            # Snapshot before applying move (self._game.state changes after _process_move).
             old_state = self._game.state
 
             # Skip illegal moves in corrupt/desynced replay files (engine asserts on bugs)
@@ -1584,7 +1581,6 @@ class GUIGame:
             # Note: _process_move calls _notify_players internally
             self._game._advance_turn()
 
-            # Get state after move
             new_state = self._game.state
 
             # Update hint tracking (callback may have done this, but ensure it's done)

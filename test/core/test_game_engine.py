@@ -37,8 +37,7 @@ class TestGame(unittest.TestCase):
 
     def test_play_valid_card(self):
         """Test playing a valid card."""
-        state = self.game.state
-        hand = state.player_hands[0]
+        hand = self.game.state.player_hands[0]
 
         # Find a card that can be played (a 1 of any color)
         playable_card_index = None
@@ -64,8 +63,7 @@ class TestGame(unittest.TestCase):
 
     def test_play_invalid_card(self):
         """Test playing an invalid card."""
-        state = self.game.state
-        hand = state.player_hands[0]
+        hand = self.game.state.player_hands[0]
 
         # Find a card that cannot be played (not a 1, or wrong sequence)
         invalid_card_index = None
@@ -75,7 +73,7 @@ class TestGame(unittest.TestCase):
                 break
 
         if invalid_card_index is not None:
-            initial_lives = state.common_view.live_tokens
+            initial_lives = self.game.state.common_view.live_tokens
             move = Play(invalid_card_index)
             # Invalid play is still processed (card is discarded, life lost)
             try:
@@ -89,17 +87,15 @@ class TestGame(unittest.TestCase):
 
     def test_discard_card(self):
         """Test discarding a card."""
-        state = self.game.state
         # Discarding is illegal when hint tokens are already at maximum
-        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
-            teammate_hand = state.player_hands[1]
+        if self.game.state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            teammate_hand = self.game.state.player_hands[1]
             color = teammate_hand.cards[0].color
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
             self.game.process_move(0, ColorHint(1, matching, color))
             self.game._advance_turn()
-            state = self.game.state
 
-        initial_hint_tokens = state.common_view.hint_tokens
+        initial_hint_tokens = self.game.state.common_view.hint_tokens
         discarder = self.game.current_player
         move = Discard(0)
         try:
@@ -118,11 +114,10 @@ class TestGame(unittest.TestCase):
 
     def test_color_hint(self):
         """Test giving a color hint."""
-        state = self.game.state
-        initial_hint_tokens = state.common_view.hint_tokens
+        initial_hint_tokens = self.game.state.common_view.hint_tokens
 
         # Get teammate's hand
-        teammate_hand = state.player_hands[1]
+        teammate_hand = self.game.state.player_hands[1]
 
         # Find a color that exists in teammate's hand
         color_to_hint = None
@@ -146,11 +141,10 @@ class TestGame(unittest.TestCase):
 
     def test_number_hint(self):
         """Test giving a number hint."""
-        state = self.game.state
-        initial_hint_tokens = state.common_view.hint_tokens
+        initial_hint_tokens = self.game.state.common_view.hint_tokens
 
         # Get teammate's hand
-        teammate_hand = state.player_hands[1]
+        teammate_hand = self.game.state.player_hands[1]
 
         # Find a number that exists in teammate's hand
         number_to_hint = None
@@ -182,8 +176,7 @@ class TestGame(unittest.TestCase):
     def test_invalid_move_no_hint_tokens(self):
         """Test that hint cannot be given without hint tokens."""
         # Use up all hint tokens
-        state = self.game.state
-        teammate_hand = state.player_hands[1]
+        teammate_hand = self.game.state.player_hands[1]
 
         # Find a color to hint
         color_to_hint = teammate_hand.cards[0].color if teammate_hand.cards else None
@@ -193,22 +186,21 @@ class TestGame(unittest.TestCase):
 
         if color_to_hint and matching_indices:
             # Use up all hint tokens (always move on behalf of the current player)
-            while state.common_view.hint_tokens > 0:
+            while self.game.state.common_view.hint_tokens > 0:
                 cp = self.game.current_player
                 moved = False
                 for tgt in range(3):
                     if tgt == cp:
                         continue
-                    th = state.player_hands[tgt]
+                    th = self.game.state.player_hands[tgt]
                     if not th.cards:
                         continue
                     col = th.cards[0].color
                     matching = [i for i, c in enumerate(th.cards) if c.color == col]
                     move = ColorHint(tgt, matching, col)
-                    if state._validate(cp, move):
+                    if self.game.state._validate(cp, move):
                         self.game.process_move(cp, move)
                         self.game._advance_turn()
-                        state = self.game.state
                         moved = True
                         break
                 if not moved:
@@ -235,8 +227,7 @@ class TestGame(unittest.TestCase):
     def test_deck_exhaustion(self):
         """Test that game handles deck exhaustion correctly."""
         # Play/discard cards until deck is exhausted
-        state = self.game.state
-        initial_deck_size = state.common_view.cards_to_draw
+        initial_deck_size = self.game.state.common_view.cards_to_draw
 
         # Make many moves to exhaust deck
         moves_made = 0
@@ -266,8 +257,7 @@ class TestGame(unittest.TestCase):
 
     def test_game_finished_no_lives(self):
         """Test that game finishes when no lives remain."""
-        state = self.game.state
-        hand = state.player_hands[0]
+        hand = self.game.state.player_hands[0]
 
         # Play invalid cards to lose all lives
         lives_lost = 0
@@ -292,8 +282,7 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.get_score(), 0)
 
         # Play some cards and check score increases
-        state = self.game.state
-        hand = state.player_hands[0]
+        hand = self.game.state.player_hands[0]
 
         # Find and play a 1
         for i, card in enumerate(hand.cards):
@@ -309,7 +298,6 @@ class TestGame(unittest.TestCase):
 
     def test_hint_shifting_after_play(self):
         """Test that hints shift correctly when a card is played."""
-        state = self.game.state
 
         # Manually set up hints on the player:
         # Index 3: number=1 hint

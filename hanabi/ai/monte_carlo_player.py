@@ -393,14 +393,11 @@ class MonteCarloPlayer(HintTrackingPlayer):
         Returns:
             Best move according to Monte Carlo evaluation
         """
-        common_view = self.common_view
-        settings = self.game_settings
-
         # Generate all candidate moves
         candidate_moves = generate_all_valid_moves(
             player_view=player_view,
-            common_view=common_view,
-            game_settings=settings,
+            common_view=self.common_view,
+            game_settings=self.game_settings,
             player_index=self._player_index,
         )
 
@@ -418,12 +415,15 @@ class MonteCarloPlayer(HintTrackingPlayer):
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = f"  Score: {common_view.cards_played}"
+        debug_msg = f"  Score: {self.common_view.cards_played}"
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = f"  Hint tokens: {common_view.hint_tokens}, Live tokens: {common_view.live_tokens}"
+        debug_msg = (
+            f"  Hint tokens: {self.common_view.hint_tokens}, "
+            f"Live tokens: {self.common_view.live_tokens}"
+        )
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
@@ -781,12 +781,9 @@ class MonteCarloPlayer(HintTrackingPlayer):
         Returns:
             A fully determinized MCGameState
         """
-        common_view = self.common_view
-        settings = self.game_settings
-
         # 1. Build global card multiset from settings
         all_cards: List[Card] = []
-        for color, suit in settings.cards.items():
+        for color, suit in self.game_settings.cards.items():
             for number, quantity in suit.cards.items():
                 for _ in range(quantity):
                     all_cards.append(Card(color, number))
@@ -801,7 +798,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
                     card_multiset[card] -= 1
 
         # Discarded cards
-        for color, suit in common_view.cards_discarded.items():
+        for color, suit in self.common_view.cards_discarded.items():
             for number, count in suit.cards.items():
                 card = Card(color, number)
                 for _ in range(count):
@@ -809,7 +806,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
                         card_multiset[card] -= 1
 
         # Played cards (need to subtract all numbers up to highest)
-        for color, highest_number in common_view.cards_played.items():
+        for color, highest_number in self.common_view.cards_played.items():
             for num_value in range(1, highest_number.value + 1):
                 number = Number(num_value)
                 card = Card(color, number)
@@ -922,7 +919,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # 6. Build hands for all players
         hands: List[List[Card]] = []
-        for i in range(settings.num_players):
+        for i in range(self.game_settings.num_players):
             if i == self._player_index:
                 hands.append(own_hand.copy())
             else:
@@ -933,23 +930,23 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # 7. Build cards_discarded dict
         cards_discarded: Dict[Color, Dict[Number, int]] = {}
-        for color, suit in common_view.cards_discarded.items():
+        for color, suit in self.common_view.cards_discarded.items():
             cards_discarded[color] = suit.cards.copy()
 
         # 8. Create MCGameState
         # Estimate turns_left: None if deck not exhausted, else approximate
         turns_left = None
         if len(deck_cards) == 0:
-            turns_left = settings.num_players
+            turns_left = self.game_settings.num_players
 
         return MCGameState(
-            settings=settings,
+            settings=self.game_settings,
             hands=hands,
             deck=deck_cards,
             current_player=self._player_index,
-            live_tokens=common_view.live_tokens,
-            hint_tokens=common_view.hint_tokens,
-            cards_played=common_view.cards_played.copy(),
+            live_tokens=self.common_view.live_tokens,
+            hint_tokens=self.common_view.hint_tokens,
+            cards_played=self.common_view.cards_played.copy(),
             cards_discarded=cards_discarded,
             cards_to_draw=len(deck_cards),
             turns_left=turns_left,

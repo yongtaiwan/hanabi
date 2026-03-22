@@ -118,8 +118,6 @@ class RecommendationPlayer(BasePlayer):
         Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.common_view`
         for shared piles and tokens (no access to full :class:`~hanabi.core.game.Game`).
         """
-        common = self.common_view
-        settings = self.game_settings
         others_sum = 0
         for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
             if p == self._player_index:
@@ -127,14 +125,16 @@ class RecommendationPlayer(BasePlayer):
             if p not in player_view.teammates:
                 continue
             hand = player_view.teammates[p].cards
-            rec = self._get_recommendation_for_hand(hand, common, settings)
+            rec = self._get_recommendation_for_hand(
+                hand, self.common_view, self.game_settings
+            )
             others_sum += rec
         rec_hinter = 0
         if hinter is not None and hinter in player_view.teammates:
             rec_hinter = self._get_recommendation_for_hand(
                 player_view.teammates[hinter].cards,
-                common,
-                settings,
+                self.common_view,
+                self.game_settings,
             )
         return (hint_value - others_sum + rec_hinter) % 8
 
@@ -186,15 +186,15 @@ class RecommendationPlayer(BasePlayer):
         return 4 + (hand_size - 1)
 
     def play(self, player_view: PlayerView) -> Move:
-        common = self.common_view
-        settings = self.game_settings
         hand_size = player_view.own_hand_size
         assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
-        errors = settings.max_live_tokens - common.live_tokens
+        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
 
         # Get my decoded recommendation
         my_rec = self._get_my_recommendation(player_view)
-        valid_moves = generate_all_valid_moves(player_view, common, settings, self._player_index)
+        valid_moves = generate_all_valid_moves(
+            player_view, self.common_view, self.game_settings, self._player_index
+        )
         valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
 
         if not valid_moves:
@@ -227,7 +227,7 @@ class RecommendationPlayer(BasePlayer):
                     return Play(play_idx)
 
         # 3) If hint token available, give hint
-        if common.hint_tokens > 0:
+        if self.common_view.hint_tokens > 0:
             hint_move = self._compute_hint(player_view)
             if hint_move is not None:
                 self._my_decoded_recommendation = None  # we are giving the hint; no recommendation for us from it
@@ -280,8 +280,6 @@ class RecommendationPlayer(BasePlayer):
 
     def _compute_hint(self, player_view: PlayerView) -> Optional[Move]:
         """Compute hint that encodes sum of recommendations mod 8."""
-        common = self.common_view
-        settings = self.game_settings
         total = 0
         for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
             if p == self._player_index:
@@ -289,7 +287,9 @@ class RecommendationPlayer(BasePlayer):
             if p not in player_view.teammates:
                 continue
             hand = player_view.teammates[p].cards
-            rec = self._get_recommendation_for_hand(hand, common, settings)
+            rec = self._get_recommendation_for_hand(
+                hand, self.common_view, self.game_settings
+            )
             total += rec
         value = total % 8
         pos_0, is_number = (value, True) if value < 4 else (value - 4, False)
