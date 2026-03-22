@@ -591,14 +591,14 @@ class GUIGame:
                     move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
                 else:
                     move_msg = f"P{player_index + 1} discards card {move.card + 1}."
-            elif isinstance(move, ColorHint):
-                indices_str = ", ".join(str(c + 1) for c in move.cards)
-                move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
             elif isinstance(move, NumberHint):
                 indices_str = ", ".join(str(c + 1) for c in move.cards)
                 move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.number.value} at {indices_str}"
+            elif isinstance(move, ColorHint):
+                indices_str = ", ".join(str(c + 1) for c in move.cards)
+                move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
             else:
-                move_msg = f"P{player_index + 1} makes move: {move}"
+                assert False, f"unexpected move type in GUI move_msg: {type(move)}"
 
             # Format with timestamp and turn number: "[HH:MM:SS T##] message"
             formatted_msg = f"[{timestamp} T{turn_number:02d}] {move_msg}"
@@ -1064,25 +1064,18 @@ class GUIGame:
                     message += " " + " ".join(additional_parts) + "."
 
             return message
-        elif isinstance(move, Discard):
+        if isinstance(move, Discard):
             if move.card < len(player_hand.cards):
                 card = player_hand.cards[move.card]
-                # Format: "discards blue 3." (with period, lowercase)
                 return f"discards {card.color.name.lower()} {card.number.value}."
-            # Use 1-based indexing for card position
             return f"discards card {move.card + 1}."
-        elif isinstance(move, ColorHint):
-            # Format: "hints player 2: white at 2, 4, 5." (with "at", period, lowercase)
-            # Use 1-based indexing for card positions
-            card_indices = ", ".join(str(card_idx + 1) for card_idx in move.cards)
-            return f"hints player {move.teammate + 1}: {move.color.name.lower()} at {card_indices}."
-        elif isinstance(move, NumberHint):
-            # Format: "hints player 2: 3 at 1, 3." (with "at", period, lowercase)
-            # Use 1-based indexing for card positions
+        if isinstance(move, NumberHint):
             card_indices = ", ".join(str(card_idx + 1) for card_idx in move.cards)
             return f"hints player {move.teammate + 1}: {move.number.value} at {card_indices}."
-        else:
-            return f"makes move: {move}."
+        if isinstance(move, ColorHint):
+            card_indices = ", ".join(str(card_idx + 1) for card_idx in move.cards)
+            return f"hints player {move.teammate + 1}: {move.color.name.lower()} at {card_indices}."
+        assert False, f"unexpected move type in _format_move_message: {type(move)}"
 
     def _on_move_made(self, move: Move):
         """

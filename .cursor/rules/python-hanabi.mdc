@@ -12,3 +12,10 @@ alwaysApply: false
 - **Classes**: Prefer private fields with a leading underscore and `@property` accessors where that pattern exists. Docstrings on public classes and non-obvious methods; avoid verbose comments on obvious code.
 - **Public API naming**: The game layer exposes **mixed naming** (e.g. camelCase attributes like `currentPlayer`, `playerHands`, `drawDeck` on some types). **Preserve existing public names** unless a refactor explicitly renames the API.
 - **Tests**: Subclass `unittest.TestCase`, use `setUp` for fixtures, and one-line docstrings on test methods describing behavior under test.
+
+# Control flow and dispatch
+
+- **Short branches first**: When order is semantically equivalent, handle the **smallest** branch first (fewer lines or simpler predicate) so the main case stays easy to scan.
+- **Early exit**: Prefer **guard clauses** (`return` soon) over deep nesting; keep the “happy path” or largest case at the end of the function when that reads best.
+- **Exhaustive dispatch** (closed set of variants, e.g. all `Move` subclasses the engine knows): List **every** case explicitly; use `assert False, f"unexpected … {type(x)}"` instead of a silent `else: return` / generic fallback. This matches repo rules: unexpected types are bugs.
+- **Event handlers** (`observe`, etc.) where **ignoring** most events is correct: use early handling + `return` for the cases you care about; a final **plain `return`** (no assert) is OK when “everything else is intentionally ignored”—add a one-line comment if non-obvious.

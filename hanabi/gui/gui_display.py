@@ -2634,10 +2634,12 @@ class GUIDisplay:
 
                 if isinstance(move, ColorHint):
                     self._hints[teammate_idx][card_idx]["color"] = move.color
-                elif isinstance(move, NumberHint):
+                else:
+                    assert isinstance(move, NumberHint)
                     self._hints[teammate_idx][card_idx]["number"] = move.number
+            return
 
-        elif isinstance(move, CardMove):
+        if isinstance(move, CardMove):
             # A card was played or discarded - shift hint indices
             card_index = move.card
 
@@ -2685,3 +2687,6 @@ class GUIDisplay:
                             # Card shifted left by 1 due to removal
                             new_hints[old_idx - 1] = hint_data
                 self._hints[player_index] = new_hints
+            return
+
+        assert False, f"unexpected move type in update_hints_from_move: {type(move)}"

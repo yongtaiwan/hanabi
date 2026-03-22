@@ -77,27 +77,37 @@ class RecommendationPlayer(BasePlayer):
     def observe(self, player_index: int, move: Move, **kwargs) -> None:
         assert self.gameSettings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
         super().observe(player_index, move, **kwargs)
-        if isinstance(move, (ColorHint, NumberHint)):
-            self._last_hinter = player_index
-            self._last_hint_move = move
-            n = self.gameSettings.numPlayers
-            pos = (move.teammate - player_index - 1) % n
-            if pos < 0:
-                pos += n
-            self._last_hint_value = pos if isinstance(move, NumberHint) else (4 + pos)
-            self._plays_since_hint = 0
-            # Decode our recommendation using state at hint time (critical: hands unchanged yet).
-            game = kwargs.get("game")
-            if game is not None and self._player_index != player_index:
-                view_at_hint = game._getPlayerView(self._player_index)
-                self._my_decoded_recommendation = self._decode_recommendation_with_view(
-                    view_at_hint, self._last_hint_value, self._last_hinter
-                )
-            elif player_index == self._player_index:
-                # We are the hinter; clear so we don't use a stale recommendation until next hint to us
-                self._my_decoded_recommendation = None
-        elif isinstance(move, Play):
+
+        if isinstance(move, Play):
             self._plays_since_hint += 1
+            return
+
+        if isinstance(move, Discard):
+            return
+
+        if not isinstance(move, (ColorHint, NumberHint)):
+            assert False, f"unexpected move type for RecommendationPlayer.observe: {type(move)}"
+
+        self._last_hinter = player_index
+        self._last_hint_move = move
+        n = self.gameSettings.numPlayers
+        pos = (move.teammate - player_index - 1) % n
+        if isinstance(move, NumberHint):
+            self._last_hint_value = pos
+        else:
+            assert isinstance(move, ColorHint)
+            self._last_hint_value = 4 + pos
+        self._plays_since_hint = 0
+        # Decode using state at hint time (hands unchanged yet).
+        game = kwargs.get("game")
+        if game is not None and self._player_index != player_index:
+            view_at_hint = game._getPlayerView(self._player_index)
+            self._my_decoded_recommendation = self._decode_recommendation_with_view(
+                view_at_hint, self._last_hint_value, self._last_hinter
+            )
+            return
+        if player_index == self._player_index:
+            self._my_decoded_recommendation = None
 
     def _decode_recommendation_with_view(
         self, player_view: PlayerView, hint_value: int, hinter: Optional[int]
@@ -265,12 +275,14 @@ class RecommendationPlayer(BasePlayer):
                         f"Hint: give color {hint_move.color.name.lower()} to P{hint_move.teammate + 1} "
                         "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
                     )
-                else:
+                    return hint_move
+                if isinstance(hint_move, NumberHint):
                     self._last_decision_summary = (
                         f"Hint: give number {hint_move.number.value} to P{hint_move.teammate + 1} "
                         "(encodes sum of all others' recommendations mod 8; each teammate decodes their own)"
                     )
-                return hint_move
+                    return hint_move
+                assert False, f"unexpected hint type from _compute_hint: {type(hint_move)}"
 
         # 4) If most recent recommendation was discard -> discard that card
         if my_rec is not None and 4 <= my_rec <= 7:
@@ -298,11 +310,14 @@ class RecommendationPlayer(BasePlayer):
         m = valid_moves[0]
         if isinstance(m, Play):
             self._last_decision_summary = f"Fallback: play card at index {m.card}"
-        elif isinstance(m, Discard):
+            return m
+        if isinstance(m, Discard):
             self._last_decision_summary = f"Fallback: discard card at index {m.card}"
-        else:
+            return m
+        if isinstance(m, (ColorHint, NumberHint)):
             self._last_decision_summary = "Fallback: first valid move (hint)"
-        return m
+            return m
+        assert False, f"unexpected move type in fallback: {type(m)}"
 
     def _compute_hint(self, player_view: PlayerView) -> Optional[Move]:
         """Compute hint that encodes sum of recommendations mod 8."""
@@ -328,18 +343,18 @@ class RecommendationPlayer(BasePlayer):
         if not hand.cards:
             return None
         if is_number:
-            # Pick a number that appears in target's hand
             for num in Number:
                 indices = [i for i, c in enumerate(hand.cards) if c.number == num]
                 if indices:
                     return NumberHint(target, indices, num)
-        else:
-            for color in Color:
-                if color == Color.MULTI:
-                    continue
-                indices = [i for i, c in enumerate(hand.cards) if c.color == color]
-                if indices:
-                    return ColorHint(target, indices, color)
+            return None
+
+        for color in Color:
+            if color == Color.MULTI:
+                continue
+            indices = [i for i, c in enumerate(hand.cards) if c.color == color]
+            if indices:
+                return ColorHint(target, indices, color)
         return None
 
     def get_decision_summary(self) -> Optional[str]:
@@ -356,22 +371,25 @@ class RecommendationPlayer(BasePlayer):
             if move.card < 0 or move.card >= hand_size:
                 return False
             return common.hintTokens < settings.maxHintTokens
-        if isinstance(move, (ColorHint, NumberHint)):
-            if common.hintTokens <= 0:
+        if isinstance(move, ColorHint):
+            return self._is_hint_move_valid(move, player_view)
+        if isinstance(move, NumberHint):
+            return self._is_hint_move_valid(move, player_view)
+        assert False, f"unexpected move type in _is_move_valid: {type(move)}"
+
+    def _is_hint_move_valid(self, move: ColorHint | NumberHint, player_view: PlayerView) -> bool:
+        common = self.commonView
+        if common.hintTokens <= 0:
+            return False
+        if move.teammate not in player_view.teammates or move.teammate == self._player_index:
+            return False
+        if not move.cards:
+            return False
+        thand = player_view.teammates[move.teammate]
+        for i in move.cards:
+            if i < 0 or i >= len(thand.cards):
                 return False
-            if move.teammate not in player_view.teammates or move.teammate == self._player_index:
-                return False
-            if not move.cards:
-                return False
-            thand = player_view.teammates[move.teammate]
-            for i in move.cards:
-                if i < 0 or i >= len(thand.cards):
-                    return False
-            if isinstance(move, ColorHint):
-                if any(thand.cards[i].color != move.color for i in move.cards):
-                    return False
-            else:
-                if any(thand.cards[i].number != move.number for i in move.cards):
-                    return False
-            return True
-        return False
+        if isinstance(move, ColorHint):
+            return not any(thand.cards[i].color != move.color for i in move.cards)
+        assert isinstance(move, NumberHint)
+        return not any(thand.cards[i].number != move.number for i in move.cards)

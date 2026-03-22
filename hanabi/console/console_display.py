@@ -703,19 +703,18 @@ class ConsoleDisplay:
 
         if isinstance(move, Play):
             return f"{player_label}: {Colors.BRIGHT_GREEN}Played{Colors.RESET} card at position {move.card}"
-        elif isinstance(move, Discard):
+        if isinstance(move, Discard):
             return f"{player_label}: {Colors.BRIGHT_YELLOW}Discarded{Colors.RESET} card at position {move.card}"
-        elif isinstance(move, ColorHint):
+        if isinstance(move, NumberHint):
+            number = move.number.value
+            cards_str = ", ".join(str(c) for c in move.cards)
+            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} number {Colors.BRIGHT_WHITE}{number}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
+        if isinstance(move, ColorHint):
             color_name = move.color.name
             color_code = self._color_map.get(move.color, Colors.BRIGHT_WHITE)
             cards_str = ", ".join(str(c) for c in move.cards)
             return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} {color_code}{color_name}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
-        elif isinstance(move, NumberHint):
-            number = move.number.value
-            cards_str = ", ".join(str(c) for c in move.cards)
-            return f"{player_label}: {Colors.BRIGHT_MAGENTA}Hinted{Colors.RESET} number {Colors.BRIGHT_WHITE}{number}{Colors.RESET} to Player {move.teammate + 1} (cards: {cards_str})"
-        else:
-            return f"{player_label}: {move}"
+        assert False, f"unexpected move type in _format_move_for_display: {type(move)}"
 
     def clear_previous_round_moves(self) -> None:
         """Clear the previous round moves (e.g., at start of new game)."""

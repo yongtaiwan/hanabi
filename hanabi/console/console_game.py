@@ -176,14 +176,14 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
                 move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
             else:
                 move_msg = f"P{player_index + 1} discards card {move.card + 1}."
-        elif isinstance(move, ColorHint):
-            indices_str = ", ".join(str(c + 1) for c in move.cards)
-            move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
         elif isinstance(move, NumberHint):
             indices_str = ", ".join(str(c + 1) for c in move.cards)
             move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.number.value} at {indices_str}"
+        elif isinstance(move, ColorHint):
+            indices_str = ", ".join(str(c + 1) for c in move.cards)
+            move_msg = f"P{player_index + 1} hints P{move.teammate + 1}: {move.color.name.lower()} at {indices_str}"
         else:
-            move_msg = f"P{player_index + 1} makes move: {move}"
+            assert False, f"unexpected move type in move message: {type(move)}"
 
         # Format with timestamp and turn number: "[HH:MM:SS T##] message"
         formatted_msg = f"[{timestamp} T{turn_number:02d}] {move_msg}"

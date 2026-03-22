@@ -429,13 +429,11 @@ class GameState:
         if self._turns_left == 0:
             return False
 
-        # Delegate to specific validation methods
         if isinstance(move, CardMove):
             return self._validateCardMove(player_index, move)
-        elif isinstance(move, Hint):
+        if isinstance(move, Hint):
             return self._validateHint(player_index, move)
-        else:
-            return False
+        assert False, f"unexpected move type in _validate: {type(move)}"
 
     def _validateCardMove(self, player_index: int, move: CardMove) -> bool:
         """
@@ -495,44 +493,34 @@ class GameState:
         teammate_hand = self._player_hands[move.teammate]
 
         if isinstance(move, ColorHint):
-            # Find all cards in the hand that match this color
             matching_indices = [
                 idx for idx, card in enumerate(teammate_hand.cards)
                 if card.color == move.color
             ]
-
-            # Check that all card indices in the hint are valid and match the color
             for card_idx in move.cards:
                 if card_idx < 0 or card_idx >= len(teammate_hand.cards):
                     return False
                 if teammate_hand.cards[card_idx].color != move.color:
                     return False
-
-            # CRITICAL RULE: A hint must include ALL matching cards in the hand
-            # You cannot give a partial hint (e.g., hinting only 2 of 3 yellow cards)
             if set(move.cards) != set(matching_indices):
                 return False
+            return True
 
-        elif isinstance(move, NumberHint):
-            # Find all cards in the hand that match this number
+        if isinstance(move, NumberHint):
             matching_indices = [
                 idx for idx, card in enumerate(teammate_hand.cards)
                 if card.number == move.number
             ]
-
-            # Check that all card indices in the hint are valid and match the number
             for card_idx in move.cards:
                 if card_idx < 0 or card_idx >= len(teammate_hand.cards):
                     return False
                 if teammate_hand.cards[card_idx].number != move.number:
                     return False
-
-            # CRITICAL RULE: A hint must include ALL matching cards in the hand
-            # You cannot give a partial hint (e.g., hinting only 2 of 3 "1" cards)
             if set(move.cards) != set(matching_indices):
                 return False
+            return True
 
-        return True
+        assert False, f"unexpected hint type in _validateHint: {type(move)}"
 
     def _get_validation_error_message(self, player_index: int, move: Move) -> str:
         """
@@ -547,18 +535,19 @@ class GameState:
         """
         error_msg = f"Invalid move from player {player_index}: {move}"
 
-        # Add specific error details based on move type
         if isinstance(move, Discard):
             if self._common_view.hintTokens >= self.settings.maxHintTokens:
                 error_msg += f" (hint tokens already at maximum: {self.settings.maxHintTokens})"
-        elif isinstance(move, (ColorHint, NumberHint)):
+            return error_msg
+        if isinstance(move, (ColorHint, NumberHint)):
             if self._common_view.hintTokens <= 0:
                 error_msg += " (no hint tokens available)"
-        elif isinstance(move, Play):
+            return error_msg
+        if isinstance(move, Play):
             if player_index != self._current_player:
                 error_msg += f" (not player {player_index}'s turn, current player is {self._current_player})"
-
-        return error_msg
+            return error_msg
+        assert False, f"unexpected move type in _get_validation_error_message: {type(move)}"
 
     def update(
         self,

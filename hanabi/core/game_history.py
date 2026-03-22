@@ -216,22 +216,17 @@ class GameHistory:
     def _move_to_short(self, move: Move) -> str:
         """Convert a move to short format string (e.g., p3, d4, h11, h4w)."""
         if isinstance(move, Play):
-            # p<card> where card is 1-based
             return f"p{move.card + 1}"
-        elif isinstance(move, Discard):
-            # d<card> where card is 1-based
+        if isinstance(move, Discard):
             return f"d{move.card + 1}"
-        elif isinstance(move, ColorHint):
-            # h<teammate><color> where teammate is 1-based
+        if isinstance(move, ColorHint):
             color_map = {Color.WHITE: 'w', Color.RED: 'r', Color.YELLOW: 'y',
                         Color.GREEN: 'g', Color.BLUE: 'b', Color.MULTI: 'm'}
             color_char = color_map.get(move.color, 'r')
             return f"h{move.teammate + 1}{color_char}"
-        elif isinstance(move, NumberHint):
-            # h<teammate><number> where teammate is 1-based
+        if isinstance(move, NumberHint):
             return f"h{move.teammate + 1}{move.number.value}"
-        else:
-            return f"unknown:{move}"
+        assert False, f"unexpected move type in _move_to_short: {type(move)}"
 
     def _serialize_state(self, game: Game, concise: bool = False, include_deck: bool = False) -> Dict[str, Any]:
         """Serialize game state to a dictionary."""
