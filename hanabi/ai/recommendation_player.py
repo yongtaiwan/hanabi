@@ -224,6 +224,11 @@ class RecommendationPlayer(BasePlayer):
         """Paper priority 5: recommend that C1 be discarded."""
         return 4 + (3 - _REC_SLOT_ORDER[0])
 
+    @staticmethod
+    def _four_card_slot_name(internal_idx: int) -> str:
+        """Paper-style slot for a 4-card hand: C1 (index 3) .. C4 (index 0)."""
+        return f"C{4 - internal_idx}"
+
     def _try_follow_play_recommendation(
         self,
         player_view: PlayerView,
@@ -252,7 +257,7 @@ class RecommendationPlayer(BasePlayer):
             else "<2 errors → follow recommendation"
         )
         self._last_decision_summary = (
-            f"Play {_four_card_slot_name(play_idx)}: decoded recommendation={recommendation} (play), {detail}"
+            f"Play {self._four_card_slot_name(play_idx)}: decoded recommendation={recommendation} (play), {detail}"
         )
         return Play(play_idx)
 
@@ -302,7 +307,7 @@ class RecommendationPlayer(BasePlayer):
             "paper discard recommendation should be legal when rule 4 applies"
         )
         self._last_decision_summary = (
-            f"Discard {_four_card_slot_name(discard_idx)}: decoded recommendation={recommendation} (discard) → follow recommendation"
+            f"Discard {self._four_card_slot_name(discard_idx)}: decoded recommendation={recommendation} (discard) → follow recommendation"
         )
         return Discard(discard_idx)
 
@@ -357,8 +362,3 @@ class RecommendationPlayer(BasePlayer):
             if indices:
                 return ColorHint(target, indices, color)
         assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
-
-
-def _four_card_slot_name(internal_idx: int) -> str:
-    """Paper-style slot for a 4-card hand: C1 (index 3) .. C4 (index 0)."""
-    return f"C{4 - internal_idx}"
