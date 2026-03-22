@@ -80,7 +80,7 @@ class TestGUIDisplay(unittest.TestCase):
 
         # Check that cards were created for all players
         state = self.engine.gameState
-        total_cards = sum(len(hand.cards) for hand in state.playerHands)
+        total_cards = sum(len(hand.cards) for hand in state.player_hands)
         self.assertEqual(len(self.display._card_widgets), total_cards)
         self.assertEqual(len(self.display._card_positions), total_cards)
 
@@ -101,8 +101,8 @@ class TestGUIDisplay(unittest.TestCase):
         self.assertIn("life", self.display._token_widgets)
 
         # Should have correct number of tokens
-        self.assertEqual(len(self.display._token_widgets["hint"]), self.settings.maxHintTokens)
-        self.assertEqual(len(self.display._token_widgets["life"]), self.settings.maxLiveTokens)
+        self.assertEqual(len(self.display._token_widgets["hint"]), self.settings.max_hint_tokens)
+        self.assertEqual(len(self.display._token_widgets["life"]), self.settings.max_live_tokens)
 
     def test_selected_card_validation(self):
         """Test that selected card is validated when state changes."""
@@ -111,14 +111,14 @@ class TestGUIDisplay(unittest.TestCase):
 
         # Play a card to reduce hand size
         move = Play(0)
-        self.engine.processMove(0, move)
+        self.engine.process_move(0, move)
         self.engine.advanceTurn()
 
         # Display new state - selected card should be validated
         self.display.display_game_state(self.engine, 1)
 
         # If hand is smaller, selected card should be reset
-        hand = self.engine.gameState.playerHands[1]
+        hand = self.engine.gameState.player_hands[1]
         if self.display._selected_card is not None:
             self.assertLess(self.display._selected_card, len(hand.cards))
 
@@ -216,7 +216,7 @@ class TestGUIInput(unittest.TestCase):
 
         # Select a card from player 1
         state = self.engine.gameState
-        hand = state.playerHands[1]
+        hand = state.player_hands[1]
         if hand.cards:
             card = hand.cards[0]
             matching = [i for i, c in enumerate(hand.cards) if c.color == card.color]
@@ -299,20 +299,20 @@ class TestGUIGameIntegration(unittest.TestCase):
         # Create history
         self.game._history = GameHistory({
             "num_players": 2,
-            "max_live_tokens": settings.maxLiveTokens,
-            "max_hint_tokens": settings.maxHintTokens,
-            "max_cards_in_hand": settings.maxCardsInHand
+            "max_live_tokens": settings.max_live_tokens,
+            "max_hint_tokens": settings.max_hint_tokens,
+            "max_cards_in_hand": settings.max_cards_in_hand
         })
         self.game._history.record_initial_state(self.game._engine)
 
         # Make a play move
         move = Play(0)
-        initial_score = self.game._engine.getScore()
+        initial_score = self.game._engine.get_score()
 
         self.game._on_move_made(move)
 
         # Check that move was processed
-        new_score = self.game._engine.getScore()
+        new_score = self.game._engine.get_score()
         # Score might increase if a valid card was played
         self.assertIsNotNone(new_score)
 
@@ -327,20 +327,20 @@ class TestGUIGameIntegration(unittest.TestCase):
 
         # Lose all lives
         state = self.game._engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         # Play invalid cards until lives are lost
         for i in range(min(3, len(hand.cards))):
             if hand.cards[i].number != Number.ONE:
                 move = Play(i)
-                self.game._engine.processMove(0, move)
+                self.game._engine.process_move(0, move)
                 self.game._engine.advanceTurn()
-                if self.game._engine.gameState.commonView.liveTokens <= 0:
+                if self.game._engine.gameState.common_view.live_tokens <= 0:
                     break
 
         # Game should be finished
-        if self.game._engine.gameState.commonView.liveTokens <= 0:
-            self.assertTrue(self.game._engine.isFinished())
+        if self.game._engine.gameState.common_view.live_tokens <= 0:
+            self.assertTrue(self.game._engine.is_finished())
 
     def test_replay_history_format(self):
         """Test replay history format parsing."""
@@ -418,7 +418,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
 
         # Select a card from player 1
         state = self.engine.gameState
-        hand = state.playerHands[1]
+        hand = state.player_hands[1]
         if hand.cards:
             card = hand.cards[0]
             matching = [i for i, c in enumerate(hand.cards) if c.color == card.color]
@@ -436,12 +436,12 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
         moves_made = 0
         max_moves = 5
 
-        while not self.engine.isFinished() and moves_made < max_moves:
-            current_player = self.engine.currentPlayer
+        while not self.engine.is_finished() and moves_made < max_moves:
+            current_player = self.engine.current_player
             self.display.display_game_state(self.engine, current_player)
 
             state = self.engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
@@ -453,7 +453,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
             self.input_handler._on_card_selected(0)
 
             # Try to discard (safer than play)
-            if state.commonView.hintTokens < self.engine.settings.maxHintTokens:
+            if state.common_view.hint_tokens < self.engine.settings.max_hint_tokens:
                 self.display._on_discard_clicked()
             else:
                 # Can't discard, try to play
@@ -462,7 +462,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
             # Process the move if one was made
             if self.move_callback_calls:
                 move = self.move_callback_calls[0]
-                success, _ = self.engine.processMove(current_player, move)
+                success, _ = self.engine.process_move(current_player, move)
                 if success:
                     self.engine.advanceTurn()
                     moves_made += 1
@@ -483,7 +483,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
 
         # Make a move that changes state
         move = Discard(0)
-        success, _ = self.engine.processMove(0, move)
+        success, _ = self.engine.process_move(0, move)
         if success:
             self.engine.advanceTurn()
 
@@ -493,7 +493,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
         # Selection should be cleared or validated
         # (selected card was for player 0, now showing player 1)
         if self.display._selected_card is not None:
-            hand = self.engine.gameState.playerHands[1]
+            hand = self.engine.gameState.player_hands[1]
             self.assertLess(self.display._selected_card, len(hand.cards))
 
     def test_hint_mode_reset(self):
@@ -506,7 +506,7 @@ class TestGUIGamePlaySimulation(unittest.TestCase):
 
         # Give a hint
         state = self.engine.gameState
-        hand = state.playerHands[1]
+        hand = state.player_hands[1]
         if hand.cards:
             card = hand.cards[0]
             matching = [i for i, c in enumerate(hand.cards) if c.color == card.color]

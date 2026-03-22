@@ -33,21 +33,21 @@ class TestGameHistory(unittest.TestCase):
     def _spend_hint_if_at_max_tokens(self) -> None:
         """Discard is illegal when hint tokens are at maximum; spend one if needed."""
         state = self.game.state
-        if state.commonView.hintTokens < self.settings.maxHintTokens:
+        if state.common_view.hint_tokens < self.settings.max_hint_tokens:
             return
-        cp = self.game.currentPlayer
-        for tgt in range(self.settings.numPlayers):
+        cp = self.game.current_player
+        for tgt in range(self.settings.num_players):
             if tgt == cp:
                 continue
-            th = state.playerHands[tgt]
+            th = state.player_hands[tgt]
             if not th.cards:
                 continue
             col = th.cards[0].color
             matching = [i for i, c in enumerate(th.cards) if c.color == col]
             move = ColorHint(tgt, matching, col)
             if state._validate(cp, move):
-                self.game._processMove(cp, move)
-                self.game._advanceTurn()
+                self.game._process_move(cp, move)
+                self.game._advance_turn()
                 return
 
     def test_record_initial_state(self):
@@ -66,12 +66,12 @@ class TestGameHistory(unittest.TestCase):
     def test_record_play_move(self):
         """Test recording a play move."""
         state = self.game.state
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         if hand.cards:
             move = Play(0)
             try:
-                self.game._processMove(0, move)
+                self.game._process_move(0, move)
                 self.history.record_move(0, move, "played", self.game)
                 self.assertEqual(len(self.history._moves), 1)
                 # Moves are now strings in short format
@@ -82,10 +82,10 @@ class TestGameHistory(unittest.TestCase):
     def test_record_discard_move(self):
         """Test recording a discard move."""
         self._spend_hint_if_at_max_tokens()
-        cp = self.game.currentPlayer
+        cp = self.game.current_player
         move = Discard(0)
         try:
-            self.game._processMove(cp, move)
+            self.game._process_move(cp, move)
             self.history.record_move(cp, move, "discarded", self.game)
             self.assertEqual(len(self.history._moves), 1)
             # Moves are now strings in short format
@@ -96,16 +96,16 @@ class TestGameHistory(unittest.TestCase):
     def test_record_color_hint(self):
         """Test recording a color hint."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
 
-        if teammate_hand.cards and state.commonView.hintTokens > 0:
+        if teammate_hand.cards and state.common_view.hint_tokens > 0:
             color = teammate_hand.cards[0].color
             matching_indices = [i for i, card in enumerate(teammate_hand.cards)
                                if card.color == color]
             if matching_indices:
                 move = ColorHint(1, matching_indices, color)
                 try:
-                    self.game._processMove(0, move)
+                    self.game._process_move(0, move)
                     self.history.record_move(0, move, "hinted", self.game)
                     self.assertEqual(len(self.history._moves), 1)
                     # Moves are now strings in short format: h<teammate><color>
@@ -119,16 +119,16 @@ class TestGameHistory(unittest.TestCase):
     def test_record_number_hint(self):
         """Test recording a number hint."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
 
-        if teammate_hand.cards and state.commonView.hintTokens > 0:
+        if teammate_hand.cards and state.common_view.hint_tokens > 0:
             number = teammate_hand.cards[0].number
             matching_indices = [i for i, card in enumerate(teammate_hand.cards)
                                if card.number == number]
             if matching_indices:
                 move = NumberHint(1, matching_indices, number)
                 try:
-                    self.game._processMove(0, move)
+                    self.game._process_move(0, move)
                     self.history.record_move(0, move, "hinted", self.game)
                     self.assertEqual(len(self.history._moves), 1)
                     # Moves are now strings in short format: h<teammate><number>
@@ -140,10 +140,10 @@ class TestGameHistory(unittest.TestCase):
     def test_save_to_file(self):
         """Test saving history to file."""
         self._spend_hint_if_at_max_tokens()
-        cp = self.game.currentPlayer
+        cp = self.game.current_player
         move = Discard(0)
         try:
-            self.game._processMove(cp, move)
+            self.game._process_move(cp, move)
             self.history.record_move(cp, move, "discarded", self.game)
         except AssertionError:
             return
@@ -197,10 +197,10 @@ class TestGameHistory(unittest.TestCase):
     def test_load_from_file(self):
         """Test loading history from file."""
         self._spend_hint_if_at_max_tokens()
-        cp = self.game.currentPlayer
+        cp = self.game.current_player
         move = Discard(0)
         try:
-            self.game._processMove(cp, move)
+            self.game._process_move(cp, move)
             self.history.record_move(cp, move, "discarded", self.game)
         except AssertionError:
             return
@@ -230,11 +230,11 @@ class TestGameHistory(unittest.TestCase):
 
         for _ in range(3):
             self._spend_hint_if_at_max_tokens()
-            cp = self.game.currentPlayer
+            cp = self.game.current_player
             move = Discard(0)
-            self.game._processMove(cp, move)
+            self.game._process_move(cp, move)
             self.history.record_move(cp, move, "discarded", self.game)
-            self.game._advanceTurn()
+            self.game._advance_turn()
 
         # Save to file
         filename = self.history.save_to_file()
@@ -288,11 +288,11 @@ class TestGameHistory(unittest.TestCase):
 
         for _ in range(3):
             self._spend_hint_if_at_max_tokens()
-            cp = self.game.currentPlayer
+            cp = self.game.current_player
             move = Discard(0)
-            self.game._processMove(cp, move)
+            self.game._process_move(cp, move)
             self.history.record_move(cp, move, "discarded", self.game)
-            self.game._advanceTurn()
+            self.game._advance_turn()
 
         # Save to file
         filename = self.history.save_to_file()
@@ -312,18 +312,18 @@ class TestGameHistory(unittest.TestCase):
 
             # Verify game was created
             self.assertIsNotNone(replayed_game)
-            self.assertEqual(replayed_game.settings.numPlayers, 3)
+            self.assertEqual(replayed_game.settings.num_players, 3)
 
             # Apply moves and verify game state updates
             moves = data.get("moves", [])
             for move_str in moves:
-                current_player = replayed_game.currentPlayer
+                current_player = replayed_game.current_player
                 move = GameHistory._short_to_move(move_str, current_player, replayed_game)
                 if move is not None:
                     st = replayed_game.state
                     if st._validate(current_player, move):
-                        replayed_game._processMove(current_player, move)
-                        replayed_game._advanceTurn()
+                        replayed_game._process_move(current_player, move)
+                        replayed_game._advance_turn()
 
         finally:
             if os.path.exists(filename):

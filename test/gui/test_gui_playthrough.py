@@ -49,13 +49,13 @@ class TestGUIPlaythrough(unittest.TestCase):
 
         def process_move(move):
             """Process a move and record it."""
-            current_player = engine.currentPlayer
-            success, msg = engine.processMove(current_player, move)
+            current_player = engine.current_player
+            success, msg = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
                 moves_processed.append((current_player, move, success, msg))
                 # Update display
-                display.display_game_state(engine, engine.currentPlayer)
+                display.display_game_state(engine, engine.current_player)
             return success, msg
 
         input_handler.set_move_callback(process_move)
@@ -74,10 +74,10 @@ class TestGUIPlaythrough(unittest.TestCase):
         moves_made = 0
         max_moves = 50  # Safety limit
 
-        while not engine.isFinished() and moves_made < max_moves:
-            current_player = engine.currentPlayer
+        while not engine.is_finished() and moves_made < max_moves:
+            current_player = engine.current_player
             state = engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
@@ -93,7 +93,7 @@ class TestGUIPlaythrough(unittest.TestCase):
 
             # Strategy: Try to play valid cards first
             for i, card in enumerate(hand.cards):
-                cards_played = state.commonView.cardsPlayed
+                cards_played = state.common_view.cards_played
                 if card.color not in cards_played:
                     # Need a 1
                     if card.number == Number.ONE:
@@ -133,9 +133,9 @@ class TestGUIPlaythrough(unittest.TestCase):
                 continue
 
             # If can't play, try to give a hint
-            if state.commonView.hintTokens > 0:
+            if state.common_view.hint_tokens > 0:
                 teammate = 1 if current_player == 0 else 0
-                teammate_hand = state.playerHands[teammate]
+                teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     # Activate hint mode
                     display._on_hint_mode_clicked("color")
@@ -157,7 +157,7 @@ class TestGUIPlaythrough(unittest.TestCase):
                             continue
 
             # Otherwise discard
-            if state.commonView.hintTokens < engine.settings.maxHintTokens:
+            if state.common_view.hint_tokens < engine.settings.max_hint_tokens:
                 # Select and discard
                 input_handler._on_card_selected(0)
                 display._on_discard_clicked()
@@ -188,7 +188,7 @@ class TestGUIPlaythrough(unittest.TestCase):
         self.assertGreater(moves_made, 0, "Should have made at least one move")
 
         # Verify display is still functional
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._card_widgets), 0, "Display should show cards")
 
         # Verify history was saved correctly
@@ -226,7 +226,7 @@ class TestGUIPlaythrough(unittest.TestCase):
 
         # Test selecting card, then playing it
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         if hand.cards:
             # Select first card
             input_handler._on_card_selected(0)
@@ -234,16 +234,16 @@ class TestGUIPlaythrough(unittest.TestCase):
 
             # Play it
             move = Play(0)
-            success, _ = engine.processMove(0, move)
+            success, _ = engine.process_move(0, move)
             if success:
                 engine.advanceTurn()
 
             # Display new state - selected card should be validated
-            display.display_game_state(engine, engine.currentPlayer)
+            display.display_game_state(engine, engine.current_player)
 
             # Selected card should be None (different player now) or valid
             if display._selected_card is not None:
-                new_hand = engine.gameState.playerHands[engine.currentPlayer]
+                new_hand = engine.gameState.player_hands[engine.current_player]
                 self.assertLess(display._selected_card, len(new_hand.cards),
                               "Selected card should be valid")
 
@@ -271,7 +271,7 @@ class TestGUIPlaythrough(unittest.TestCase):
 
         # Give hint
         state = engine.gameState
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         if teammate_hand.cards:
             card = teammate_hand.cards[0]
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == card.color]
@@ -316,12 +316,12 @@ class TestGUIPlaythrough(unittest.TestCase):
 
         # Make several moves
         for i in range(5):
-            if engine.isFinished():
+            if engine.is_finished():
                 break
 
-            current_player = engine.currentPlayer
+            current_player = engine.current_player
             state = engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
@@ -334,12 +334,12 @@ class TestGUIPlaythrough(unittest.TestCase):
             self.assertGreater(len(display._card_positions), 0, f"Should have positions after move {i}")
 
             # Make a move
-            if state.commonView.hintTokens < engine.settings.maxHintTokens:
+            if state.common_view.hint_tokens < engine.settings.max_hint_tokens:
                 move = Discard(0)
             else:
                 move = Play(0)
 
-            success, _ = engine.processMove(current_player, move)
+            success, _ = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
 

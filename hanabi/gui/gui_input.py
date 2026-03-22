@@ -48,11 +48,11 @@ class GUIInput:
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
             state = self._game.state
-            if state.turnsLeft is not None:
+            if state.turns_left is not None:
                 # Deck is exhausted - only ignore if turns_left == 0
-                if state.turnsLeft == 0 and self._game.isFinished:
+                if state.turns_left == 0 and self._game.is_finished:
                     return
-            elif self._game.isFinished:
+            elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
                 return
 
@@ -147,7 +147,7 @@ class GUIInput:
         if not self._game:
             return False
 
-        current_player_idx = self._game.currentPlayer
+        current_player_idx = self._game.current_player
         if current_player_idx >= len(self._game.team.players):
             return False
 

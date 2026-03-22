@@ -36,13 +36,13 @@ class TestGameComprehensive(unittest.TestCase):
                 team = PlayerTeam(players)
                 game = Game.create(team, settings)
 
-                self.assertEqual(len(game.state.playerHands), num_players)
-                self.assertEqual(game.currentPlayer, 0)
-                self.assertEqual(game.state.turnNumber, 0)
+                self.assertEqual(len(game.state.player_hands), num_players)
+                self.assertEqual(game.current_player, 0)
+                self.assertEqual(game.state.turn_number, 0)
 
                 # Check cards per hand
                 expected_cards = 5 if num_players <= 3 else 4
-                for hand in game.state.playerHands:
+                for hand in game.state.player_hands:
                     self.assertEqual(len(hand.cards), expected_cards)
 
     def test_initial_state_correctness(self):
@@ -50,24 +50,24 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Check tokens
-        self.assertEqual(state.commonView.liveTokens, 3)
-        self.assertEqual(state.commonView.hintTokens, 8)
+        self.assertEqual(state.common_view.live_tokens, 3)
+        self.assertEqual(state.common_view.hint_tokens, 8)
 
         # Check no cards played or discarded
-        self.assertEqual(len(state.commonView.cardsPlayed), 0)
-        self.assertEqual(len(state.commonView.cardsDiscarded), 0)
+        self.assertEqual(len(state.common_view.cards_played), 0)
+        self.assertEqual(len(state.common_view.cards_discarded), 0)
 
         # Check turn number
-        self.assertEqual(state.turnNumber, 0)
-        self.assertEqual(state.currentPlayer, 0)
-        self.assertIsNone(state.turnsLeft)
+        self.assertEqual(state.turn_number, 0)
+        self.assertEqual(state.current_player, 0)
+        self.assertIsNone(state.turns_left)
 
         # Check deck size
         # Total cards: 5 colors * (3+2+2+2+1) = 5 * 10 = 50 cards
         total_cards = 50
         dealt_cards = 3 * 5  # 3 players * 5 cards each = 15
         expected_remaining = total_cards - dealt_cards  # 50 - 15 = 35
-        self.assertEqual(state.commonView.cardsToDraw, expected_remaining)
+        self.assertEqual(state.common_view.cards_to_draw, expected_remaining)
 
     def test_deck_shuffling(self):
         """Test that deck is shuffled (cards are in different order)."""
@@ -79,7 +79,7 @@ class TestGameComprehensive(unittest.TestCase):
             game = Game.create(team, self.settings)
             # Get first few cards from each player's hand
             first_cards = tuple(
-                tuple(hand.cards[:3]) for hand in game.state.playerHands
+                tuple(hand.cards[:3]) for hand in game.state.player_hands
             )
             decks.append(first_cards)
 
@@ -97,7 +97,7 @@ class TestGameComprehensive(unittest.TestCase):
         self.assertFalse(self.game.state._validate(1, move))
 
         with self.assertRaises(AssertionError) as context:
-            self.game.processMove(1, move)
+            self.game.process_move(1, move)
         self.assertIn("Invalid move", str(context.exception))
 
     def test_validate_invalid_card_index(self):
@@ -107,36 +107,36 @@ class TestGameComprehensive(unittest.TestCase):
         self.assertFalse(self.game.state._validate(0, move))
 
         # Index too high
-        hand_size = len(self.game.state.playerHands[0].cards)
+        hand_size = len(self.game.state.player_hands[0].cards)
         move = Play(hand_size)
         self.assertFalse(self.game.state._validate(0, move))
 
         with self.assertRaises(AssertionError):
-            self.game.processMove(0, move)
+            self.game.process_move(0, move)
 
     def test_validate_discard_at_max_hint_tokens(self):
         """Test that discard is invalid when hint tokens are at maximum."""
         state = self.game.state
 
         # Fill hint tokens to max
-        while state.commonView.hintTokens < self.settings.maxHintTokens:
+        while state.common_view.hint_tokens < self.settings.max_hint_tokens:
             # Discard to gain tokens
             move = Discard(0)
-            self.game.processMove(self.game.currentPlayer, move)
-            self.game._advanceTurn()
+            self.game.process_move(self.game.current_player, move)
+            self.game._advance_turn()
             state = self.game.state
 
         # Now try to discard - should be invalid
         move = Discard(0)
-        self.assertFalse(state._validate(self.game.currentPlayer, move))
+        self.assertFalse(state._validate(self.game.current_player, move))
 
         with self.assertRaises(AssertionError):
-            self.game.processMove(self.game.currentPlayer, move)
+            self.game.process_move(self.game.current_player, move)
 
     def test_validate_hint_no_tokens(self):
         """Test that hint is invalid when no hint tokens available."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
 
         # Find a color to hint
         if teammate_hand.cards:
@@ -144,18 +144,18 @@ class TestGameComprehensive(unittest.TestCase):
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
 
             # Use up all hint tokens
-            while state.commonView.hintTokens > 0:
-                current_player = self.game.currentPlayer
+            while state.common_view.hint_tokens > 0:
+                current_player = self.game.current_player
                 # Make sure we're hinting a valid teammate
                 target = 1 if current_player != 1 else 2
-                target_hand = state.playerHands[target]
+                target_hand = state.player_hands[target]
                 if target_hand.cards:
                     target_color = target_hand.cards[0].color
                     target_matching = [i for i, c in enumerate(target_hand.cards) if c.color == target_color]
                     move = ColorHint(target, target_matching, target_color)
                     try:
-                        self.game.processMove(current_player, move)
-                        self.game._advanceTurn()
+                        self.game.process_move(current_player, move)
+                        self.game._advance_turn()
                         state = self.game.state
                     except AssertionError:
                         break
@@ -163,17 +163,17 @@ class TestGameComprehensive(unittest.TestCase):
                     break
 
             # Now try to hint - should be invalid
-            if state.commonView.hintTokens == 0:
+            if state.common_view.hint_tokens == 0:
                 move = ColorHint(1, matching, color)
-                self.assertFalse(state._validate(self.game.currentPlayer, move))
+                self.assertFalse(state._validate(self.game.current_player, move))
 
                 with self.assertRaises(AssertionError):
-                    self.game.processMove(self.game.currentPlayer, move)
+                    self.game.process_move(self.game.current_player, move)
 
     def test_validate_hint_must_include_all_matching_cards(self):
         """Test that hint must include ALL matching cards (critical rule)."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
 
         # Find all cards of a specific color
         if teammate_hand.cards:
@@ -187,12 +187,12 @@ class TestGameComprehensive(unittest.TestCase):
                 self.assertFalse(state._validate(0, move))
 
                 with self.assertRaises(AssertionError):
-                    self.game.processMove(0, move)
+                    self.game.process_move(0, move)
 
     def test_validate_hint_cannot_hint_self(self):
         """Test that player cannot hint themselves."""
         state = self.game.state
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         if hand.cards:
             color = hand.cards[0].color
@@ -201,7 +201,7 @@ class TestGameComprehensive(unittest.TestCase):
             self.assertFalse(state._validate(0, move))
 
             with self.assertRaises(AssertionError):
-                self.game.processMove(0, move)
+                self.game.process_move(0, move)
 
     def test_validate_hint_invalid_teammate_index(self):
         """Test that hint with invalid teammate index is rejected."""
@@ -216,33 +216,33 @@ class TestGameComprehensive(unittest.TestCase):
         """Test that moves are invalid when game is over."""
         # Lose all lives
         state = self.game.state
-        while state.commonView.liveTokens > 0 and not self.game.isFinished:
+        while state.common_view.live_tokens > 0 and not self.game.is_finished:
             # Play invalid cards
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
             if hand.cards:
                 for i, card in enumerate(hand.cards):
                     if card.number != Number.ONE:
                         move = Play(i)
                         try:
-                            self.game.processMove(current_player, move)
-                            self.game._advanceTurn()
+                            self.game.process_move(current_player, move)
+                            self.game._advance_turn()
                             break
                         except AssertionError:
                             pass
             state = self.game.state
-            if state.commonView.liveTokens <= 0:
+            if state.common_view.live_tokens <= 0:
                 break
 
         # Game should be finished
-        if state.commonView.liveTokens <= 0:
-            self.assertTrue(self.game.isFinished)
+        if state.common_view.live_tokens <= 0:
+            self.assertTrue(self.game.is_finished)
 
             # Moves should be invalid (turns_left should be 0 or game finished)
-            # Actually, when lives are 0, isFinished() returns True, but turns_left might not be 0
+            # Actually, when lives are 0, is_finished() returns True, but turns_left might not be 0
             # The validation checks turns_left == 0, so let's check that condition
-            if state.turnsLeft == 0:
-                if state.playerHands[0].cards:
+            if state.turns_left == 0:
+                if state.player_hands[0].cards:
                     move = Play(0)
                     self.assertFalse(state._validate(0, move))
 
@@ -253,7 +253,7 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Play a 1 of any color
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         one_index = None
         one_color = None
         for i, card in enumerate(hand.cards):
@@ -265,49 +265,49 @@ class TestGameComprehensive(unittest.TestCase):
         if one_index is not None:
             # Play the 1
             move = Play(one_index)
-            self.game.processMove(0, move)
-            self.game._advanceTurn()
+            self.game.process_move(0, move)
+            self.game._advance_turn()
 
             # Check it was played
             state = self.game.state
-            self.assertIn(one_color, state.commonView.cardsPlayed)
-            self.assertEqual(state.commonView.cardsPlayed[one_color], Number.ONE)
+            self.assertIn(one_color, state.common_view.cards_played)
+            self.assertEqual(state.common_view.cards_played[one_color], Number.ONE)
 
             # Now find and play a 2 of the same color
             # (This requires checking all players' hands, but only current player can play)
             found_two = False
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
             for i, card in enumerate(hand.cards):
                 if card.color == one_color and card.number == Number.TWO:
                     move = Play(i)
-                    self.game.processMove(current_player, move)
+                    self.game.process_move(current_player, move)
                     found_two = True
                     break
 
             # If not found in current player's hand, advance turn and try next player
             if not found_two:
-                self.game._advanceTurn()
-                current_player = self.game.currentPlayer
-                hand = state.playerHands[current_player]
+                self.game._advance_turn()
+                current_player = self.game.current_player
+                hand = state.player_hands[current_player]
                 for i, card in enumerate(hand.cards):
                     if card.color == one_color and card.number == Number.TWO:
                         move = Play(i)
-                        self.game.processMove(current_player, move)
+                        self.game.process_move(current_player, move)
                         found_two = True
                         break
 
             if found_two:
                 state = self.game.state
-                self.assertEqual(state.commonView.cardsPlayed[one_color], Number.TWO)
+                self.assertEqual(state.common_view.cards_played[one_color], Number.TWO)
 
     def test_play_invalid_card_loses_life(self):
         """Test that invalid play loses a life token."""
         state = self.game.state
-        initial_lives = state.commonView.liveTokens
+        initial_lives = state.common_view.live_tokens
 
         # Find a card that cannot be played
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         invalid_index = None
         for i, card in enumerate(hand.cards):
             if card.number != Number.ONE:
@@ -316,15 +316,15 @@ class TestGameComprehensive(unittest.TestCase):
 
         if invalid_index is not None:
             move = Play(invalid_index)
-            self.game.processMove(0, move)
+            self.game.process_move(0, move)
 
             # Check life was lost
             state = self.game.state
-            self.assertEqual(state.commonView.liveTokens, initial_lives - 1)
+            self.assertEqual(state.common_view.live_tokens, initial_lives - 1)
 
             # Check card was discarded
             card = hand.cards[invalid_index]
-            discarded = state.commonView.cardsDiscarded
+            discarded = state.common_view.cards_discarded
             self.assertIn(card.color, discarded)
             self.assertIn(card.number, discarded[card.color].cards)
 
@@ -352,56 +352,56 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # First use a hint to reduce tokens below max
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(1, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
-        initial_tokens = state.commonView.hintTokens
+        initial_tokens = state.common_view.hint_tokens
 
         # Now discard a card (only if tokens are below max)
-        if initial_tokens < self.settings.maxHintTokens:
-            current_player = self.game.currentPlayer
+        if initial_tokens < self.settings.max_hint_tokens:
+            current_player = self.game.current_player
             move = Discard(0)
-            self.game.processMove(current_player, move)
+            self.game.process_move(current_player, move)
 
             # Check token was gained
             state = self.game.state
-            self.assertEqual(state.commonView.hintTokens, initial_tokens + 1)
+            self.assertEqual(state.common_view.hint_tokens, initial_tokens + 1)
 
     def test_discard_adds_to_discard_pile(self):
         """Test that discarded card is added to discard pile."""
         state = self.game.state
 
         # First use a hint to reduce tokens below max
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(1, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         # Get current player and their hand
-        current_player = self.game.currentPlayer
-        hand = state.playerHands[current_player]
-        if hand.cards and state.commonView.hintTokens < self.settings.maxHintTokens:
+        current_player = self.game.current_player
+        hand = state.player_hands[current_player]
+        if hand.cards and state.common_view.hint_tokens < self.settings.max_hint_tokens:
             card = hand.cards[0]
             move = Discard(0)
-            self.game.processMove(current_player, move)
+            self.game.process_move(current_player, move)
 
             # Check card is in discard pile
             state = self.game.state
-            discarded = state.commonView.cardsDiscarded
+            discarded = state.common_view.cards_discarded
             self.assertIn(card.color, discarded)
             self.assertIn(card.number, discarded[card.color].cards)
             self.assertEqual(discarded[card.color].cards[card.number], 1)
@@ -409,72 +409,72 @@ class TestGameComprehensive(unittest.TestCase):
     def test_hint_uses_hint_token(self):
         """Test that giving a hint uses a hint token."""
         state = self.game.state
-        initial_tokens = state.commonView.hintTokens
-        teammate_hand = state.playerHands[1]
+        initial_tokens = state.common_view.hint_tokens
+        teammate_hand = state.player_hands[1]
 
         if teammate_hand.cards:
             color = teammate_hand.cards[0].color
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
 
             move = ColorHint(1, matching, color)
-            self.game.processMove(0, move)
+            self.game.process_move(0, move)
 
             # Check token was used
             state = self.game.state
-            self.assertEqual(state.commonView.hintTokens, initial_tokens - 1)
+            self.assertEqual(state.common_view.hint_tokens, initial_tokens - 1)
 
     def test_card_drawing_on_play(self):
         """Test that a new card is drawn after playing."""
         state = self.game.state
-        initial_deck_size = state.commonView.cardsToDraw
-        hand = state.playerHands[0]
+        initial_deck_size = state.common_view.cards_to_draw
+        hand = state.player_hands[0]
         initial_hand_size = len(hand.cards)
 
         # Find and play a 1
         for i, card in enumerate(hand.cards):
             if card.number == Number.ONE:
                 move = Play(i)
-                self.game.processMove(0, move)
+                self.game.process_move(0, move)
                 break
 
         # Check hand size maintained and deck decreased
         state = self.game.state
-        new_hand = state.playerHands[0]
+        new_hand = state.player_hands[0]
         self.assertEqual(len(new_hand.cards), initial_hand_size)
         # Deck should have decreased by 1
-        self.assertEqual(state.commonView.cardsToDraw, initial_deck_size - 1)
+        self.assertEqual(state.common_view.cards_to_draw, initial_deck_size - 1)
 
     def test_card_drawing_on_discard(self):
         """Test that a new card is drawn after discarding."""
         state = self.game.state
 
         # First use a hint to reduce tokens below max
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(1, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         # Get current player and their hand
-        current_player = self.game.currentPlayer
-        hand = state.playerHands[current_player]
-        if hand.cards and state.commonView.hintTokens < self.settings.maxHintTokens:
-            initial_deck_size = state.commonView.cardsToDraw
+        current_player = self.game.current_player
+        hand = state.player_hands[current_player]
+        if hand.cards and state.common_view.hint_tokens < self.settings.max_hint_tokens:
+            initial_deck_size = state.common_view.cards_to_draw
             initial_hand_size = len(hand.cards)
 
             move = Discard(0)
-            self.game.processMove(current_player, move)
+            self.game.process_move(current_player, move)
 
             # Check hand size maintained and deck decreased
             state = self.game.state
-            new_hand = state.playerHands[current_player]
+            new_hand = state.player_hands[current_player]
             self.assertEqual(len(new_hand.cards), initial_hand_size)
-            self.assertEqual(state.commonView.cardsToDraw, initial_deck_size - 1)
+            self.assertEqual(state.common_view.cards_to_draw, initial_deck_size - 1)
 
     def test_no_card_drawing_when_deck_exhausted(self):
         """Test that no card is drawn when deck is exhausted."""
@@ -482,17 +482,17 @@ class TestGameComprehensive(unittest.TestCase):
 
         # Exhaust the deck by playing/discarding
         # Use hints first to reduce tokens
-        while state.commonView.hintTokens >= self.settings.maxHintTokens and state.commonView.cardsToDraw > 0:
-            current_player = self.game.currentPlayer
+        while state.common_view.hint_tokens >= self.settings.max_hint_tokens and state.common_view.cards_to_draw > 0:
+            current_player = self.game.current_player
             target = (current_player + 1) % 3
-            teammate_hand = state.playerHands[target]
+            teammate_hand = state.player_hands[target]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(target, matching, color)
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -502,17 +502,17 @@ class TestGameComprehensive(unittest.TestCase):
         # Now discard/play to exhaust deck - keep going until exhausted
         max_iterations = 100  # Safety limit
         iterations = 0
-        while state.commonView.cardsToDraw > 0 and iterations < max_iterations:
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
-            if hand.cards and state.commonView.liveTokens > 0:  # Don't play if no lives
+        while state.common_view.cards_to_draw > 0 and iterations < max_iterations:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
+            if hand.cards and state.common_view.live_tokens > 0:  # Don't play if no lives
                 # Use discard if possible, otherwise hint
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
-                elif state.commonView.hintTokens > 0:
+                elif state.common_view.hint_tokens > 0:
                     # Give a hint instead of playing
                     target = (current_player + 1) % 3
-                    target_hand = state.playerHands[target]
+                    target_hand = state.player_hands[target]
                     if target_hand.cards:
                         color = target_hand.cards[0].color
                         matching = [i for i, c in enumerate(target_hand.cards) if c.color == color]
@@ -525,8 +525,8 @@ class TestGameComprehensive(unittest.TestCase):
                 else:
                     break
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                     iterations += 1
                 except AssertionError:
@@ -536,17 +536,17 @@ class TestGameComprehensive(unittest.TestCase):
                 break
 
         # Deck should be exhausted (or we hit the limit)
-        # The main test is that cardsToDraw is 0, meaning no more cards can be drawn
-        # turnsLeft is set when a draw attempt happens on an exhausted deck
+        # The main test is that cards_to_draw is 0, meaning no more cards can be drawn
+        # turns_left is set when a draw attempt happens on an exhausted deck
         # If the deck is exhausted, verify the state
-        if state.commonView.cardsToDraw == 0:
-            # turnsLeft should be set if deck was exhausted during a draw
+        if state.common_view.cards_to_draw == 0:
+            # turns_left should be set if deck was exhausted during a draw
             # It may not be set if we're checking before any draw happens
-            # The key assertion is that cardsToDraw is 0
-            if state.turnsLeft is not None:
-                # turnsLeft should be numPlayers (all players get one final turn)
-                self.assertGreaterEqual(state.turnsLeft, 0)
-                self.assertLessEqual(state.turnsLeft, self.settings.numPlayers)
+            # The key assertion is that cards_to_draw is 0
+            if state.turns_left is not None:
+                # turns_left should be num_players (all players get one final turn)
+                self.assertGreaterEqual(state.turns_left, 0)
+                self.assertLessEqual(state.turns_left, self.settings.num_players)
         # If deck wasn't exhausted, that's acceptable - the test verifies the logic
         # when exhaustion occurs, but we can't guarantee it in all scenarios
 
@@ -556,86 +556,86 @@ class TestGameComprehensive(unittest.TestCase):
         """Test that turns cycle through players correctly."""
         # Use hints first to reduce tokens so we can discard
         state = self.game.state
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
             for _ in range(3):
-                current_player = self.game.currentPlayer
+                current_player = self.game.current_player
                 # Hint a different player (not self)
                 target = (current_player + 1) % 3
-                teammate_hand = state.playerHands[target]
+                teammate_hand = state.player_hands[target]
                 if teammate_hand.cards:
                     color = teammate_hand.cards[0].color
                     matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                     move = ColorHint(target, matching, color)
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
 
         for expected_player in range(3):
-            self.assertEqual(self.game.currentPlayer, expected_player)
+            self.assertEqual(self.game.current_player, expected_player)
             # Make a move (discard or play)
             state = self.game.state
-            hand = state.playerHands[expected_player]
+            hand = state.player_hands[expected_player]
             if hand.cards:
                 # Try discard first, if not possible, play
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
                 else:
                     # Play a card instead
                     move = Play(0)
                 try:
-                    self.game.processMove(expected_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(expected_player, move)
+                    self.game._advance_turn()
                 except AssertionError:
                     break
 
         # Should cycle back to player 0 (or be at some valid player)
-        self.assertIn(self.game.currentPlayer, [0, 1, 2])
+        self.assertIn(self.game.current_player, [0, 1, 2])
 
     def test_turn_number_increments(self):
         """Test that turn number increments with each move."""
-        initial_turn = self.game.state.turnNumber
+        initial_turn = self.game.state.turn_number
 
         # Use hint first if needed
         state = self.game.state
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(1, matching, color)
-                self.game.processMove(0, move)
+                self.game.process_move(0, move)
         else:
             move = Discard(0)
-            self.game.processMove(0, move)
+            self.game.process_move(0, move)
 
-        self.assertEqual(self.game.state.turnNumber, initial_turn + 1)
+        self.assertEqual(self.game.state.turn_number, initial_turn + 1)
 
     def test_turns_left_decrements_when_deck_exhausted(self):
         """Test that turns_left decrements when deck is exhausted."""
         # Exhaust deck - use hints first to reduce tokens
         state = self.game.state
-        while state.commonView.hintTokens >= self.settings.maxHintTokens and state.commonView.cardsToDraw > 0:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[(current_player + 1) % 3]
+        while state.common_view.hint_tokens >= self.settings.max_hint_tokens and state.common_view.cards_to_draw > 0:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[(current_player + 1) % 3]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint((current_player + 1) % 3, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         # Now discard/play to exhaust deck
-        while state.commonView.cardsToDraw > 0:
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
-            if hand.cards and state.commonView.liveTokens > 0:  # Don't play if no lives
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+        while state.common_view.cards_to_draw > 0:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
+            if hand.cards and state.common_view.live_tokens > 0:  # Don't play if no lives
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
-                elif state.commonView.hintTokens > 0:
+                elif state.common_view.hint_tokens > 0:
                     # Give a hint instead of playing
                     target = (current_player + 1) % 3
-                    target_hand = state.playerHands[target]
+                    target_hand = state.player_hands[target]
                     if target_hand.cards:
                         color = target_hand.cards[0].color
                         matching = [i for i, c in enumerate(target_hand.cards) if c.color == color]
@@ -648,8 +648,8 @@ class TestGameComprehensive(unittest.TestCase):
                 else:
                     break
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -657,17 +657,17 @@ class TestGameComprehensive(unittest.TestCase):
                 break
 
         # Check turns_left is set and decrements
-        if state.turnsLeft is not None:
-            initial_turns = state.turnsLeft
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
-            if hand.cards and state.commonView.liveTokens > 0:  # Don't play if no lives
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+        if state.turns_left is not None:
+            initial_turns = state.turns_left
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
+            if hand.cards and state.common_view.live_tokens > 0:  # Don't play if no lives
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
-                elif state.commonView.hintTokens > 0:
+                elif state.common_view.hint_tokens > 0:
                     # Give a hint instead of playing
                     target = (current_player + 1) % 3
-                    target_hand = state.playerHands[target]
+                    target_hand = state.player_hands[target]
                     if target_hand.cards:
                         color = target_hand.cards[0].color
                         matching = [i for i, c in enumerate(target_hand.cards) if c.color == color]
@@ -680,11 +680,11 @@ class TestGameComprehensive(unittest.TestCase):
                 else:
                     pass  # Skip if no hint tokens
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
-                    if state.turnsLeft is not None:
-                        self.assertEqual(state.turnsLeft, initial_turns - 1)
+                    if state.turns_left is not None:
+                        self.assertEqual(state.turns_left, initial_turns - 1)
                 except AssertionError:
                     pass
 
@@ -695,25 +695,25 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Lose all lives
-        while state.commonView.liveTokens > 0 and not self.game.isFinished:
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
+        while state.common_view.live_tokens > 0 and not self.game.is_finished:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
             if hand.cards:
                 # Play an invalid card
                 for i, card in enumerate(hand.cards):
                     if card.number != Number.ONE:
                         move = Play(i)
                         try:
-                            self.game.processMove(current_player, move)
-                            self.game._advanceTurn()
+                            self.game.process_move(current_player, move)
+                            self.game._advance_turn()
                             break
                         except AssertionError:
                             pass
             state = self.game.state
 
         # Game should be finished
-        self.assertTrue(self.game.isFinished)
-        self.assertEqual(state.commonView.liveTokens, 0)
+        self.assertTrue(self.game.is_finished)
+        self.assertEqual(state.common_view.live_tokens, 0)
 
     def test_game_ends_when_perfect_score(self):
         """Test that game ends when perfect score is achieved (all 5s played)."""
@@ -725,34 +725,34 @@ class TestGameComprehensive(unittest.TestCase):
             state._common_view._cards_played[color] = Number.FIVE
 
         # Game should be finished
-        self.assertTrue(state.isFinished())
+        self.assertTrue(state.is_finished())
 
     def test_game_ends_when_deck_exhausted_and_turns_complete(self):
         """Test that game ends when deck is exhausted and all players had final turn."""
         # Exhaust deck - use hints first
         state = self.game.state
-        while state.commonView.hintTokens >= self.settings.maxHintTokens and state.commonView.cardsToDraw > 0:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[(current_player + 1) % 3]
+        while state.common_view.hint_tokens >= self.settings.max_hint_tokens and state.common_view.cards_to_draw > 0:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[(current_player + 1) % 3]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint((current_player + 1) % 3, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         # Now discard/play to exhaust deck
-        while state.commonView.cardsToDraw > 0:
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
-            if hand.cards and state.commonView.liveTokens > 0:  # Don't play if no lives
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+        while state.common_view.cards_to_draw > 0:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
+            if hand.cards and state.common_view.live_tokens > 0:  # Don't play if no lives
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
-                elif state.commonView.hintTokens > 0:
+                elif state.common_view.hint_tokens > 0:
                     # Give a hint instead of playing
                     target = (current_player + 1) % 3
-                    target_hand = state.playerHands[target]
+                    target_hand = state.player_hands[target]
                     if target_hand.cards:
                         color = target_hand.cards[0].color
                         matching = [i for i, c in enumerate(target_hand.cards) if c.color == color]
@@ -765,8 +765,8 @@ class TestGameComprehensive(unittest.TestCase):
                 else:
                     break
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -774,17 +774,17 @@ class TestGameComprehensive(unittest.TestCase):
                 break
 
         # Play through final turns
-        if state.turnsLeft is not None:
-            while state.turnsLeft > 0 and not self.game.isFinished:
-                current_player = self.game.currentPlayer
-                hand = state.playerHands[current_player]
-                if hand.cards and state.commonView.liveTokens > 0:  # Don't play if no lives left
-                    if state.commonView.hintTokens < self.settings.maxHintTokens:
+        if state.turns_left is not None:
+            while state.turns_left > 0 and not self.game.is_finished:
+                current_player = self.game.current_player
+                hand = state.player_hands[current_player]
+                if hand.cards and state.common_view.live_tokens > 0:  # Don't play if no lives left
+                    if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                         move = Discard(0)
-                    elif state.commonView.hintTokens > 0:
+                    elif state.common_view.hint_tokens > 0:
                         # Give a hint instead of playing
                         target = (current_player + 1) % 3
-                        target_hand = state.playerHands[target]
+                        target_hand = state.player_hands[target]
                         if target_hand.cards:
                             color = target_hand.cards[0].color
                             matching = [i for i, c in enumerate(target_hand.cards) if c.color == color]
@@ -797,42 +797,42 @@ class TestGameComprehensive(unittest.TestCase):
                     else:
                         break
                     try:
-                        self.game.processMove(current_player, move)
-                        self.game._advanceTurn()
+                        self.game.process_move(current_player, move)
+                        self.game._advance_turn()
                     except AssertionError:
                         break
                 state = self.game.state
 
             # After all turns, game should be finished
-            if state.turnsLeft == 0:
-                self.assertTrue(self.game.isFinished)
+            if state.turns_left == 0:
+                self.assertTrue(self.game.is_finished)
 
     # ========== Score Calculation Tests ==========
 
     def test_initial_score_is_zero(self):
         """Test that initial score is zero."""
-        self.assertEqual(self.game.getScore(), 0)
+        self.assertEqual(self.game.get_score(), 0)
 
     def test_score_increases_with_played_cards(self):
         """Test that score increases as cards are played."""
-        initial_score = self.game.getScore()
+        initial_score = self.game.get_score()
 
         state = self.game.state
-        cp = self.game.currentPlayer
-        hand = state.playerHands[cp]
+        cp = self.game.current_player
+        hand = state.player_hands[cp]
         played = False
         for i, card in enumerate(hand.cards):
             if card.number == Number.ONE:
                 move = Play(i)
                 if state._validate(cp, move):
-                    self.game.processMove(cp, move)
+                    self.game.process_move(cp, move)
                     played = True
                     break
 
         if not played:
             self.skipTest("No playable 1 in current player's hand for this shuffle")
 
-        new_score = self.game.getScore()
+        new_score = self.game.get_score()
         self.assertGreater(new_score, initial_score)
         self.assertEqual(new_score, 1)
 
@@ -843,14 +843,14 @@ class TestGameComprehensive(unittest.TestCase):
         # Play cards of different colors
         colors_played = []
         for player_idx in range(3):
-            hand = state.playerHands[player_idx]
+            hand = state.player_hands[player_idx]
             for i, card in enumerate(hand.cards):
                 if card.number == Number.ONE and card.color not in colors_played:
                     move = Play(i)
                     try:
-                        self.game.processMove(player_idx, move)
+                        self.game.process_move(player_idx, move)
                         colors_played.append(card.color)
-                        self.game._advanceTurn()
+                        self.game._advance_turn()
                         state = self.game.state
                         if len(colors_played) >= 3:
                             break
@@ -860,7 +860,7 @@ class TestGameComprehensive(unittest.TestCase):
                 break
 
         # Score should equal number of cards played
-        score = self.game.getScore()
+        score = self.game.get_score()
         self.assertEqual(score, len(colors_played))
 
     # ========== State Management Tests ==========
@@ -885,17 +885,17 @@ class TestGameComprehensive(unittest.TestCase):
         # Make several moves - use hints first if needed
         state = self.game.state
         for _ in range(5):
-            if self.game.isFinished:
+            if self.game.is_finished:
                 break
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
             if hand.cards:
                 # Use discard if possible, otherwise play
-                if state.commonView.hintTokens < self.settings.maxHintTokens:
+                if state.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
                 else:
                     # Use hint to reduce tokens
-                    teammate_hand = state.playerHands[(current_player + 1) % 3]
+                    teammate_hand = state.player_hands[(current_player + 1) % 3]
                     if teammate_hand.cards:
                         color = teammate_hand.cards[0].color
                         matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
@@ -906,8 +906,8 @@ class TestGameComprehensive(unittest.TestCase):
                     else:
                         break
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -917,9 +917,9 @@ class TestGameComprehensive(unittest.TestCase):
         # Should have more turns in history
         self.assertGreater(len(self.game._turns), initial_turns)
 
-    def test_getPlayerView_excludes_own_hand(self):
-        """Test that getPlayerView excludes the requesting player's hand."""
-        view = self.game.getPlayerView(0)
+    def test_get_player_view_excludes_own_hand(self):
+        """Test that get_player_view excludes the requesting player's hand."""
+        view = self.game.get_player_view(0)
 
         # Should not see own hand
         self.assertNotIn(0, view.teammates)
@@ -930,8 +930,8 @@ class TestGameComprehensive(unittest.TestCase):
 
     # ========== Error Handling Tests ==========
 
-    def test_processMove_on_uninitialized_game(self):
-        """Test that processMove raises error on uninitialized game."""
+    def test_process_move_on_uninitialized_game(self):
+        """Test that process_move raises error on uninitialized game."""
         # Create game but don't initialize
         settings = create_standard_game_settings(2)
         players = [HumanPlayer(i) for i in range(2)]
@@ -940,18 +940,18 @@ class TestGameComprehensive(unittest.TestCase):
 
         # Should raise AssertionError (since we use assertions now)
         with self.assertRaises(AssertionError) as context:
-            game.processMove(0, Play(0))
+            game.process_move(0, Play(0))
         self.assertIn("not initialized", str(context.exception).lower())
 
-    def test_getPlayerView_on_uninitialized_game(self):
-        """Test that getPlayerView raises error on uninitialized game."""
+    def test_get_player_view_on_uninitialized_game(self):
+        """Test that get_player_view raises error on uninitialized game."""
         settings = create_standard_game_settings(2)
         players = [HumanPlayer(i) for i in range(2)]
         team = PlayerTeam(players)
         game = Game(StartPosition(settings, Deck([])), team)
 
         with self.assertRaises(AssertionError) as context:
-            game.getPlayerView(0)
+            game.get_player_view(0)
         self.assertIn("not initialized", str(context.exception).lower())
 
     def test_state_property_on_uninitialized_game(self):
@@ -965,7 +965,7 @@ class TestGameComprehensive(unittest.TestCase):
             _ = game.state
         self.assertIn("not initialized", str(context.exception).lower())
 
-    def test_processMove_with_unknown_move_type(self):
+    def test_process_move_with_unknown_move_type(self):
         """Test that unknown move types raise AssertionError."""
         # Create a fake move type
         class FakeMove:
@@ -987,14 +987,14 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Fill hint tokens to max
-        while state.commonView.hintTokens < self.settings.maxHintTokens:
+        while state.common_view.hint_tokens < self.settings.max_hint_tokens:
             move = Discard(0)
-            self.game.processMove(self.game.currentPlayer, move)
-            self.game._advanceTurn()
+            self.game.process_move(self.game.current_player, move)
+            self.game._advance_turn()
             state = self.game.state
 
-        # Now _updateDiscard should assert (but validation should prevent this)
-        # This tests the assertion in _updateDiscard
+        # Now _update_discard should assert (but validation should prevent this)
+        # This tests the assertion in _update_discard
         # Since validation prevents it, we test the assertion by calling update directly
         # (which should never happen in normal flow)
         state = self.game.state
@@ -1006,18 +1006,18 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Use all hint tokens
-        while state.commonView.hintTokens > 0:
-            current_player = self.game.currentPlayer
+        while state.common_view.hint_tokens > 0:
+            current_player = self.game.current_player
             # Hint a different player (not self)
             target = (current_player + 1) % 3
-            teammate_hand = state.playerHands[target]
+            teammate_hand = state.player_hands[target]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(target, matching, color)
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -1026,39 +1026,39 @@ class TestGameComprehensive(unittest.TestCase):
 
         # Validation should prevent this, but test the assertion exists
         # Similar to above, we can't easily test without bypassing validation
-        # The assertion is in _updateHint, but validation prevents reaching it
+        # The assertion is in _update_hint, but validation prevents reaching it
 
     def test_hand_size_maintained_after_moves(self):
         """Test that hand size is maintained after all move types."""
         state = self.game.state
-        initial_hand_size = len(state.playerHands[0].cards)
+        initial_hand_size = len(state.player_hands[0].cards)
 
         # Test play
-        for i, card in enumerate(state.playerHands[0].cards):
+        for i, card in enumerate(state.player_hands[0].cards):
             if card.number == Number.ONE:
                 move = Play(i)
-                self.game.processMove(0, move)
+                self.game.process_move(0, move)
                 break
 
         state = self.game.state
-        self.assertEqual(len(state.playerHands[0].cards), initial_hand_size)
+        self.assertEqual(len(state.player_hands[0].cards), initial_hand_size)
 
         # Test discard (use hint first if needed)
-        if state.commonView.hintTokens >= self.settings.maxHintTokens:
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint(1, matching, color)
-                self.game.processMove(0, move)
-                self.game._advanceTurn()
+                self.game.process_move(0, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         move = Discard(0)
         try:
-            self.game.processMove(0, move)
+            self.game.process_move(0, move)
             state = self.game.state
-            self.assertEqual(len(state.playerHands[0].cards), initial_hand_size)
+            self.assertEqual(len(state.player_hands[0].cards), initial_hand_size)
         except AssertionError:
             # If discard fails, that's ok - we tested play already
             pass
@@ -1068,29 +1068,29 @@ class TestGameComprehensive(unittest.TestCase):
         state = self.game.state
 
         # Use hints first to reduce tokens
-        while state.commonView.hintTokens >= self.settings.maxHintTokens:
-            current_player = self.game.currentPlayer
-            teammate_hand = state.playerHands[(current_player + 1) % 3]
+        while state.common_view.hint_tokens >= self.settings.max_hint_tokens:
+            current_player = self.game.current_player
+            teammate_hand = state.player_hands[(current_player + 1) % 3]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 move = ColorHint((current_player + 1) % 3, matching, color)
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
                 state = self.game.state
 
         # Discard multiple cards
         cards_discarded = []
         for _ in range(3):
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
-            if hand.cards and state.commonView.hintTokens < self.settings.maxHintTokens:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
+            if hand.cards and state.common_view.hint_tokens < self.settings.max_hint_tokens:
                 card = hand.cards[0]
                 cards_discarded.append(card)
                 move = Discard(0)
                 try:
-                    self.game.processMove(current_player, move)
-                    self.game._advanceTurn()
+                    self.game.process_move(current_player, move)
+                    self.game._advance_turn()
                     state = self.game.state
                 except AssertionError:
                     break
@@ -1100,7 +1100,7 @@ class TestGameComprehensive(unittest.TestCase):
         # Check discard pile counts
         if cards_discarded:
             first_card = cards_discarded[0]
-            discarded = state.commonView.cardsDiscarded
+            discarded = state.common_view.cards_discarded
             if first_card.color in discarded:
                 count = discarded[first_card.color].cards.get(first_card.number, 0)
                 # Should have at least one of this card type
@@ -1117,18 +1117,18 @@ class TestGameComprehensive(unittest.TestCase):
 
         # RandomPlayer must return only legal moves; illegal moves are bugs (assert)
         game.play()
-        self.assertTrue(game.isFinished)
+        self.assertTrue(game.is_finished)
 
     def test_game_state_consistency_after_multiple_moves(self):
         """Test that game state remains consistent after multiple moves."""
         # Make many moves and check state consistency
         for _ in range(20):
-            if self.game.isFinished:
+            if self.game.is_finished:
                 break
 
-            current_player = self.game.currentPlayer
+            current_player = self.game.current_player
             state = self.game.state
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
@@ -1136,78 +1136,78 @@ class TestGameComprehensive(unittest.TestCase):
             # Make a move
             move = Discard(0)
             try:
-                self.game.processMove(current_player, move)
-                self.game._advanceTurn()
+                self.game.process_move(current_player, move)
+                self.game._advance_turn()
 
                 # Check state consistency
                 new_state = self.game.state
-                self.assertGreaterEqual(new_state.commonView.liveTokens, 0)
-                self.assertGreaterEqual(new_state.commonView.hintTokens, 0)
-                self.assertLessEqual(new_state.commonView.hintTokens, self.settings.maxHintTokens)
-                self.assertGreaterEqual(new_state.commonView.cardsToDraw, 0)
+                self.assertGreaterEqual(new_state.common_view.live_tokens, 0)
+                self.assertGreaterEqual(new_state.common_view.hint_tokens, 0)
+                self.assertLessEqual(new_state.common_view.hint_tokens, self.settings.max_hint_tokens)
+                self.assertGreaterEqual(new_state.common_view.cards_to_draw, 0)
 
             except AssertionError:
                 break
 
     def test_turn_number_tracks_correctly(self):
         """Test that turn number tracks correctly through game."""
-        initial_turn = self.game.state.turnNumber
+        initial_turn = self.game.state.turn_number
 
         # Make 10 moves
         for i in range(10):
-            if self.game.isFinished:
+            if self.game.is_finished:
                 break
-            current_player = self.game.currentPlayer
+            current_player = self.game.current_player
             move = Discard(0)
             try:
-                self.game.processMove(current_player, move)
+                self.game.process_move(current_player, move)
                 expected_turn = initial_turn + i + 1
-                self.assertEqual(self.game.state.turnNumber, expected_turn)
-                self.game._advanceTurn()
+                self.assertEqual(self.game.state.turn_number, expected_turn)
+                self.game._advance_turn()
             except AssertionError:
                 break
 
     # ========== Property Tests ==========
 
-    def test_isFinished_property(self):
-        """Test isFinished property."""
+    def test_is_finished_property(self):
+        """Test is_finished property."""
         # Initially not finished
-        self.assertFalse(self.game.isFinished)
+        self.assertFalse(self.game.is_finished)
 
         # Lose all lives
         state = self.game.state
-        while state.commonView.liveTokens > 0 and not self.game.isFinished:
-            current_player = self.game.currentPlayer
-            hand = state.playerHands[current_player]
+        while state.common_view.live_tokens > 0 and not self.game.is_finished:
+            current_player = self.game.current_player
+            hand = state.player_hands[current_player]
             if hand.cards:
                 for i, card in enumerate(hand.cards):
                     if card.number != Number.ONE:
                         move = Play(i)
                         try:
-                            self.game.processMove(current_player, move)
-                            self.game._advanceTurn()
+                            self.game.process_move(current_player, move)
+                            self.game._advance_turn()
                             break
                         except AssertionError:
                             pass
             state = self.game.state
 
         # Should be finished
-        if state.commonView.liveTokens <= 0:
-            self.assertTrue(self.game.isFinished)
+        if state.common_view.live_tokens <= 0:
+            self.assertTrue(self.game.is_finished)
 
-    def test_currentPlayer_property(self):
-        """Test currentPlayer property."""
+    def test_current_player_property(self):
+        """Test current_player property."""
         # Initially player 0
-        self.assertEqual(self.game.currentPlayer, 0)
+        self.assertEqual(self.game.current_player, 0)
 
         # After advancing, should be player 1
-        self.game._advanceTurn()
-        self.assertEqual(self.game.currentPlayer, 1)
+        self.game._advance_turn()
+        self.assertEqual(self.game.current_player, 1)
 
     def test_settings_property(self):
         """Test settings property."""
         self.assertEqual(self.game.settings, self.settings)
-        self.assertEqual(self.game.settings.numPlayers, 3)
+        self.assertEqual(self.game.settings.num_players, 3)
 
     def test_team_property(self):
         """Test team property."""

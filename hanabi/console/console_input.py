@@ -83,7 +83,7 @@ class ConsoleInput:
                 # Convert 1-based UI index to 0-based internal index
                 card_index = card_index_ui - 1
                 state = self._game.state
-                hand = state.playerHands[self._player_index]
+                hand = state.player_hands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
                     return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
                 return Play(card_index), None
@@ -98,7 +98,7 @@ class ConsoleInput:
                 # Convert 1-based UI index to 0-based internal index
                 card_index = card_index_ui - 1
                 state = self._game.state
-                hand = state.playerHands[self._player_index]
+                hand = state.player_hands[self._player_index]
                 if card_index < 0 or card_index >= len(hand.cards):
                     return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
                 return Discard(card_index), None
@@ -113,7 +113,7 @@ class ConsoleInput:
     def _parse_simplified_hint(self, player_index: int, rest: str) -> Tuple[Optional[Move], Optional[str]]:
         """Parse simplified hint format: h<value> or h<color><value> or h<number><value>."""
         state = self._game.state
-        num_players = len(state.playerHands)
+        num_players = len(state.player_hands)
 
         # In 2-player game, automatically hint the other player
         if num_players == 2:
@@ -135,7 +135,7 @@ class ConsoleInput:
         if not rest:
             return None, "Usage: h<value> (e.g., h3 for number 3, hr for red)"
 
-        teammate_hand = state.playerHands[teammate_idx]
+        teammate_hand = state.player_hands[teammate_idx]
 
         # Try to parse as number first
         if rest.isdigit():
@@ -202,7 +202,7 @@ class ConsoleInput:
             # Convert 1-based UI index to 0-based internal index
             card_index = card_index_ui - 1
             state = self._game.state
-            hand = state.playerHands[self._player_index]
+            hand = state.player_hands[self._player_index]
 
             if card_index < 0 or card_index >= len(hand.cards):
                 return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
@@ -221,7 +221,7 @@ class ConsoleInput:
             # Convert 1-based UI index to 0-based internal index
             card_index = card_index_ui - 1
             state = self._game.state
-            hand = state.playerHands[self._player_index]
+            hand = state.player_hands[self._player_index]
 
             if card_index < 0 or card_index >= len(hand.cards):
                 return None, f"Invalid card index. Your hand has {len(hand.cards)} cards (indices 1-{len(hand.cards)})"
@@ -239,14 +239,14 @@ class ConsoleInput:
             teammate_idx = int(parts[1]) - 1  # Convert from 1-based to 0-based
             state = self._game.state
 
-            if teammate_idx < 0 or teammate_idx >= len(state.playerHands):
-                return None, f"Invalid player index. Valid players: 1-{len(state.playerHands)}"
+            if teammate_idx < 0 or teammate_idx >= len(state.player_hands):
+                return None, f"Invalid player index. Valid players: 1-{len(state.player_hands)}"
 
             if teammate_idx == self._player_index:
                 return None, "You cannot give a hint to yourself"
 
             hint_type = parts[2].lower()
-            teammate_hand = state.playerHands[teammate_idx]
+            teammate_hand = state.player_hands[teammate_idx]
 
             if hint_type == "color":
                 # Parse color

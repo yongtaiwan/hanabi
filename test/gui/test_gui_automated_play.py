@@ -50,11 +50,11 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         def record_move(move):
             move_callback_calls.append(move)
             # Actually process the move
-            current_player = engine.currentPlayer
-            success, msg = engine.processMove(current_player, move)
+            current_player = engine.current_player
+            success, msg = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
-                display.display_game_state(engine, engine.currentPlayer)
+                display.display_game_state(engine, engine.current_player)
             return success, msg
 
         input_handler.set_move_callback(record_move)
@@ -73,10 +73,10 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         moves_made = 0
         max_moves = 30  # Safety limit
 
-        while not engine.isFinished() and moves_made < max_moves:
-            current_player = engine.currentPlayer
+        while not engine.is_finished() and moves_made < max_moves:
+            current_player = engine.current_player
             state = engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
@@ -89,7 +89,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
             # Try to play a valid card (number 1 or next in sequence)
             for i, card in enumerate(hand.cards):
-                cards_played = state.commonView.cardsPlayed
+                cards_played = state.common_view.cards_played
                 if card.color not in cards_played:
                     # Need a 1
                     if card.number == Number.ONE:
@@ -116,9 +116,9 @@ class TestGUIAutomatedPlay(unittest.TestCase):
                 continue
 
             # If can't play, try to give a hint
-            if state.commonView.hintTokens > 0:
+            if state.common_view.hint_tokens > 0:
                 teammate = 1 if current_player == 0 else 0
-                teammate_hand = state.playerHands[teammate]
+                teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     # Give color hint
                     color = teammate_hand.cards[0].color
@@ -132,7 +132,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
                             continue
 
             # Otherwise discard
-            if state.commonView.hintTokens < engine.settings.maxHintTokens:
+            if state.common_view.hint_tokens < engine.settings.max_hint_tokens:
                 move = Discard(0)
                 success, msg = record_move(move)
                 if success:
@@ -155,7 +155,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         self.assertGreater(moves_made, 0)
 
         # Verify display is still functional
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._card_widgets), 0)
 
         # Save and verify history
@@ -199,7 +199,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Select a card
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         if hand.cards:
             input_handler._on_card_selected(0)
             self.assertEqual(display._selected_card, 0)
@@ -240,7 +240,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Select target card
         state = engine.gameState
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         if teammate_hand.cards:
             card = teammate_hand.cards[0]
             matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == card.color]
@@ -273,8 +273,8 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         def record_move(move):
             move_callback_calls.append(move)
-            current_player = engine.currentPlayer
-            success, msg = engine.processMove(current_player, move)
+            current_player = engine.current_player
+            success, msg = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
             return success, msg
@@ -285,21 +285,21 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Make 5 moves
         for turn in range(5):
-            if engine.isFinished():
+            if engine.is_finished():
                 break
 
-            current_player = engine.currentPlayer
+            current_player = engine.current_player
             display.display_game_state(engine, current_player)
 
             state = engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
 
             # Select and discard a card
             input_handler._on_card_selected(0)
-            if state.commonView.hintTokens < engine.settings.maxHintTokens:
+            if state.common_view.hint_tokens < engine.settings.max_hint_tokens:
                 display._on_discard_clicked()
             else:
                 display._on_play_clicked()
@@ -311,7 +311,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
                 move_callback_calls.clear()
 
             # Verify display updated
-            display.display_game_state(engine, engine.currentPlayer)
+            display.display_game_state(engine, engine.current_player)
             self.assertGreater(len(display._card_widgets), 0)
 
     def test_selected_card_validation(self):
@@ -328,14 +328,14 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Select last card
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         if len(hand.cards) > 1:
             last_idx = len(hand.cards) - 1
             display._selected_card = last_idx
 
             # Play a different card (reduces hand size)
             move = Play(0)
-            engine.processMove(0, move)
+            engine.process_move(0, move)
             engine.advanceTurn()
 
             # Display new state - selected card should be validated
@@ -343,7 +343,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
             # Selected card should be None (different player) or valid
             if display._selected_card is not None:
-                new_hand = engine.gameState.playerHands[1]
+                new_hand = engine.gameState.player_hands[1]
                 self.assertLess(display._selected_card, len(new_hand.cards))
 
     def test_button_state_updates(self):
@@ -369,13 +369,13 @@ class TestGUIAutomatedPlay(unittest.TestCase):
         # Test when hint tokens at max (can't discard)
         state = engine.gameState
         # Use up hint tokens to max
-        while state.commonView.hintTokens < engine.settings.maxHintTokens:
+        while state.common_view.hint_tokens < engine.settings.max_hint_tokens:
             move = Discard(0)
-            engine.processMove(engine.currentPlayer, move)
+            engine.process_move(engine.current_player, move)
             engine.advanceTurn()
             state = engine.gameState
 
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         display._update_action_buttons()
 
     def test_canvas_resize_handling(self):
@@ -440,7 +440,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Try to select invalid card index
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         invalid_idx = len(hand.cards) + 10
 
         # Should not crash
@@ -477,7 +477,7 @@ class TestGUIAutomatedPlay(unittest.TestCase):
 
         # Try to give hint - should handle gracefully even if no matching
         state = engine.gameState
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         if teammate_hand.cards:
             # This should work even if there's only one card of that color
             input_handler._on_hint_target_selected(1, 0)

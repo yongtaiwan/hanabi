@@ -18,14 +18,14 @@ class TestHintTracking(unittest.TestCase):
         """Set up test fixtures."""
         self.player = HumanPlayer(0)
         self.player.set_game_settings(create_standard_game_settings(3))
-        self._observer_view = PlayerView({}, self.player.gameSettings.maxCardsInHand)
+        self._observer_view = PlayerView({}, self.player.game_settings.max_cards_in_hand)
 
     def test_receive_color_hint(self):
         """Test receiving a color hint."""
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0, 2])
-        self.player._updateHintsFromHint(hint)
+        self.player._update_hints_from_hint(hint)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[0]["color"], Color.RED)
         self.assertIsNone(hints[0]["number"])
         self.assertEqual(hints[2]["color"], Color.RED)
@@ -34,9 +34,9 @@ class TestHintTracking(unittest.TestCase):
     def test_receive_number_hint(self):
         """Test receiving a number hint."""
         hint = NumberHint(teammate=0, number=Number.ONE, cards=[1, 3])
-        self.player._updateHintsFromHint(hint)
+        self.player._update_hints_from_hint(hint)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[1]["number"], Number.ONE)
         self.assertIsNone(hints[1]["color"])
         self.assertEqual(hints[3]["number"], Number.ONE)
@@ -47,10 +47,10 @@ class TestHintTracking(unittest.TestCase):
         color_hint = ColorHint(teammate=0, color=Color.RED, cards=[1])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[1])
 
-        self.player._updateHintsFromHint(color_hint)
-        self.player._updateHintsFromHint(number_hint)
+        self.player._update_hints_from_hint(color_hint)
+        self.player._update_hints_from_hint(number_hint)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[1]["color"], Color.RED)
         self.assertEqual(hints[1]["number"], Number.ONE)
 
@@ -66,9 +66,9 @@ class TestHintTracking(unittest.TestCase):
 
         # Play card at position 0
         move = Play(0)
-        self.player._updateHintsFromCardMove(move)
+        self.player._update_hints_from_card_move(move)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         # Position 0 hint (RED) should be removed (card was played)
         # New card fills position 0, so all other cards stay at same positions (no net shift)
         self.assertEqual(hints[1]["color"], Color.BLUE)  # Was at 1, stays at 1
@@ -87,9 +87,9 @@ class TestHintTracking(unittest.TestCase):
 
         # Play card at position 1
         move = Play(1)
-        self.player._updateHintsFromCardMove(move)
+        self.player._update_hints_from_card_move(move)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         # Position 1 hint (BLUE) should be removed
         # Hints at positions < 1 should shift right by 1
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
@@ -110,9 +110,9 @@ class TestHintTracking(unittest.TestCase):
 
         # Play card at position 2
         move = Play(2)
-        self.player._updateHintsFromCardMove(move)
+        self.player._update_hints_from_card_move(move)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         # Position 2 hint (GREEN) should be removed
         # Hints at positions < 2 should shift right by 1
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
@@ -133,9 +133,9 @@ class TestHintTracking(unittest.TestCase):
 
         # Play card at position 3 (last)
         move = Play(3)
-        self.player._updateHintsFromCardMove(move)
+        self.player._update_hints_from_card_move(move)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         # Position 3 hint (YELLOW) should be removed
         # All other hints should shift right by 1
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
@@ -154,9 +154,9 @@ class TestHintTracking(unittest.TestCase):
 
         # Discard card at position 1
         move = Discard(1)
-        self.player._updateHintsFromCardMove(move)
+        self.player._update_hints_from_card_move(move)
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         # Position 1 hint (BLUE) should be removed
         # Hints should shift correctly
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
@@ -174,17 +174,17 @@ class TestHintTracking(unittest.TestCase):
         }
 
         # Play card at position 0 (RED hint removed)
-        self.player._updateHintsFromCardMove(Play(0))
+        self.player._update_hints_from_card_move(Play(0))
         # New card fills position 0, so remaining hints stay at same positions
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[1]["color"], Color.BLUE)  # Was at 1, stays at 1
         self.assertEqual(hints[2]["color"], Color.GREEN)  # Was at 2, stays at 2
         self.assertEqual(hints[3]["color"], Color.YELLOW)  # Was at 3, stays at 3
 
         # Play card at position 2 (GREEN hint removed)
-        self.player._updateHintsFromCardMove(Play(2))
+        self.player._update_hints_from_card_move(Play(2))
         # Position 2 hint (GREEN) removed, positions < 2 shift right, positions > 2 stay same
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[2]["color"], Color.BLUE)  # Was at 1, shifted to 2
         self.assertEqual(hints[3]["color"], Color.YELLOW)  # Was at 3, stays at 3
 
@@ -196,15 +196,15 @@ class TestHintTracking(unittest.TestCase):
         }
 
         # Play card at position 0
-        self.player._updateHintsFromCardMove(Play(0))
+        self.player._update_hints_from_card_move(Play(0))
         # New card fills position 0, so hint at position 1 stays at position 1
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[1]["color"], Color.BLUE)
 
         # Receive new hint at position 0
         new_hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
-        self.player._updateHintsFromHint(new_hint)
-        hints = self.player.getHints()
+        self.player._update_hints_from_hint(new_hint)
+        hints = self.player.get_hints()
         self.assertEqual(hints[0]["color"], Color.RED)
         self.assertEqual(hints[1]["color"], Color.BLUE)  # Still at position 1
 
@@ -214,7 +214,7 @@ class TestHintTracking(unittest.TestCase):
         hint_for_me = ColorHint(teammate=0, color=Color.RED, cards=[0])
         self.player.observe(1, hint_for_me, self._observer_view)  # Player 1 gives hint to player 0
 
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[0]["color"], Color.RED)
 
         # Hint for another player (player 1)
@@ -222,7 +222,7 @@ class TestHintTracking(unittest.TestCase):
         self.player.observe(2, hint_for_other, self._observer_view)  # Player 2 gives hint to player 1
 
         # Should not affect this player's hints
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(len(hints), 1)
         self.assertEqual(hints[0]["color"], Color.RED)
 
@@ -238,7 +238,7 @@ class TestHintTracking(unittest.TestCase):
         self.player.observe(1, Play(0), self._observer_view)  # Player 1 plays their card 0
 
         # Should not affect this player's hints
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[0]["color"], Color.RED)
         self.assertEqual(hints[1]["color"], Color.BLUE)
 
@@ -246,7 +246,7 @@ class TestHintTracking(unittest.TestCase):
         self.player.observe(0, Play(0), self._observer_view)  # Player 0 plays their card 0
 
         # RED hint at 0 is removed, new card fills position 0, so BLUE hint stays at 1
-        hints = self.player.getHints()
+        hints = self.player.get_hints()
         self.assertEqual(hints[1]["color"], Color.BLUE)  # Was at 1, stays at 1
 
 

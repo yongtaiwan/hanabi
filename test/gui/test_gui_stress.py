@@ -45,12 +45,12 @@ class TestGUIStress(unittest.TestCase):
 
         # Rapidly change display state
         for i in range(10):
-            current_player = engine.currentPlayer
+            current_player = engine.current_player
             display.display_game_state(engine, current_player)
 
             # Make a move
             move = Discard(0)
-            success, _ = engine.processMove(current_player, move)
+            success, _ = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
             else:
@@ -72,7 +72,7 @@ class TestGUIStress(unittest.TestCase):
         display.display_game_state(engine, 0)
 
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         if len(hand.cards) > 1:
             # Select last card
@@ -81,15 +81,15 @@ class TestGUIStress(unittest.TestCase):
 
             # Play first card (reduces hand size)
             move = Play(0)
-            success, _ = engine.processMove(0, move)
+            success, _ = engine.process_move(0, move)
             if success:
                 engine.advanceTurn()
 
             # Display new state
-            display.display_game_state(engine, engine.currentPlayer)
+            display.display_game_state(engine, engine.current_player)
 
             # Selected card should be validated/reset
-            new_hand = engine.gameState.playerHands[engine.currentPlayer]
+            new_hand = engine.gameState.player_hands[engine.current_player]
             if display._selected_card is not None:
                 self.assertLess(display._selected_card, len(new_hand.cards),
                               "Selected card index should be valid")
@@ -112,16 +112,16 @@ class TestGUIStress(unittest.TestCase):
 
         # Empty teammate's hand by discarding all cards (with safety limit)
         state = engine.gameState
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         max_discards = 10
         discards = 0
         while teammate_hand.cards and discards < max_discards:
             move = Discard(0)
-            success, _ = engine.processMove(engine.currentPlayer, move)
+            success, _ = engine.process_move(engine.current_player, move)
             if success:
                 engine.advanceTurn()
                 state = engine.gameState
-                teammate_hand = state.playerHands[1]
+                teammate_hand = state.player_hands[1]
                 discards += 1
             else:
                 break
@@ -164,7 +164,7 @@ class TestGUIStress(unittest.TestCase):
         display.display_game_state(engine, 0)
 
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         # Select a card
         if hand.cards:
@@ -173,16 +173,16 @@ class TestGUIStress(unittest.TestCase):
             # Play multiple cards to reduce hand size
             for i in range(min(3, len(hand.cards))):
                 move = Play(0)
-                engine.processMove(0, move)
+                engine.process_move(0, move)
                 engine.advanceTurn()
-                if engine.isFinished():
+                if engine.is_finished():
                     break
 
             # Display new state
-            display.display_game_state(engine, engine.currentPlayer)
+            display.display_game_state(engine, engine.current_player)
 
             # Selected card should be validated
-            new_hand = engine.gameState.playerHands[engine.currentPlayer]
+            new_hand = engine.gameState.player_hands[engine.current_player]
             if display._selected_card is not None:
                 self.assertLess(display._selected_card, len(new_hand.cards),
                               "Selected card should be valid after hand size change")
@@ -200,14 +200,14 @@ class TestGUIStress(unittest.TestCase):
 
         # Use up all hint tokens
         state = engine.gameState
-        while state.commonView.hintTokens > 0:
-            teammate_hand = state.playerHands[1]
+        while state.common_view.hint_tokens > 0:
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                 if matching:
                     move = ColorHint(1, matching, color)
-                    engine.processMove(engine.currentPlayer, move)
+                    engine.process_move(engine.current_player, move)
                     engine.advanceTurn()
                     state = engine.gameState
                 else:
@@ -216,7 +216,7 @@ class TestGUIStress(unittest.TestCase):
                 break
 
         # Display should work with zero hint tokens
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._card_widgets), 0)
 
     def test_display_with_zero_lives(self):
@@ -232,17 +232,17 @@ class TestGUIStress(unittest.TestCase):
 
         # Lose all lives
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         for i in range(min(3, len(hand.cards))):
             if hand.cards[i].number != Number.ONE:
                 move = Play(i)
-                engine.processMove(0, move)
+                engine.process_move(0, move)
                 engine.advanceTurn()
-                if engine.gameState.commonView.liveTokens <= 0:
+                if engine.gameState.common_view.live_tokens <= 0:
                     break
 
         # Display should work even with zero lives
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._card_widgets), 0)
 
     def test_fireworks_display_with_all_colors_played(self):
@@ -258,7 +258,7 @@ class TestGUIStress(unittest.TestCase):
 
         # Play one card of each color
         state = engine.gameState
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
         colors_played = set()
 
         for card in hand.cards:
@@ -266,15 +266,15 @@ class TestGUIStress(unittest.TestCase):
                 colors_played.add(card.color)
                 card_idx = hand.cards.index(card)
                 move = Play(card_idx)
-                engine.processMove(0, move)
+                engine.process_move(0, move)
                 engine.advanceTurn()
                 if len(colors_played) >= 5:
                     break
                 state = engine.gameState
-                hand = state.playerHands[engine.currentPlayer]
+                hand = state.player_hands[engine.current_player]
 
         # Display should show all fireworks
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._firework_widgets), 0)
 
     def test_canvas_click_with_invalid_coordinates(self):
@@ -318,9 +318,9 @@ class TestGUIStress(unittest.TestCase):
 
         # Fill hint tokens to max
         state = engine.gameState
-        while state.commonView.hintTokens < engine.settings.maxHintTokens:
+        while state.common_view.hint_tokens < engine.settings.max_hint_tokens:
             move = Discard(0)
-            success, _ = engine.processMove(engine.currentPlayer, move)
+            success, _ = engine.process_move(engine.current_player, move)
             if success:
                 engine.advanceTurn()
                 state = engine.gameState
@@ -328,7 +328,7 @@ class TestGUIStress(unittest.TestCase):
                 break
 
         # Display should work
-        display.display_game_state(engine, engine.currentPlayer)
+        display.display_game_state(engine, engine.current_player)
         self.assertGreater(len(display._card_widgets), 0)
 
         # Discard button should not be available
@@ -410,7 +410,7 @@ class TestGUIStress(unittest.TestCase):
                 # Should display correctly for any number of players
                 self.assertGreater(len(display._card_widgets), 0)
                 self.assertEqual(len(display._card_positions),
-                               sum(len(hand.cards) for hand in engine.gameState.playerHands))
+                               sum(len(hand.cards) for hand in engine.gameState.player_hands))
 
     def test_concurrent_display_updates(self):
         """Test that display handles rapid updates correctly."""
@@ -425,12 +425,12 @@ class TestGUIStress(unittest.TestCase):
 
         # Rapidly update display
         for i in range(20):
-            current_player = engine.currentPlayer
+            current_player = engine.current_player
             display.display_game_state(engine, current_player)
 
             # Make a move
             move = Discard(0)
-            success, _ = engine.processMove(current_player, move)
+            success, _ = engine.process_move(current_player, move)
             if success:
                 engine.advanceTurn()
             else:

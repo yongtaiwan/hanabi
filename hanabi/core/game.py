@@ -78,7 +78,7 @@ class StartPosition:
         return self._settings
 
     @property
-    def drawDeck(self) -> Deck:
+    def draw_deck(self) -> Deck:
         """Get the initial draw deck."""
         return self._draw_deck
 
@@ -135,22 +135,22 @@ class GameSettings:
         self._auto_end_when_no_points_possible = auto_end_when_no_points_possible
 
     @property
-    def numPlayers(self) -> int:
+    def num_players(self) -> int:
         """Get the number of players."""
         return self._num_players
 
     @property
-    def maxLiveTokens(self) -> int:
+    def max_live_tokens(self) -> int:
         """Get the maximum number of live tokens."""
         return self._max_live_tokens
 
     @property
-    def maxHintTokens(self) -> int:
+    def max_hint_tokens(self) -> int:
         """Get the maximum number of hint tokens."""
         return self._max_hint_tokens
 
     @property
-    def maxCardsInHand(self) -> int:
+    def max_cards_in_hand(self) -> int:
         """Get the maximum cards in hand."""
         return self._max_cards_in_hand
 
@@ -160,7 +160,7 @@ class GameSettings:
         return self._cards.copy()
 
     @property
-    def autoEndWhenNoPointsPossible(self) -> bool:
+    def auto_end_when_no_points_possible(self) -> bool:
         """Get whether to auto-end when no more points are possible."""
         return self._auto_end_when_no_points_possible
 
@@ -282,31 +282,31 @@ class CommonView:
         self._cards_played = cards_played.copy()
 
     @property
-    def liveTokens(self) -> int:
+    def live_tokens(self) -> int:
         """Get the current number of live tokens."""
         return self._live_tokens
 
     @property
-    def hintTokens(self) -> int:
+    def hint_tokens(self) -> int:
         """Get the current number of hint tokens."""
         return self._hint_tokens
 
     @property
-    def cardsToDraw(self) -> int:
+    def cards_to_draw(self) -> int:
         """Get the number of cards remaining to draw."""
         return self._cards_to_draw
 
     @property
-    def cardsDiscarded(self) -> Dict[Color, Suit]:
+    def cards_discarded(self) -> Dict[Color, Suit]:
         """Get the discarded cards mapping (Color -> Suit)."""
         return self._cards_discarded.copy()
 
     @property
-    def cardsPlayed(self) -> Dict[Color, Number]:
+    def cards_played(self) -> Dict[Color, Number]:
         """Get the played cards mapping (Color -> Number)."""
         return self._cards_played.copy()
 
-    def cardKind(self, card: Card, settings: GameSettings) -> CardKind:
+    def card_kind(self, card: Card, settings: GameSettings) -> CardKind:
         """
         Classify ``card`` for full-information discard / play heuristics.
 
@@ -399,11 +399,11 @@ class PlayerView:
         return {k: Hand(v.cards) for k, v in self._teammates.items()}
 
     @property
-    def ownHandSize(self) -> int:
+    def own_hand_size(self) -> int:
         """Get the size of the player's own hand (cards are hidden)."""
         return self._own_hand_size
 
-    def visibleHandCardCounts(self) -> Counter:
+    def visible_hand_card_counts(self) -> Counter:
         """Multiset of cards visible in teammates' hands (excludes own hidden hand)."""
         c: Counter = Counter()
         for hand in self._teammates.values():
@@ -449,37 +449,37 @@ class GameState:
         self._turns_left = turns_left
 
     @property
-    def startPosition(self) -> StartPosition:
+    def start_position(self) -> StartPosition:
         """Get the starting position."""
         return self._start_position
 
     @property
-    def commonView(self) -> CommonView:
+    def common_view(self) -> CommonView:
         """Get the common view."""
         return self._common_view
 
     @property
-    def playerHands(self) -> List[Hand]:
+    def player_hands(self) -> List[Hand]:
         """Get the list of player hands."""
         return [Hand(h.cards) for h in self._player_hands]
 
     @property
-    def drawDeckIndex(self) -> int:
+    def draw_deck_index(self) -> int:
         """Get the current draw deck index."""
         return self._draw_deck_index
 
     @property
-    def turnNumber(self) -> int:
+    def turn_number(self) -> int:
         """Get the current turn number."""
         return self._turn_number
 
     @property
-    def currentPlayer(self) -> int:
+    def current_player(self) -> int:
         """Get the current player index."""
         return self._current_player
 
     @property
-    def turnsLeft(self) -> Optional[int]:
+    def turns_left(self) -> Optional[int]:
         """Get the number of turns left (None if deck not exhausted)."""
         return self._turns_left
 
@@ -508,12 +508,12 @@ class GameState:
             return False
 
         if isinstance(move, CardMove):
-            return self._validateCardMove(player_index, move)
+            return self._validate_card_move(player_index, move)
         if isinstance(move, Hint):
-            return self._validateHint(player_index, move)
+            return self._validate_hint(player_index, move)
         assert False, f"unexpected move type in _validate: {type(move)}"
 
-    def _validateCardMove(self, player_index: int, move: CardMove) -> bool:
+    def _validate_card_move(self, player_index: int, move: CardMove) -> bool:
         """
         Validate a card move (Play or Discard).
 
@@ -532,15 +532,15 @@ class GameState:
         # Discard-specific validation
         if isinstance(move, Discard):
             # Cannot discard if hint tokens are already at maximum
-            if self._common_view.hintTokens >= self.settings.maxHintTokens:
+            if self._common_view.hint_tokens >= self.settings.max_hint_tokens:
                 return False
 
         # Play moves don't have additional validation here
-        # (validity of the play itself is checked in _updatePlay)
+        # (validity of the play itself is checked in _update_play)
 
         return True
 
-    def _validateHint(self, player_index: int, move: Hint) -> bool:
+    def _validate_hint(self, player_index: int, move: Hint) -> bool:
         """
         Validate a hint move (ColorHint or NumberHint).
 
@@ -552,7 +552,7 @@ class GameState:
             True if the move is valid, False otherwise
         """
         # Check if hint tokens available
-        if self._common_view.hintTokens <= 0:
+        if self._common_view.hint_tokens <= 0:
             return False
 
         # Check if teammate index is valid
@@ -573,7 +573,7 @@ class GameState:
         if isinstance(move, NumberHint):
             return is_legal_hint_against_hand_cards(move, teammate_hand.cards)
 
-        assert False, f"unexpected hint type in _validateHint: {type(move)}"
+        assert False, f"unexpected hint type in _validate_hint: {type(move)}"
 
     def _get_validation_error_message(self, player_index: int, move: Move) -> str:
         """
@@ -589,11 +589,11 @@ class GameState:
         error_msg = f"Invalid move from player {player_index}: {move}"
 
         if isinstance(move, Discard):
-            if self._common_view.hintTokens >= self.settings.maxHintTokens:
-                error_msg += f" (hint tokens already at maximum: {self.settings.maxHintTokens})"
+            if self._common_view.hint_tokens >= self.settings.max_hint_tokens:
+                error_msg += f" (hint tokens already at maximum: {self.settings.max_hint_tokens})"
             return error_msg
         if isinstance(move, (ColorHint, NumberHint)):
-            if self._common_view.hintTokens <= 0:
+            if self._common_view.hint_tokens <= 0:
                 error_msg += " (no hint tokens available)"
             return error_msg
         if isinstance(move, Play):
@@ -618,15 +618,15 @@ class GameState:
             f"player_index {player_index} out of range [0, {len(self._player_hands)})"
 
         if isinstance(move, Play):
-            self._updatePlay(player_index, move)
+            self._update_play(player_index, move)
         elif isinstance(move, Discard):
-            self._updateDiscard(player_index, move)
+            self._update_discard(player_index, move)
         elif isinstance(move, (ColorHint, NumberHint)):
-            self._updateHint(player_index, move)
+            self._update_hint(player_index, move)
         else:
             assert False, f"Unknown move type: {type(move)}"
 
-    def _updatePlay(
+    def _update_play(
         self,
         player_index: int,
         move: Play
@@ -640,7 +640,7 @@ class GameState:
         card = hand.cards[move.card]
 
         # Check if card can be played
-        cards_played = self._common_view.cardsPlayed
+        cards_played = self._common_view.cards_played
         expected_number = cards_played.get(card.color, Number.ONE)
 
         # Determine if valid play
@@ -651,11 +651,11 @@ class GameState:
             is_valid = (card.number.value == next_number_value)
 
         if is_valid:
-            self._playCard(player_index, move.card, card)
+            self._play_card(player_index, move.card, card)
         else:
-            self._handleInvalidPlay(player_index, move.card, card)
+            self._handle_invalid_play(player_index, move.card, card)
 
-    def _playCard(
+    def _play_card(
         self,
         player_index: int,
         card_index: int,
@@ -684,16 +684,16 @@ class GameState:
         # Standard Hanabi rule: gain a hint token when completing a firework,
         # but only if we are below the maximum. If we're already at max,
         # we simply don't gain an extra token (no assertion).
-        if firework_completed and self._common_view._hint_tokens < self.settings.maxHintTokens:
+        if firework_completed and self._common_view._hint_tokens < self.settings.max_hint_tokens:
             self._common_view._hint_tokens += 1
 
         # Draw a new card if available
-        self._drawCardToHand(new_hand_cards)
+        self._draw_card_to_hand(new_hand_cards)
 
         # Update player hands
         self._player_hands[player_index] = Hand(new_hand_cards)
 
-    def _handleInvalidPlay(
+    def _handle_invalid_play(
         self,
         player_index: int,
         card_index: int,
@@ -706,12 +706,12 @@ class GameState:
             f"Cannot lose life token: already at 0"
 
         # Remove card, discard it, and draw new card (same as discard)
-        self._removeCardAndDiscard(player_index, card_index, card)
+        self._remove_card_and_discard(player_index, card_index, card)
 
         # Lose a life token (invalid play penalty)
         self._common_view._live_tokens -= 1
 
-    def _updateDiscard(
+    def _update_discard(
         self,
         player_index: int,
         move: Discard
@@ -720,8 +720,8 @@ class GameState:
         assert 0 <= player_index < len(self._player_hands), \
             f"player_index {player_index} out of range [0, {len(self._player_hands)})"
         # Assert that hint tokens are not already at max (should be validated before calling)
-        assert self._common_view._hint_tokens < self.settings.maxHintTokens, \
-            f"Cannot discard when hint tokens are already at maximum: {self._common_view._hint_tokens} >= {self.settings.maxHintTokens}"
+        assert self._common_view._hint_tokens < self.settings.max_hint_tokens, \
+            f"Cannot discard when hint tokens are already at maximum: {self._common_view._hint_tokens} >= {self.settings.max_hint_tokens}"
 
         hand = self._player_hands[player_index]
         assert 0 <= move.card < len(hand.cards), \
@@ -729,12 +729,12 @@ class GameState:
         card = hand.cards[move.card]
 
         # Remove card, discard it, and draw new card
-        self._removeCardAndDiscard(player_index, move.card, card)
+        self._remove_card_and_discard(player_index, move.card, card)
 
         # Gain a hint token
         self._common_view._hint_tokens += 1
 
-    def _removeCardAndDiscard(
+    def _remove_card_and_discard(
         self,
         player_index: int,
         card_index: int,
@@ -752,15 +752,15 @@ class GameState:
         # Remove card from hand and add to discard
         new_hand_cards = hand.cards.copy()
         new_hand_cards.pop(card_index)
-        self._addCardToDiscardPile(card)
+        self._add_card_to_discard_pile(card)
 
         # Draw a new card if available
-        self._drawCardToHand(new_hand_cards)
+        self._draw_card_to_hand(new_hand_cards)
 
         # Update player hands
         self._player_hands[player_index] = Hand(new_hand_cards)
 
-    def _updateHint(
+    def _update_hint(
         self,
         player_index: int,
         move: Hint
@@ -777,42 +777,42 @@ class GameState:
             f"Cannot give hint: no hint tokens available (current: {self._common_view._hint_tokens})"
 
         # Check if deck is already exhausted (hints don't draw cards, so we need to check separately)
-        self._checkAndSetTurnsLeftIfDeckExhausted()
+        self._check_and_set_turns_left_if_deck_exhausted()
 
         # Assert invariant: if deck is exhausted, turns_left must be set
-        original_deck_size = len(self._start_position.drawDeck.cards)
+        original_deck_size = len(self._start_position.draw_deck.cards)
         if self._draw_deck_index >= original_deck_size:
             assert self._turns_left is not None, \
                 f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}) " \
-                f"but turns_left is None after _checkAndSetTurnsLeftIfDeckExhausted in _updateHint"
+                f"but turns_left is None after _check_and_set_turns_left_if_deck_exhausted in _update_hint"
 
         # Use a hint token
         self._common_view._hint_tokens -= 1
 
-    def _checkAndSetTurnsLeftIfDeckExhausted(self) -> None:
+    def _check_and_set_turns_left_if_deck_exhausted(self) -> None:
         """
         Check if deck is exhausted and set turns_left if not already set.
 
-        This is called from both _drawCardToHand (when drawing would exhaust deck)
-        and _updateHint (when deck is already exhausted and a hint is given).
+        This is called from both _draw_card_to_hand (when drawing would exhaust deck)
+        and _update_hint (when deck is already exhausted and a hint is given).
         """
-        original_deck_size = len(self._start_position.drawDeck.cards)
+        original_deck_size = len(self._start_position.draw_deck.cards)
         if self._draw_deck_index >= original_deck_size:
             # Deck exhausted - we want each player to take one more turn
             # The current player has just taken their turn (the one that exhausted the deck)
-            # So we need numPlayers more turns (one for each player)
-            # After advanceTurn() decrements it, we'll have numPlayers turns left
+            # So we need num_players more turns (one for each player)
+            # After advanceTurn() decrements it, we'll have num_players turns left
             if self._turns_left is None:
-                # Set to numPlayers + 1 because:
+                # Set to num_players + 1 because:
                 # - The current player has already taken their turn (exhausted deck)
-                # - After this move, advanceTurn() will decrement to numPlayers
-                # - This gives us exactly numPlayers more turns (one for each player)
+                # - After this move, advanceTurn() will decrement to num_players
+                # - This gives us exactly num_players more turns (one for each player)
                 # - When it reaches 0, all players have taken their final turn
-                self._turns_left = self.settings.numPlayers + 1
-                logger.debug(f"[_checkAndSetTurnsLeftIfDeckExhausted] Deck exhausted! Set turns_left={self._turns_left} "
-                            f"(numPlayers={self.settings.numPlayers})")
+                self._turns_left = self.settings.num_players + 1
+                logger.debug(f"[_check_and_set_turns_left_if_deck_exhausted] Deck exhausted! Set turns_left={self._turns_left} "
+                            f"(num_players={self.settings.num_players})")
             else:
-                logger.debug(f"[_checkAndSetTurnsLeftIfDeckExhausted] Deck exhausted but turns_left already set: {self._turns_left}")
+                logger.debug(f"[_check_and_set_turns_left_if_deck_exhausted] Deck exhausted but turns_left already set: {self._turns_left}")
             self._common_view._cards_to_draw = 0
             # Assert invariant: if deck is exhausted, turns_left must be set
             assert self._turns_left is not None, \
@@ -820,39 +820,39 @@ class GameState:
             assert self._turns_left > 0, \
                 f"Deck is exhausted but turns_left is {self._turns_left} (should be > 0 when deck just exhausted)"
 
-    def _drawCardToHand(self, hand_cards: List[Card]) -> None:
+    def _draw_card_to_hand(self, hand_cards: List[Card]) -> None:
         """Draw a new card from the deck and add it to the hand (in-place update)."""
-        original_deck_size = len(self._start_position.drawDeck.cards)
+        original_deck_size = len(self._start_position.draw_deck.cards)
         assert 0 <= self._draw_deck_index <= original_deck_size, \
             f"draw_deck_index {self._draw_deck_index} out of range [0, {original_deck_size}]"
 
-        logger.debug(f"[_drawCardToHand] draw_deck_index={self._draw_deck_index}, original_deck_size={original_deck_size}, "
-                    f"turns_left={self._turns_left}, numPlayers={self.settings.numPlayers}")
+        logger.debug(f"[_draw_card_to_hand] draw_deck_index={self._draw_deck_index}, original_deck_size={original_deck_size}, "
+                    f"turns_left={self._turns_left}, num_players={self.settings.num_players}")
 
         if self._draw_deck_index < original_deck_size:
             # Draw next card from original deck
-            new_card = self._start_position.drawDeck.cards[self._draw_deck_index]
+            new_card = self._start_position.draw_deck.cards[self._draw_deck_index]
             hand_cards.insert(0, new_card)
             self._draw_deck_index += 1
             self._common_view._cards_to_draw = original_deck_size - self._draw_deck_index
             assert self._common_view._cards_to_draw >= 0, \
                 f"cards_to_draw became negative: {self._common_view._cards_to_draw}"
-            logger.debug(f"[_drawCardToHand] Drew card, new draw_deck_index={self._draw_deck_index}, "
+            logger.debug(f"[_draw_card_to_hand] Drew card, new draw_deck_index={self._draw_deck_index}, "
                         f"cards_to_draw={self._common_view._cards_to_draw}")
             # Check if deck is now exhausted after drawing
-            self._checkAndSetTurnsLeftIfDeckExhausted()
+            self._check_and_set_turns_left_if_deck_exhausted()
             # Assert invariant: if no cards to draw, turns_left must be set
             if self._common_view._cards_to_draw == 0:
                 assert self._turns_left is not None, \
                     f"No cards to draw (cards_to_draw=0) but turns_left is None"
         else:
             # Deck already exhausted - just check and set turns_left if needed
-            self._checkAndSetTurnsLeftIfDeckExhausted()
+            self._check_and_set_turns_left_if_deck_exhausted()
             # Assert invariant: if deck is exhausted, turns_left must be set
             assert self._turns_left is not None, \
                 f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}) but turns_left is None"
 
-    def _addCardToDiscardPile(self, card: Card) -> None:
+    def _add_card_to_discard_pile(self, card: Card) -> None:
         """Add a card to the discard pile in common view (in-place update)."""
         # Get current counts for this color
         if card.color in self._common_view._cards_discarded:
@@ -870,54 +870,54 @@ class GameState:
         # Update the discard pile dict
         self._common_view._cards_discarded[card.color] = Suit(new_counts)
 
-    def isFinished(self) -> bool:
+    def is_finished(self) -> bool:
         """
         Check if the game is finished.
 
         Returns:
             True if the game is finished, False otherwise
         """
-        logger.debug(f"[isFinished] Checking game end conditions: liveTokens={self._common_view.liveTokens}, "
+        logger.debug(f"[is_finished] Checking game end conditions: live_tokens={self._common_view.live_tokens}, "
                     f"turns_left={self._turns_left}, turn_number={self._turn_number}, "
                     f"current_player={self._current_player}")
 
         # 1. All life tokens are lost
-        if self._common_view.liveTokens <= 0:
-            logger.debug("[isFinished] Game finished: All life tokens lost")
+        if self._common_view.live_tokens <= 0:
+            logger.debug("[is_finished] Game finished: All life tokens lost")
             return True
 
         # 2. All fireworks are completed (perfect score)
-        cards_played = self._common_view.cardsPlayed
+        cards_played = self._common_view.cards_played
         if len(cards_played) == 5:  # All 5 colors
             all_fives = all(num == Number.FIVE for num in cards_played.values())
             if all_fives:
-                logger.debug("[isFinished] Game finished: All fireworks completed (perfect score)")
+                logger.debug("[is_finished] Game finished: All fireworks completed (perfect score)")
                 return True
 
         # 3. Deck is exhausted and all players have taken final turn
         # Assert invariant: if deck is exhausted (no cards to draw), turns_left must be set
-        original_deck_size = len(self._start_position.drawDeck.cards)
+        original_deck_size = len(self._start_position.draw_deck.cards)
         if self._draw_deck_index >= original_deck_size:
             assert self._turns_left is not None, \
                 f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}, " \
                 f"cards_to_draw={self._common_view._cards_to_draw}) but turns_left is None"
         if self._turns_left == 0:
-            logger.debug(f"[isFinished] Game finished: turns_left == 0 (deck exhausted, all players took final turn)")
+            logger.debug(f"[is_finished] Game finished: turns_left == 0 (deck exhausted, all players took final turn)")
             return True
 
         # 4. Auto-end when no more points possible (if setting enabled)
-        if self.settings.autoEndWhenNoPointsPossible:
-            if self._isNoMorePointsPossible():
-                logger.debug("[isFinished] Game finished: No more points possible")
+        if self.settings.auto_end_when_no_points_possible:
+            if self._is_no_more_points_possible():
+                logger.debug("[is_finished] Game finished: No more points possible")
                 return True
 
-        logger.debug("[isFinished] Game not finished")
+        logger.debug("[is_finished] Game not finished")
         return False
 
-    def _isNoMorePointsPossible(self) -> bool:
+    def _is_no_more_points_possible(self) -> bool:
         """Check if no more points are possible based on discarded cards."""
-        cards_played = self._common_view.cardsPlayed
-        cards_discarded = self._common_view.cardsDiscarded
+        cards_played = self._common_view.cards_played
+        cards_discarded = self._common_view.cards_discarded
 
         # Get discarded counts from CommonView
         discarded_counts: Dict[Color, Dict[Number, int]] = {}
@@ -958,7 +958,7 @@ class GameState:
         Returns:
             The current game score
         """
-        cards_played = self._common_view.cardsPlayed
+        cards_played = self._common_view.cards_played
         score = 0
         for number in cards_played.values():
             score += number.value
@@ -982,7 +982,7 @@ class GameState:
 
         # If deck is exhausted, decrement turns remaining
         # Assert invariant: if deck is exhausted, turns_left must be set
-        original_deck_size = len(self._start_position.drawDeck.cards)
+        original_deck_size = len(self._start_position.draw_deck.cards)
         if self._draw_deck_index >= original_deck_size:
             assert self._turns_left is not None, \
                 f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}) " \
@@ -1086,15 +1086,15 @@ class Game:
         return self._start_position.settings
 
     @property
-    def currentPlayer(self) -> int:
+    def current_player(self) -> int:
         """Get the current player index."""
         assert self._turns, "Game not initialized. No turns yet."
-        return self.state.currentPlayer
+        return self.state.current_player
 
     def _initialize_players(self) -> None:
         """Initialize players with game settings."""
-        assert len(self._team.players) == self.settings.numPlayers, \
-            f"Number of players ({len(self._team.players)}) does not match settings ({self.settings.numPlayers})"
+        assert len(self._team.players) == self.settings.num_players, \
+            f"Number of players ({len(self._team.players)}) does not match settings ({self.settings.num_players})"
         # Set game settings for all players (they are BasePlayer instances and observe all moves)
         for player in self._team.players:
             player.set_game_settings(self.settings)
@@ -1110,10 +1110,10 @@ class Game:
         Without this, players will see stale hint token counts and may generate invalid moves.
         """
         assert self._turns, "Game not initialized. No turns yet."
-        # Set common view - players need the current state's commonView
+        # Set common view - players need the current state's common_view
         # Note: Each GameState has its own CommonView, so we must update players' references
         # after each state transition to ensure they see current values
-        common_view = self.state.commonView
+        common_view = self.state.common_view
         for player in self._team.players:
             player.set_common_view(common_view)
 
@@ -1123,10 +1123,10 @@ class Game:
             player.observe(
                 player_index,
                 move,
-                observer_view=self._getPlayerView(observer_index),
+                observer_view=self._get_player_view(observer_index),
             )
 
-    def _getPlayerView(self, player_index: int) -> PlayerView:
+    def _get_player_view(self, player_index: int) -> PlayerView:
         """
         Get the view of the game from a player's perspective (private).
 
@@ -1141,22 +1141,22 @@ class Game:
             f"player_index {player_index} out of range [0, {len(self._team.players)})"
 
         teammates: Dict[int, Hand] = {}
-        for i, hand in enumerate(self.state.playerHands):
+        for i, hand in enumerate(self.state.player_hands):
             if i != player_index:
                 teammates[i] = hand
 
-        own_hand_size = len(self.state.playerHands[player_index].cards)
+        own_hand_size = len(self.state.player_hands[player_index].cards)
         return PlayerView(teammates, own_hand_size)
 
-    def getPlayerView(self, player_index: int) -> PlayerView:
-        """Public alias for :meth:`_getPlayerView` (tests and tooling)."""
-        return self._getPlayerView(player_index)
+    def get_player_view(self, player_index: int) -> PlayerView:
+        """Public alias for :meth:`_get_player_view` (tests and tooling)."""
+        return self._get_player_view(player_index)
 
-    def processMove(self, player_index: int, move: Move) -> None:
-        """Public alias for :meth:`_processMove` (tests and tooling)."""
-        self._processMove(player_index, move)
+    def process_move(self, player_index: int, move: Move) -> None:
+        """Public alias for :meth:`_process_move` (tests and tooling)."""
+        self._process_move(player_index, move)
 
-    def _processMove(self, player_index: int, move: Move) -> None:
+    def _process_move(self, player_index: int, move: Move) -> None:
         """
         Process a move and update the game state.
 
@@ -1170,9 +1170,9 @@ class Game:
             f"player_index {player_index} out of range [0, {len(self._team.players)})"
 
         current_state = self.state
-        logger.debug(f"[processMove] Processing move: player={player_index}, move={move}, "
-                    f"turn_number={current_state.turnNumber}, current_player={current_state.currentPlayer}, "
-                    f"turns_left={current_state.turnsLeft}, cards_to_draw={current_state.commonView.cardsToDraw}")
+        logger.debug(f"[process_move] Processing move: player={player_index}, move={move}, "
+                    f"turn_number={current_state.turn_number}, current_player={current_state.current_player}, "
+                    f"turns_left={current_state.turns_left}, cards_to_draw={current_state.common_view.cards_to_draw}")
 
         # Validate the move (callers must supply legal moves; illegal = bug)
         assert self.state._validate(player_index, move), \
@@ -1181,21 +1181,21 @@ class Game:
         # Clone the current state and update it in-place
         new_state = copy.copy(current_state)
         new_state._turn_number += 1  # Increment turn number (0-based)
-        logger.debug(f"[processMove] After cloning: new turn_number={new_state._turn_number}")
+        logger.debug(f"[process_move] After cloning: new turn_number={new_state._turn_number}")
 
         # Update the cloned state in-place
         new_state.update(player_index, move)
-        logger.debug(f"[processMove] After update: turn_number={new_state._turn_number}, "
-                    f"current_player={new_state.currentPlayer}, turns_left={new_state.turnsLeft}, "
-                    f"cards_to_draw={new_state.commonView.cardsToDraw}, "
-                    f"isFinished={new_state.isFinished()}")
+        logger.debug(f"[process_move] After update: turn_number={new_state._turn_number}, "
+                    f"current_player={new_state.current_player}, turns_left={new_state.turns_left}, "
+                    f"cards_to_draw={new_state.common_view.cards_to_draw}, "
+                    f"is_finished={new_state.is_finished()}")
 
         # Add new state to turns history
         self._turns.append(new_state)
 
-        # Update players' commonView references to point to the new state's commonView
+        # Update players' common_view references to point to the new state's common_view
         # This is critical because GameState.__copy__ creates a new CommonView object
-        # Players need to see the updated commonView from the current state
+        # Players need to see the updated common_view from the current state
         self._set_common_view_for_players()
 
         # Notify players about the move BEFORE the callback
@@ -1206,26 +1206,26 @@ class Game:
         if self._on_move is not None:
             self._on_move(player_index, move, current_state, new_state)
 
-    def _advanceTurn(self) -> None:
+    def _advance_turn(self) -> None:
         """Advance to the next player's turn (internal method)."""
         assert self._turns, "Cannot advance turn: no turns yet"
-        num_players = self.settings.numPlayers
+        num_players = self.settings.num_players
         assert num_players > 0, f"num_players must be positive, got {num_players}"
         last_state = self._turns[-1]
-        logger.debug(f"[_advanceTurn] Before advance: current_player={last_state.currentPlayer}, "
-                    f"turns_left={last_state.turnsLeft}, turn_number={last_state.turnNumber}")
+        logger.debug(f"[_advance_turn] Before advance: current_player={last_state.current_player}, "
+                    f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}")
         last_state.advance_player(num_players)
-        logger.debug(f"[_advanceTurn] After advance: current_player={last_state.currentPlayer}, "
-                    f"turns_left={last_state.turnsLeft}, turn_number={last_state.turnNumber}, "
-                    f"isFinished={last_state.isFinished()}")
+        logger.debug(f"[_advance_turn] After advance: current_player={last_state.current_player}, "
+                    f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}, "
+                    f"is_finished={last_state.is_finished()}")
 
     @property
-    def isFinished(self) -> bool:
+    def is_finished(self) -> bool:
         """Check if the game is finished."""
         assert self._turns, "Game not initialized. No turns yet."
-        return self.state.isFinished()
+        return self.state.is_finished()
 
-    def getScore(self) -> int:
+    def get_score(self) -> int:
         """Calculate the current game score."""
         assert self._turns, "Game not initialized. No turns yet."
         return self.state.score()
@@ -1238,22 +1238,22 @@ class Game:
         notifies observers about moves made.
         """
         assert self._turns, "Game not initialized. No turns yet."
-        while not self.isFinished:
-            current_player = self.state.currentPlayer
+        while not self.is_finished:
+            current_player = self.state.current_player
             player = self._team.players[current_player]
 
             # Get player view
-            player_view = self._getPlayerView(current_player)
+            player_view = self._get_player_view(current_player)
 
             # Get move from player (must be legal; illegal moves are bugs in the player / UI)
             move = player.play(player_view)
 
-            # Process the move; _processMove asserts move legality
-            # Note: _processMove calls _notify_players internally before the callback
-            self._processMove(current_player, move)
+            # Process the move; _process_move asserts move legality
+            # Note: _process_move calls _notify_players internally before the callback
+            self._process_move(current_player, move)
 
             # Advance turn
-            self._advanceTurn()
+            self._advance_turn()
 
     @staticmethod
     def create(
@@ -1281,8 +1281,8 @@ class Game:
         start_position = StartPosition(settings, original_deck)
 
         # Deal cards to players (using draw_deck_index to track position)
-        num_players = settings.numPlayers
-        cards_per_player = settings.maxCardsInHand
+        num_players = settings.num_players
+        cards_per_player = settings.max_cards_in_hand
         player_hands: List[Hand] = []
         draw_deck_index = 0
         deck_cards = original_deck.cards
@@ -1305,8 +1305,8 @@ class Game:
         # cards_to_draw should be remaining cards after dealing
         remaining_cards = len(deck_cards) - draw_deck_index
         common_view = CommonView(
-            live_tokens=settings.maxLiveTokens,
-            hint_tokens=settings.maxHintTokens,
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
             cards_to_draw=remaining_cards,
             cards_discarded={},
             cards_played={}

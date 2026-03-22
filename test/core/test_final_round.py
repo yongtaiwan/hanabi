@@ -33,24 +33,24 @@ class TestFinalRound(unittest.TestCase):
             if len(self.engine._draw_deck) == 0:
                 # Deck is empty, but we need to make one more move to trigger exhaustion
                 # Make a move that will try to draw
-                current = self.engine.currentPlayer
-                hand = self.engine.gameState.playerHands[current]
+                current = self.engine.current_player
+                hand = self.engine.gameState.player_hands[current]
                 if hand.cards:
-                    if self.engine.gameState.commonView.hintTokens < self.settings.maxHintTokens:
+                    if self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
                         move = Discard(0)
                     else:
                         move = Play(0)
-                    success, _ = self.engine.processMove(current, move)
+                    success, _ = self.engine.process_move(current, move)
                     if success:
                         # Now _player_exhausting_deck should be set
                         break
                 break
 
-            current = self.engine.currentPlayer
-            hand = self.engine.gameState.playerHands[current]
-            if hand.cards and self.engine.gameState.commonView.hintTokens < self.settings.maxHintTokens:
+            current = self.engine.current_player
+            hand = self.engine.gameState.player_hands[current]
+            if hand.cards and self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
                 move = Discard(0)
-                success, _ = self.engine.processMove(current, move)
+                success, _ = self.engine.process_move(current, move)
                 if success:
                     # Check if deck was exhausted (before advancing turn)
                     if self.engine._player_exhausting_deck is not None:
@@ -61,7 +61,7 @@ class TestFinalRound(unittest.TestCase):
             elif hand.cards:
                 # Can't discard, try playing
                 move = Play(0)
-                success, _ = self.engine.processMove(current, move)
+                success, _ = self.engine.process_move(current, move)
                 if success:
                     # Check if deck was exhausted (before advancing turn)
                     if self.engine._player_exhausting_deck is not None:
@@ -96,17 +96,17 @@ class TestFinalRound(unittest.TestCase):
         # Advance to next players
         for _ in range(3):
             self.engine.advanceTurn()
-            if self.engine.currentPlayer == player_exhausting:
+            if self.engine.current_player == player_exhausting:
                 break
 
         # Now it's back to the player who exhausted the deck
-        self.assertEqual(self.engine.currentPlayer, player_exhausting)
+        self.assertEqual(self.engine.current_player, player_exhausting)
 
         # They should not be able to make a move
-        hand = self.engine.gameState.playerHands[player_exhausting]
+        hand = self.engine.gameState.player_hands[player_exhausting]
         if hand.cards:
             move = Discard(0)
-            success, msg = self.engine.processMove(player_exhausting, move)
+            success, msg = self.engine.process_move(player_exhausting, move)
             self.assertFalse(success)
             self.assertIn("Game is over", msg)
 
@@ -126,12 +126,12 @@ class TestFinalRound(unittest.TestCase):
 
         # Go through remaining players
         for _ in range(3):
-            current = self.engine.currentPlayer
+            current = self.engine.current_player
 
             # Skip if this is the player who exhausted (they already took their turn)
             if current == player_exhausting:
                 # Game should end when it comes back to this player
-                self.assertTrue(self.engine.isFinished())
+                self.assertTrue(self.engine.is_finished())
                 break
 
             # This player should be able to take their final turn
@@ -139,14 +139,14 @@ class TestFinalRound(unittest.TestCase):
                            f"Player {current} should not have taken final turn yet")
 
             # Make a move (discard if possible)
-            hand = self.engine.gameState.playerHands[current]
+            hand = self.engine.gameState.player_hands[current]
             if hand.cards:
-                if self.engine.gameState.commonView.hintTokens < self.settings.maxHintTokens:
+                if self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
                 else:
                     # Can't discard, try to play
                     move = Play(0)
-                success, _ = self.engine.processMove(current, move)
+                success, _ = self.engine.process_move(current, move)
                 self.assertTrue(success, f"Player {current} should be able to take final turn")
                 players_taken_final_turn.add(current)
                 self.engine.advanceTurn()
@@ -163,20 +163,20 @@ class TestFinalRound(unittest.TestCase):
 
         # Advance through all other players
         for _ in range(3):
-            current = self.engine.currentPlayer
+            current = self.engine.current_player
             if current == player_exhausting:
                 # Should be finished when back to this player
-                self.assertTrue(self.engine.isFinished())
+                self.assertTrue(self.engine.is_finished())
                 break
 
             # Make a move
-            hand = self.engine.gameState.playerHands[current]
+            hand = self.engine.gameState.player_hands[current]
             if hand.cards:
-                if self.engine.gameState.commonView.hintTokens < self.settings.maxHintTokens:
+                if self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
                     move = Discard(0)
                 else:
                     move = Play(0)
-                success, _ = self.engine.processMove(current, move)
+                success, _ = self.engine.process_move(current, move)
                 if success:
                     self.engine.advanceTurn()
                 else:
@@ -191,15 +191,15 @@ class TestFinalRound(unittest.TestCase):
 
         player_exhausting = self.engine._player_exhausting_deck
         # Advance to a different player (not the one who exhausted)
-        while self.engine.currentPlayer == player_exhausting:
+        while self.engine.current_player == player_exhausting:
             self.engine.advanceTurn()
 
-        current = self.engine.currentPlayer
+        current = self.engine.current_player
         self.assertNotEqual(current, player_exhausting, "Should be a different player")
-        initial_lives = self.engine.gameState.commonView.liveTokens
+        initial_lives = self.engine.gameState.common_view.live_tokens
 
         # Play an invalid card
-        hand = self.engine.gameState.playerHands[current]
+        hand = self.engine.gameState.player_hands[current]
         invalid_index = None
         for i, card in enumerate(hand.cards):
             if card.number != Number.ONE:
@@ -208,15 +208,15 @@ class TestFinalRound(unittest.TestCase):
 
         if invalid_index is not None:
             move = Play(invalid_index)
-            success, _ = self.engine.processMove(current, move)
+            success, _ = self.engine.process_move(current, move)
             self.assertTrue(success)  # Move processes (loses life)
 
             # Life should be lost
-            self.assertEqual(self.engine.gameState.commonView.liveTokens, initial_lives - 1)
+            self.assertEqual(self.engine.gameState.common_view.live_tokens, initial_lives - 1)
 
             # Game should continue (not finished yet unless lives = 0)
             if initial_lives > 1:
-                self.assertFalse(self.engine.isFinished())
+                self.assertFalse(self.engine.is_finished())
 
     def test_invalid_play_ends_game_if_last_life(self):
         """Test that invalid play ends game if it's the last life."""
@@ -228,30 +228,30 @@ class TestFinalRound(unittest.TestCase):
         state = self.engine.gameState
         new_common_view = CommonView(
             live_tokens=1,
-            hint_tokens=state.commonView.hintTokens,
-            cards_to_draw=state.commonView.cardsToDraw,
-            cards_discarded=state.commonView.cardsDiscarded,
-            cards_played=state.commonView.cardsPlayed
+            hint_tokens=state.common_view.hint_tokens,
+            cards_to_draw=state.common_view.cards_to_draw,
+            cards_discarded=state.common_view.cards_discarded,
+            cards_played=state.common_view.cards_played
         )
         new_state = GameState(
             common_view=new_common_view,
-            player_hands=state.playerHands,
-            draw_deck_index=state.drawDeckIndex
+            player_hands=state.player_hands,
+            draw_deck_index=state.draw_deck_index
         )
         self.engine._game_state = new_state
 
         # Advance to a different player (not the one who exhausted)
         player_exhausting = self.engine._player_exhausting_deck
-        while self.engine.currentPlayer == player_exhausting:
+        while self.engine.current_player == player_exhausting:
             self.engine.advanceTurn()
 
         # Now in final round with 1 life
-        current = self.engine.currentPlayer
+        current = self.engine.current_player
         self.assertNotEqual(current, player_exhausting, "Should be a different player")
-        self.assertEqual(self.engine.gameState.commonView.liveTokens, 1)
+        self.assertEqual(self.engine.gameState.common_view.live_tokens, 1)
 
         # Play an invalid card
-        hand = self.engine.gameState.playerHands[current]
+        hand = self.engine.gameState.player_hands[current]
         invalid_index = None
         for i, card in enumerate(hand.cards):
             if card.number != Number.ONE:
@@ -260,12 +260,12 @@ class TestFinalRound(unittest.TestCase):
 
         if invalid_index is not None:
             move = Play(invalid_index)
-            success, _ = self.engine.processMove(current, move)
+            success, _ = self.engine.process_move(current, move)
             self.assertTrue(success)
 
             # Game should be finished (lives = 0)
-            self.assertTrue(self.engine.isFinished())
-            self.assertEqual(self.engine.gameState.commonView.liveTokens, 0)
+            self.assertTrue(self.engine.is_finished())
+            self.assertEqual(self.engine.gameState.common_view.live_tokens, 0)
 
 
 if __name__ == '__main__':

@@ -262,11 +262,11 @@ class GameField:
             A new initialized Game instance
         """
         settings = start_position.settings
-        deck_cards = start_position.drawDeck.cards
+        deck_cards = start_position.draw_deck.cards
 
         # Deal cards to players
-        num_players = settings.numPlayers
-        cards_per_player = settings.maxCardsInHand
+        num_players = settings.num_players
+        cards_per_player = settings.max_cards_in_hand
         player_hands: List[Hand] = []
         draw_deck_index = 0
 
@@ -287,8 +287,8 @@ class GameField:
         # Initialize common view
         remaining_cards = len(deck_cards) - draw_deck_index
         common_view = CommonView(
-            live_tokens=settings.maxLiveTokens,
-            hint_tokens=settings.maxHintTokens,
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
             cards_to_draw=remaining_cards,
             cards_discarded={},
             cards_played={}
@@ -342,7 +342,7 @@ class GameField:
         return GameField(start_position)
 
     @property
-    def startPosition(self) -> StartPosition:
+    def start_position(self) -> StartPosition:
         """Get the starting position."""
         return self._start_position
 
@@ -377,10 +377,10 @@ class GameField:
         if save_record:
             # Convert settings to dict for GameHistory
             settings_dict = {
-                "num_players": self._start_position.settings.numPlayers,
-                "max_live_tokens": self._start_position.settings.maxLiveTokens,
-                "max_hint_tokens": self._start_position.settings.maxHintTokens,
-                "max_cards_in_hand": self._start_position.settings.maxCardsInHand,
+                "num_players": self._start_position.settings.num_players,
+                "max_live_tokens": self._start_position.settings.max_live_tokens,
+                "max_hint_tokens": self._start_position.settings.max_hint_tokens,
+                "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
             }
             history = GameHistory(settings_dict)
 
@@ -404,15 +404,15 @@ class GameField:
         duration = time.time() - start_time
 
         # Get final score
-        final_score = game.getScore()
+        final_score = game.get_score()
 
         # Determine end reason
         state = game.state
-        if state.commonView.liveTokens <= 0:
+        if state.common_view.live_tokens <= 0:
             end_reason = "lives_lost"
         elif final_score == 25:
             end_reason = "perfect_score"
-        elif state.turnsLeft == 0:
+        elif state.turns_left == 0:
             end_reason = "deck_exhausted"
         else:
             end_reason = "unknown"
@@ -488,10 +488,10 @@ class GameField:
 
         # Convert settings to dict for serialization
         settings_dict = {
-            "num_players": self._start_position.settings.numPlayers,
-            "max_live_tokens": self._start_position.settings.maxLiveTokens,
-            "max_hint_tokens": self._start_position.settings.maxHintTokens,
-            "max_cards_in_hand": self._start_position.settings.maxCardsInHand,
+            "num_players": self._start_position.settings.num_players,
+            "max_live_tokens": self._start_position.settings.max_live_tokens,
+            "max_hint_tokens": self._start_position.settings.max_hint_tokens,
+            "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
         }
 
         runs: List[RunResult] = []
@@ -515,7 +515,7 @@ class GameField:
             # Play the same deck with each AI
             for ai_name, factory in ai_factories.items():
                 # Create team of AI players
-                num_players = self._start_position.settings.numPlayers
+                num_players = self._start_position.settings.num_players
                 players = [factory(i) for i in range(num_players)]
                 team = PlayerTeam(players)
 
@@ -576,10 +576,10 @@ class GameField:
 
         # Convert settings to dict
         settings_dict = {
-            "num_players": settings.numPlayers,
-            "max_live_tokens": settings.maxLiveTokens,
-            "max_hint_tokens": settings.maxHintTokens,
-            "max_cards_in_hand": settings.maxCardsInHand,
+            "num_players": settings.num_players,
+            "max_live_tokens": settings.max_live_tokens,
+            "max_hint_tokens": settings.max_hint_tokens,
+            "max_cards_in_hand": settings.max_cards_in_hand,
         }
 
         with open(filepath, 'w') as f:

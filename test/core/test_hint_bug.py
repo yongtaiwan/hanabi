@@ -25,16 +25,16 @@ class TestHintBug(unittest.TestCase):
     def test_hint_message_player_number(self):
         """Test that hint messages show correct player numbers (1-indexed for display)."""
         state = self.engine.gameState
-        teammate_hand = state.playerHands[1]  # Player 2 (0-indexed: 1)
+        teammate_hand = state.player_hands[1]  # Player 2 (0-indexed: 1)
         
-        if teammate_hand.cards and state.commonView.hintTokens > 0:
+        if teammate_hand.cards and state.common_view.hint_tokens > 0:
             number = teammate_hand.cards[0].number
             matching_indices = [i for i, card in enumerate(teammate_hand.cards) 
                                if card.number == number]
             if matching_indices:
                 # Give hint to player 2 (index 1)
                 move = NumberHint(1, matching_indices, number)
-                success, msg = self.engine.processMove(0, move)
+                success, msg = self.engine.process_move(0, move)
                 
                 if success:
                     # Message should say "player 2" (1-indexed), not "player 1"
@@ -45,7 +45,7 @@ class TestHintBug(unittest.TestCase):
     def test_console_input_hint_parsing(self):
         """Test that console input correctly parses player numbers."""
         state = self.engine.gameState
-        teammate_hand = state.playerHands[1]  # Player 2
+        teammate_hand = state.player_hands[1]  # Player 2
         
         if teammate_hand.cards:
             number = teammate_hand.cards[0].number
@@ -65,8 +65,8 @@ class TestHintBug(unittest.TestCase):
         state = self.engine.gameState
         
         # Test with player 2 (index 1)
-        if state.commonView.hintTokens > 0:
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens > 0:
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
@@ -77,7 +77,7 @@ class TestHintBug(unittest.TestCase):
                     
                     if move and not error:
                         # Process the move
-                        success, msg = self.engine.processMove(0, move)
+                        success, msg = self.engine.process_move(0, move)
                         
                         if success:
                             # Message should say "player 2" since input was "hint 2"

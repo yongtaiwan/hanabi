@@ -363,8 +363,8 @@ class GUIGame:
             move_message = self._format_move_message(player_index, move, old_state, new_state)
 
             # Check if deck just became empty (old_state had cards, new_state has 0)
-            old_deck_size = old_state.commonView.cardsToDraw if old_state else None
-            new_deck_size = new_state.commonView.cardsToDraw if new_state else None
+            old_deck_size = old_state.common_view.cards_to_draw if old_state else None
+            new_deck_size = new_state.common_view.cards_to_draw if new_state else None
             deck_just_emptied = (old_deck_size is not None and old_deck_size > 0 and
                                 new_deck_size is not None and new_deck_size == 0)
 
@@ -382,14 +382,14 @@ class GUIGame:
 
             # Schedule display updates on GUI thread (Tkinter is not thread-safe)
             # Get turn number when move was made (new_state has the turn number after increment)
-            move_turn_number = new_state.turnNumber
+            move_turn_number = new_state.turn_number
 
             def update_display():
                 # Always update game state display, including when game ends
                 # This ensures the final state is shown after the last move
                 # In single player mode, always show human player's view (player 0)
                 # In multi-player mode, show current player's view
-                display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+                display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
                 self._display.display_game_state(self._game, display_player)
 
                 # Close action menu if it's not the GUI player's turn (AI player's turn)
@@ -438,14 +438,14 @@ class GUIGame:
 
             if isinstance(move, (Play, Discard)) and old_state:
                 # Get card from old_state (before it was removed)
-                if player_index < len(old_state.playerHands) and move.card < len(old_state.playerHands[player_index].cards):
-                    card = old_state.playerHands[player_index].cards[move.card]
+                if player_index < len(old_state.player_hands) and move.card < len(old_state.player_hands[player_index].cards):
+                    card = old_state.player_hands[player_index].cards[move.card]
                     should_animate = True
 
                     if isinstance(move, Play):
                         # Check if it was a valid play (didn't lose a life)
-                        old_lives = old_state.commonView.liveTokens
-                        new_lives = new_state.commonView.liveTokens
+                        old_lives = old_state.common_view.live_tokens
+                        new_lives = new_state.common_view.live_tokens
                         lost_life = new_lives < old_lives
 
                         if not lost_life:
@@ -497,13 +497,13 @@ class GUIGame:
                     edge_color = "#FF1493"  # Default to deep pink
 
                 # Check if a card was drawn
-                old_deck_size = old_state.commonView.cardsToDraw if old_state else 0
-                new_deck_size = new_state.commonView.cardsToDraw if new_state else 0
+                old_deck_size = old_state.common_view.cards_to_draw if old_state else 0
+                new_deck_size = new_state.common_view.cards_to_draw if new_state else 0
                 card_was_drawn = old_deck_size > new_deck_size
                 drawn_card = None
 
-                if card_was_drawn and player_index < len(new_state.playerHands):
-                    new_hand = new_state.playerHands[player_index]
+                if card_was_drawn and player_index < len(new_state.player_hands):
+                    new_hand = new_state.player_hands[player_index]
                     if len(new_hand.cards) > 0:
                         drawn_card = new_hand.cards[0]
 
@@ -579,15 +579,15 @@ class GUIGame:
             # Format move message
             if isinstance(move, Play):
                 state = old_state if old_state else self._game.state
-                if state and player_index < len(state.playerHands):
-                    card = state.playerHands[player_index].cards[move.card]
+                if state and player_index < len(state.player_hands):
+                    card = state.player_hands[player_index].cards[move.card]
                     move_msg = f"P{player_index + 1} plays {card.color.name.lower()} {card.number.value}."
                 else:
                     move_msg = f"P{player_index + 1} plays card {move.card + 1}."
             elif isinstance(move, Discard):
                 state = old_state if old_state else self._game.state
-                if state and player_index < len(state.playerHands):
-                    card = state.playerHands[player_index].cards[move.card]
+                if state and player_index < len(state.player_hands):
+                    card = state.player_hands[player_index].cards[move.card]
                     move_msg = f"P{player_index + 1} discards {card.color.name.lower()} {card.number.value}."
                 else:
                     move_msg = f"P{player_index + 1} discards card {move.card + 1}."
@@ -636,11 +636,11 @@ class GUIGame:
             # Update team with actual players
             self._game._team = PlayerTeam(actual_players)
             # CRITICAL: Set game settings on all players in the new team
-            # This ensures all players have access to gameSettings
+            # This ensures all players have access to game_settings
             for player in actual_players:
                 player.set_game_settings(settings)
             # Update common view for AI players
-            common_view = self._game.state.commonView
+            common_view = self._game.state.common_view
             for player in actual_players:
                 player.set_common_view(common_view)
 
@@ -677,9 +677,9 @@ class GUIGame:
         # Initialize game history
         self._history = GameHistory({
             "num_players": num_players,
-            "max_live_tokens": settings.maxLiveTokens,
-            "max_hint_tokens": settings.maxHintTokens,
-            "max_cards_in_hand": settings.maxCardsInHand
+            "max_live_tokens": settings.max_live_tokens,
+            "max_hint_tokens": settings.max_hint_tokens,
+            "max_cards_in_hand": settings.max_cards_in_hand
         })
         # Record initial state
         if self._game:
@@ -715,7 +715,7 @@ class GUIGame:
 
         # Initial display update to show the starting game state
         # In single player mode, always show human player's view (player 0)
-        display_player = 0 if one_player_mode else self._game.currentPlayer
+        display_player = 0 if one_player_mode else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
     # Removed _add_abandon_button - home button now serves this purpose
@@ -866,8 +866,8 @@ class GUIGame:
         """
         # Count how many of this card are already discarded (before this discard)
         discarded_count = 0
-        if card.color in state.commonView.cardsDiscarded:
-            suit = state.commonView.cardsDiscarded[card.color]
+        if card.color in state.common_view.cards_discarded:
+            suit = state.common_view.cards_discarded[card.color]
             if card.number in suit.cards:
                 discarded_count = suit.cards[card.number]
 
@@ -912,7 +912,7 @@ class GUIGame:
         }
 
         # Check what's currently played
-        cards_played = state.commonView.cardsPlayed
+        cards_played = state.common_view.cards_played
         current_played = cards_played.get(color)
         current_played_value = current_played.value if current_played else 0
 
@@ -931,8 +931,8 @@ class GUIGame:
                 discarded = discarded_count_for_card
             else:
                 discarded = 0
-                if color in state.commonView.cardsDiscarded:
-                    suit = state.commonView.cardsDiscarded[color]
+                if color in state.common_view.cards_discarded:
+                    suit = state.common_view.cards_discarded[color]
                     if num in suit.cards:
                         discarded = suit.cards[num]
 
@@ -940,7 +940,7 @@ class GUIGame:
             # Exclude the card being discarded if specified (only one instance)
             in_hands = 0
             excluded_count = 0
-            for hand in state.playerHands:
+            for hand in state.player_hands:
                 for hand_card in hand.cards:
                     if hand_card.color == color and hand_card.number == num:
                         # Exclude exactly one instance of the card being discarded
@@ -990,10 +990,10 @@ class GUIGame:
             # For hints, use new_state (or current state)
             state = new_state if new_state else (self._game.state if self._game else None)
 
-        if state is None or player_index >= len(state.playerHands):
+        if state is None or player_index >= len(state.player_hands):
             return f"makes move: {move}."
 
-        player_hand = state.playerHands[player_index]
+        player_hand = state.player_hands[player_index]
 
         # Format the base message
         if isinstance(move, Play):
@@ -1007,8 +1007,8 @@ class GUIGame:
 
             # Check for special events (invalid play, firework completion, perfect score)
             if old_state and new_state:
-                old_lives = old_state.commonView.liveTokens
-                new_lives = new_state.commonView.liveTokens
+                old_lives = old_state.common_view.live_tokens
+                new_lives = new_state.common_view.live_tokens
                 lost_life = new_lives < old_lives
                 old_score = old_state.score()
                 new_score = new_state.score()
@@ -1019,8 +1019,8 @@ class GUIGame:
                 if not lost_life and move.card < len(player_hand.cards):
                     card = player_hand.cards[move.card]
                     # Firework is completed when a 5 is played and previous value was 4
-                    old_cards_played = old_state.commonView.cardsPlayed
-                    new_cards_played = new_state.commonView.cardsPlayed
+                    old_cards_played = old_state.common_view.cards_played
+                    new_cards_played = new_state.common_view.cards_played
                     old_value = old_cards_played.get(card.color)
                     new_value = new_cards_played.get(card.color)
 
@@ -1048,8 +1048,8 @@ class GUIGame:
                     if firework_completed:
                         additional_parts.append("firework completed.")
                         # Show bonus hint token returned with current count
-                        max_hints = new_state.startPosition.settings.maxHintTokens
-                        hint_count = new_state.commonView.hintTokens
+                        max_hints = new_state.start_position.settings.max_hint_tokens
+                        hint_count = new_state.common_view.hint_tokens
                         additional_parts.append(f"bonus hint token returned. ({hint_count}/{max_hints})")
 
                 # Check for perfect score
@@ -1089,22 +1089,22 @@ class GUIGame:
 
         # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
         state = self._game.state
-        if state.turnsLeft is not None:
+        if state.turns_left is not None:
             # Deck is exhausted - game ends only when turns_left == 0
-            if state.turnsLeft == 0:
+            if state.turns_left == 0:
                 # All players have taken their final turn - game is finished
-                if self._game.isFinished:
+                if self._game.is_finished:
                     if not hasattr(self, '_game_ended') or not self._game_ended:
                         self._on_game_end()
                     return
             # If turns_left > 0, allow the move (current player still has their final turn)
-        elif self._game.isFinished:
+        elif self._game.is_finished:
             # Game finished for other reasons (lives lost, perfect score, etc.)
             if not hasattr(self, '_game_ended') or not self._game_ended:
                 self._on_game_end()
             return
 
-        current_player = self._game.currentPlayer
+        current_player = self._game.current_player
 
         # Set the move on the current player (this will unblock player.play())
         # Display updates are now handled by the global callback in Game
@@ -1118,7 +1118,7 @@ class GUIGame:
     def _process_gui_updates(self):
         """Periodically process GUI updates to ensure display refreshes immediately."""
         # Only continue if game is active and not finished
-        if self._game and not self._game.isFinished:
+        if self._game and not self._game.is_finished:
             # Process any pending GUI events
             # This ensures display updates are processed even when AI players move quickly
             try:
@@ -1137,7 +1137,7 @@ class GUIGame:
         # No defensive programming - assertions should crash with stack trace
         self._game.play()
         # Game finished normally
-        if self._game and self._game.isFinished:
+        if self._game and self._game.is_finished:
             self._on_game_end()
 
     def _update_display(self):
@@ -1147,7 +1147,7 @@ class GUIGame:
 
         # In single player mode, always show human player's view (player 0)
         # In multi-player mode, show current player's view
-        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
     def _on_game_end(self):
@@ -1157,7 +1157,7 @@ class GUIGame:
 
         if self._game and self._history:
             # Record and save game history with final score
-            final_score = self._game.getScore()
+            final_score = self._game.get_score()
             self._history.record_final_score(self._game)
             self._history.save_to_file(final_score=final_score)
 
@@ -1556,7 +1556,7 @@ class GUIGame:
         moves = self._replay_history.get("moves", [])
         for move_str in moves[:self._replay_move_index]:
             # Get current player (moves are deterministic)
-            current_player = self._game.currentPlayer
+            current_player = self._game.current_player
 
             # Parse move from short format
             move = GameHistory._short_to_move(move_str, current_player, self._game)
@@ -1575,9 +1575,9 @@ class GUIGame:
                 )
                 continue
 
-            self._game._processMove(current_player, move)
-            # Note: _processMove calls _notify_players internally
-            self._game._advanceTurn()
+            self._game._process_move(current_player, move)
+            # Note: _process_move calls _notify_players internally
+            self._game._advance_turn()
 
             # Get state after move
             new_state = self._game.state
@@ -1603,7 +1603,7 @@ class GUIGame:
         # Force display update
         # In single player mode, always show human player's view (player 0)
         # In replay mode, we can show any player, but for consistency use player 0 in single player mode
-        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.currentPlayer
+        display_player = 0 if getattr(self, '_one_player_mode', False) else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
         # Update status label

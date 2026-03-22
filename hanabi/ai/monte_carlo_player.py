@@ -176,7 +176,7 @@ class MCGameState:
             return True
 
         # 4. Auto-end when no more points possible (if enabled)
-        if self._settings.autoEndWhenNoPointsPossible:
+        if self._settings.auto_end_when_no_points_possible:
             if self._is_no_more_points_possible():
                 return True
 
@@ -217,7 +217,7 @@ class MCGameState:
 
     def advance_player(self) -> None:
         """Advance to next player's turn."""
-        self._current_player = (self._current_player + 1) % self._settings.numPlayers
+        self._current_player = (self._current_player + 1) % self._settings.num_players
 
         # If deck exhausted, decrement turns left
         if self._turns_left is not None:
@@ -258,7 +258,7 @@ class MCGameState:
             if card.number == Number.FIVE:
                 previous = self._cards_played.get(card.color)
                 if previous == Number.FOUR:
-                    if self._hint_tokens < self._settings.maxHintTokens:
+                    if self._hint_tokens < self._settings.max_hint_tokens:
                         self._hint_tokens += 1
 
             # Draw new card
@@ -280,7 +280,7 @@ class MCGameState:
         self._add_to_discard(card)
 
         # Gain hint token
-        if self._hint_tokens < self._settings.maxHintTokens:
+        if self._hint_tokens < self._settings.max_hint_tokens:
             self._hint_tokens += 1
 
         # Draw new card
@@ -294,7 +294,7 @@ class MCGameState:
 
         # Check if deck exhausted (hints don't draw cards)
         if self._cards_to_draw == 0 and self._turns_left is None:
-            self._turns_left = self._settings.numPlayers
+            self._turns_left = self._settings.num_players
 
     def _draw_card(self, player_index: int) -> None:
         """Draw a card from deck to player's hand."""
@@ -306,11 +306,11 @@ class MCGameState:
 
             # Check if deck exhausted
             if self._cards_to_draw == 0 and self._turns_left is None:
-                self._turns_left = self._settings.numPlayers
+                self._turns_left = self._settings.num_players
         else:
             # Deck exhausted
             if self._turns_left is None:
-                self._turns_left = self._settings.numPlayers
+                self._turns_left = self._settings.num_players
 
     def _add_to_discard(self, card: Card) -> None:
         """Add a card to discard pile."""
@@ -395,8 +395,8 @@ class MonteCarloPlayer(HintTrackingPlayer):
         Returns:
             Best move according to Monte Carlo evaluation
         """
-        common_view = self.commonView
-        settings = self.gameSettings
+        common_view = self.common_view
+        settings = self.game_settings
 
         # Generate all candidate moves
         candidate_moves = generate_all_valid_moves(
@@ -420,17 +420,17 @@ class MonteCarloPlayer(HintTrackingPlayer):
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = f"  Score: {common_view.cardsPlayed}"
+        debug_msg = f"  Score: {common_view.cards_played}"
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = f"  Hint tokens: {common_view.hintTokens}, Live tokens: {common_view.liveTokens}"
+        debug_msg = f"  Hint tokens: {common_view.hint_tokens}, Live tokens: {common_view.live_tokens}"
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
 
-        debug_msg = f"  Own hand size: {player_view.ownHandSize}"
+        debug_msg = f"  Own hand size: {player_view.own_hand_size}"
         logger.debug(debug_msg)
         if self._verbose:
             print(debug_msg, file=sys.stderr)
@@ -761,8 +761,8 @@ class MonteCarloPlayer(HintTrackingPlayer):
         Returns:
             A fully determinized MCGameState
         """
-        common_view = self.commonView
-        settings = self.gameSettings
+        common_view = self.common_view
+        settings = self.game_settings
 
         # 1. Build global card multiset from settings
         all_cards: List[Card] = []
@@ -781,7 +781,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
                     card_multiset[card] -= 1
 
         # Discarded cards
-        for color, suit in common_view.cardsDiscarded.items():
+        for color, suit in common_view.cards_discarded.items():
             for number, count in suit.cards.items():
                 card = Card(color, number)
                 for _ in range(count):
@@ -789,7 +789,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
                         card_multiset[card] -= 1
 
         # Played cards (need to subtract all numbers up to highest)
-        for color, highest_number in common_view.cardsPlayed.items():
+        for color, highest_number in common_view.cards_played.items():
             for num_value in range(1, highest_number.value + 1):
                 number = Number(num_value)
                 card = Card(color, number)
@@ -797,11 +797,11 @@ class MonteCarloPlayer(HintTrackingPlayer):
                     card_multiset[card] -= 1
 
         # 3. Get candidate sets for our hand positions using hints
-        hand_size = player_view.ownHandSize
+        hand_size = player_view.own_hand_size
         candidate_sets: List[Set[Card]] = []
 
         # Get hints we've received
-        hints = self.getHints()
+        hints = self.get_hints()
 
         # Debug: log all hints to help diagnose hint tracking issues
         if hints:
@@ -903,7 +903,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # 6. Build hands for all players
         hands: List[List[Card]] = []
-        for i in range(settings.numPlayers):
+        for i in range(settings.num_players):
             if i == self._player_index:
                 hands.append(own_hand.copy())
             else:
@@ -914,23 +914,23 @@ class MonteCarloPlayer(HintTrackingPlayer):
 
         # 7. Build cards_discarded dict
         cards_discarded: Dict[Color, Dict[Number, int]] = {}
-        for color, suit in common_view.cardsDiscarded.items():
+        for color, suit in common_view.cards_discarded.items():
             cards_discarded[color] = suit.cards.copy()
 
         # 8. Create MCGameState
         # Estimate turns_left: None if deck not exhausted, else approximate
         turns_left = None
         if len(deck_cards) == 0:
-            turns_left = settings.numPlayers
+            turns_left = settings.num_players
 
         return MCGameState(
             settings=settings,
             hands=hands,
             deck=deck_cards,
             current_player=self._player_index,
-            live_tokens=common_view.liveTokens,
-            hint_tokens=common_view.hintTokens,
-            cards_played=common_view.cardsPlayed.copy(),
+            live_tokens=common_view.live_tokens,
+            hint_tokens=common_view.hint_tokens,
+            cards_played=common_view.cards_played.copy(),
             cards_discarded=cards_discarded,
             cards_to_draw=len(deck_cards),
             turns_left=turns_left,
@@ -1084,7 +1084,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
             hand = state.hands[state.current_player]
             if move.card < 0 or move.card >= len(hand):
                 return False
-            if state.hint_tokens >= state.settings.maxHintTokens:
+            if state.hint_tokens >= state.settings.max_hint_tokens:
                 return False
             return True
 

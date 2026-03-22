@@ -34,11 +34,11 @@ class TestHintConstraints(unittest.TestCase):
 
         # Give player a hint
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0, 1])
-        dummy_view = PlayerView({}, self.settings.maxCardsInHand)
+        dummy_view = PlayerView({}, self.settings.max_cards_in_hand)
         player.observe(0, hint, dummy_view)
 
         # Check that hints are tracked
-        hints = player.getHints()
+        hints = player.get_hints()
         self.assertIn(0, hints)
         self.assertIn(1, hints)
         self.assertEqual(hints[0]["color"], Color.RED)
@@ -55,7 +55,7 @@ class TestHintConstraints(unittest.TestCase):
         game = Game.create(team=team, settings=self.settings)
 
         # Give player a hint that card 0 is red
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
         player.observe(0, hint, player_view)
 
@@ -64,7 +64,7 @@ class TestHintConstraints(unittest.TestCase):
         for _ in range(20):
             world = player._sample_determinized_state(player_view)
             hand = world._hands[0]
-            self.assertEqual(len(hand), player_view.ownHandSize)
+            self.assertEqual(len(hand), player_view.own_hand_size)
             # Card at position 0 should be red
             self.assertEqual(hand[0].color, Color.RED,
                            f"Card at position 0 should be red, got {hand[0]}")
@@ -79,7 +79,7 @@ class TestHintConstraints(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give player a hint that card 0 is number 1
         hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
         player.observe(0, hint, player_view)
@@ -101,7 +101,7 @@ class TestHintConstraints(unittest.TestCase):
         team = PlayerTeam([player, RandomPlayer(1), RandomPlayer(2)])
         game = Game.create(team=team, settings=self.settings)
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give player hints: card 0 is red 1
         color_hint = ColorHint(teammate=0, color=Color.RED, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])
@@ -141,13 +141,13 @@ class TestPlayableCardDetection(unittest.TestCase):
         game = Game.create(team=team, settings=self.settings)
 
         # Get common view
-        common_view = game.state.commonView
+        common_view = game.state.common_view
 
         # A '1' card is playable if its color hasn't been played yet
         # Find a color that hasn't been played
         playable_color = None
         for color in [Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW, Color.WHITE]:
-            if color not in common_view.cardsPlayed:
+            if color not in common_view.cards_played:
                 playable_color = color
                 break
 
@@ -209,17 +209,17 @@ class TestMonteCarloEvaluation(unittest.TestCase):
 
         # Give player a hint that card 0 is a playable '1'
         # First, find a color that hasn't been played
-        common_view = game.state.commonView
+        common_view = game.state.common_view
         playable_color = None
         for color in [Color.RED, Color.BLUE, Color.GREEN, Color.YELLOW, Color.WHITE]:
-            if color not in common_view.cardsPlayed:
+            if color not in common_view.cards_played:
                 playable_color = color
                 break
 
         if playable_color is None:
             self.skipTest("No playable color available in test setup")
 
-        player_view = game._getPlayerView(0)
+        player_view = game._get_player_view(0)
         # Give hint that card 0 is this color and number 1
         color_hint = ColorHint(teammate=0, color=playable_color, cards=[0])
         number_hint = NumberHint(teammate=0, number=Number.ONE, cards=[0])

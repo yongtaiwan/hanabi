@@ -226,7 +226,7 @@ class TestGUIGameFlow(unittest.TestCase):
 
         # Select a card and play it
         state = game.state
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         if hand.cards:
             # Find a playable card (number 1)
@@ -238,13 +238,13 @@ class TestGUIGameFlow(unittest.TestCase):
 
             if playable_idx is not None:
                 move = Play(playable_idx)
-                initial_score = game.getScore()
+                initial_score = game.get_score()
 
                 # Process move
                 self.game._on_move_made(move)
 
                 # Check that score increased
-                new_score = game.getScore()
+                new_score = game.get_score()
                 self.assertGreater(new_score, initial_score)
 
     def test_discard_move_flow(self):
@@ -272,16 +272,16 @@ class TestGUIGameFlow(unittest.TestCase):
 
         # Discard a card
         state = game.state
-        initial_hints = state.commonView.hintTokens
+        initial_hints = state.common_view.hint_tokens
 
-        if state.commonView.hintTokens < game.settings.maxHintTokens:
+        if state.common_view.hint_tokens < game.settings.max_hint_tokens:
             move = Discard(0)
             self.game._on_move_made(move)
 
             # Check that hint token was gained
             new_state = game.state
-            if initial_hints < game.settings.maxHintTokens:
-                self.assertEqual(new_state.commonView.hintTokens, initial_hints + 1)
+            if initial_hints < game.settings.max_hint_tokens:
+                self.assertEqual(new_state.common_view.hint_tokens, initial_hints + 1)
 
     def test_hint_move_flow(self):
         """Test giving a hint through the GUI."""
@@ -308,20 +308,20 @@ class TestGUIGameFlow(unittest.TestCase):
 
         # Give a color hint
         state = game.state
-        if state.commonView.hintTokens > 0:
-            teammate_hand = state.playerHands[1]
+        if state.common_view.hint_tokens > 0:
+            teammate_hand = state.player_hands[1]
             if teammate_hand.cards:
                 color = teammate_hand.cards[0].color
                 matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
 
                 if matching:
-                    initial_hints = state.commonView.hintTokens
+                    initial_hints = state.common_view.hint_tokens
                     move = ColorHint(1, matching, color)
                     self.game._on_move_made(move)
 
                     # Check that hint token was used
                     new_state = game.state
-                    self.assertEqual(new_state.commonView.hintTokens, initial_hints - 1)
+                    self.assertEqual(new_state.common_view.hint_tokens, initial_hints - 1)
 
     def test_invalid_move_handling(self):
         """Test that invalid moves are handled correctly."""
@@ -338,7 +338,7 @@ class TestGUIGameFlow(unittest.TestCase):
         # Try to make a move with wrong player
         move = Play(0)
         with self.assertRaises(AssertionError) as context:
-            game.processMove(1, move)  # Player 1 on player 0's turn
+            game.process_move(1, move)  # Player 1 on player 0's turn
         self.assertIn("not player", str(context.exception).lower())
 
     def test_turn_advancement(self):
@@ -365,12 +365,12 @@ class TestGUIGameFlow(unittest.TestCase):
         self.game._history.record_initial_state(game)
 
         # Make a move
-        initial_player = game.currentPlayer
+        initial_player = game.current_player
         move = Discard(0)
         self.game._on_move_made(move)
 
         # Check that turn advanced
-        self.assertEqual(game.currentPlayer, (initial_player + 1) % 3)
+        self.assertEqual(game.current_player, (initial_player + 1) % 3)
 
     def test_game_end_detection(self):
         """Test that game end is detected correctly."""
@@ -397,19 +397,19 @@ class TestGUIGameFlow(unittest.TestCase):
 
         # Lose all lives
         state = game.state
-        hand = state.playerHands[0]
+        hand = state.player_hands[0]
 
         # Play invalid cards to lose all lives
         for i in range(len(hand.cards)):
             if hand.cards[i].number != Number.ONE:
                 move = Play(i)
                 self.game._on_move_made(move)
-                if game.isFinished:
+                if game.is_finished:
                     break
 
         # Game should be finished
-        if game.state.commonView.liveTokens <= 0:
-            self.assertTrue(game.isFinished)
+        if game.state.common_view.live_tokens <= 0:
+            self.assertTrue(game.is_finished)
 
 
 @unittest.skip("GUIDisplay API drift (_on_hint_mode_clicked etc.); update tests or restore methods")
@@ -454,39 +454,39 @@ class TestGUISimulation(unittest.TestCase):
         moves_made = 0
         max_moves = 10
 
-        while not game.isFinished and moves_made < max_moves:
-            current_player = game.currentPlayer
+        while not game.is_finished and moves_made < max_moves:
+            current_player = game.current_player
             state = game.state
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
 
             if not hand.cards:
                 break
 
             # Try to give a hint if possible
-            if state.commonView.hintTokens > 0:
+            if state.common_view.hint_tokens > 0:
                 teammate = 1 if current_player == 0 else 0
-                teammate_hand = state.playerHands[teammate]
+                teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     color = teammate_hand.cards[0].color
                     matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                     if matching:
                         move = ColorHint(teammate, matching, color)
                         try:
-                            game.processMove(current_player, move)
+                            game.process_move(current_player, move)
                             history.record_move(current_player, move, "", game)
-                            game._advanceTurn()
+                            game._advance_turn()
                             moves_made += 1
                             continue
                         except AssertionError:
                             break
 
             # Otherwise discard
-            if state.commonView.hintTokens < game.settings.maxHintTokens:
+            if state.common_view.hint_tokens < game.settings.max_hint_tokens:
                 move = Discard(0)
                 try:
-                    game.processMove(current_player, move)
+                    game.process_move(current_player, move)
                     history.record_move(current_player, move, "", game)
-                    game._advanceTurn()
+                    game._advance_turn()
                     moves_made += 1
                 except AssertionError:
                     break
@@ -494,9 +494,9 @@ class TestGUISimulation(unittest.TestCase):
                 # Must play or hint
                 move = Play(0)
                 try:
-                    game.processMove(current_player, move)
+                    game.process_move(current_player, move)
                     history.record_move(current_player, move, "", game)
-                    game._advanceTurn()
+                    game._advance_turn()
                     moves_made += 1
                 except AssertionError:
                     break
@@ -506,7 +506,7 @@ class TestGUISimulation(unittest.TestCase):
         self.assertGreaterEqual(moves_made, 1)
 
         # Verify display can show the state
-        display.display_game_state(game, game.currentPlayer)
+        display.display_game_state(game, game.current_player)
         self.assertGreater(len(display._card_widgets), 0)
 
     def test_card_click_simulation(self):
@@ -567,7 +567,7 @@ class TestGUISimulation(unittest.TestCase):
 
         # Simulate clicking on teammate's card
         state = game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         if teammate_hand.cards and display._card_positions:
             # Find teammate's card
             for (player_idx, card_idx), (x1, y1, x2, y2) in display._card_positions.items():

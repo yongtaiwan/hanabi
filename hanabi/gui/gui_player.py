@@ -60,7 +60,7 @@ class GUIPlayer(HumanPlayer):
             def safe_display_update():
                 # Check if animating before updating
                 if not (self._display._is_animating or self._display._active_animations):
-                    self._display.display_game_state(self._game, self.playerIndex)
+                    self._display.display_game_state(self._game, self.player_index)
             self._display.root.after(0, safe_display_update)
 
         # Wait for move to be set from GUI

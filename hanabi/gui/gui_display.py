@@ -232,11 +232,11 @@ class GUIDisplay:
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
             state = self._game.state
-            if state.turnsLeft is not None:
+            if state.turns_left is not None:
                 # Deck is exhausted - only ignore if turns_left == 0
-                if state.turnsLeft == 0 and self._game.isFinished:
+                if state.turns_left == 0 and self._game.is_finished:
                     return
-            elif self._game.isFinished:
+            elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
                 return
 
@@ -343,11 +343,11 @@ class GUIDisplay:
                 turn_number = self._live_turn_numbers[move_index]
             else:
                 # Fallback: use current game state (shouldn't happen)
-                turn_number = self._game.state.turnNumber if self._game else 1
+                turn_number = self._game.state.turn_number if self._game else 1
         elif self._game:
             # Fallback: use turn number from game state (for live play)
             # This should only happen if turn_number wasn't provided and we haven't tracked it yet
-            turn_number = self._game.state.turnNumber
+            turn_number = self._game.state.turn_number
         else:
             turn_number = 1
 
@@ -517,7 +517,7 @@ class GUIDisplay:
         if not self._game:
             return False
 
-        current_player_idx = self._game.currentPlayer
+        current_player_idx = self._game.current_player
         if current_player_idx >= len(self._game.team.players):
             return False
 
@@ -599,7 +599,7 @@ class GUIDisplay:
         self._draw_player_hands()
 
         # Update status
-        score = game.getScore()
+        score = game.get_score()
         max_score = 25
         self._score_label.config(text=f"Score: {score}/{max_score}")
 
@@ -658,17 +658,17 @@ class GUIDisplay:
             state = self._game.state
         else:
             return
-        deck_count = state.commonView.cardsToDraw
-        draw_deck_index = state.drawDeckIndex
+        deck_count = state.common_view.cards_to_draw
+        draw_deck_index = state.draw_deck_index
 
         # Draw deck label and cards (with more spacing from discard pile)
         deck_y = center_y + 180
 
         # Show cards in grid layout (both play and replay modes)
-        # Always use current game for startPosition (doesn't change)
+        # Always use current game for start_position (doesn't change)
         if self._game:
             # Get the total initial deck size to create fixed grid
-            initial_deck = self._game.state.startPosition.drawDeck.cards
+            initial_deck = self._game.state.start_position.draw_deck.cards
             total_deck_size = len(initial_deck)
 
             if total_deck_size > 0 and draw_deck_index < total_deck_size:
@@ -695,8 +695,8 @@ class GUIDisplay:
                 # This determines the grid layout that will be maintained throughout the game
                 # Calculate how many cards were in the deck at the start (after initial dealing)
                 # Always use current game for settings (settings don't change)
-                num_players = self._game.settings.numPlayers
-                cards_per_player = self._game.settings.maxCardsInHand
+                num_players = self._game.settings.num_players
+                cards_per_player = self._game.settings.max_cards_in_hand
                 initial_remaining = total_deck_size - (num_players * cards_per_player)
 
                 if initial_remaining == 0:
@@ -893,10 +893,10 @@ class GUIDisplay:
             return
         settings = self._game.settings
 
-        hint_tokens = state.commonView.hintTokens
-        life_tokens = state.commonView.liveTokens
-        max_hints = settings.maxHintTokens
-        max_lives = settings.maxLiveTokens
+        hint_tokens = state.common_view.hint_tokens
+        life_tokens = state.common_view.live_tokens
+        max_hints = settings.max_hint_tokens
+        max_lives = settings.max_live_tokens
 
         token_size = 18
         token_spacing = 4
@@ -969,7 +969,7 @@ class GUIDisplay:
             state = self._game.state
         else:
             return
-        cards_played = state.commonView.cardsPlayed
+        cards_played = state.common_view.cards_played
 
         colors = [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
         card_width = 50
@@ -1038,7 +1038,7 @@ class GUIDisplay:
         else:
             return
         discard_pile = []
-        for color, suit in state.commonView.cardsDiscarded.items():
+        for color, suit in state.common_view.cards_discarded.items():
             for number, count in suit.cards.items():
                 for _ in range(count):
                     discard_pile.append(Card(color, number))
@@ -1207,7 +1207,7 @@ class GUIDisplay:
         center_y = height // 2
         # Make table smaller (was // 3, now // 4)
         table_radius = min(width, height) // 4
-        num_players = len(state.playerHands)
+        num_players = len(state.player_hands)
 
         # Calculate card dimensions
         card_width = 50
@@ -1215,7 +1215,7 @@ class GUIDisplay:
         spacing = 10
 
         # Find the maximum number of cards in any hand to ensure all hands are outside the table
-        max_cards = max(len(hand.cards) for hand in state.playerHands) if state.playerHands else 5
+        max_cards = max(len(hand.cards) for hand in state.player_hands) if state.player_hands else 5
         max_hand_width = max_cards * (card_width + spacing) - spacing
         max_half_width = max_hand_width // 2
 
@@ -1258,7 +1258,7 @@ class GUIDisplay:
             y = center_y + hand_radius * sin(angle_rad)
 
             # Draw player hand
-            hand = state.playerHands[i]
+            hand = state.player_hands[i]
             is_current_player = (i == self._current_player)
 
             # Draw player label - always on top of hand
@@ -1272,7 +1272,7 @@ class GUIDisplay:
             game_is_over = False
             if self._game:
                 # Check if game is over by checking turns left or status label
-                if hasattr(self._game, '_turns_left') and self._game._turns_left == 0:
+                if self._game.state.turns_left == 0:
                     game_is_over = True
                 elif hasattr(self, '_status_label'):
                     status_text = self._status_label.cget("text")
@@ -1576,7 +1576,7 @@ class GUIDisplay:
 
         is_own_card = (player_idx == self._current_player)
         state = self._game.state
-        common_view = state.commonView
+        common_view = state.common_view
 
         if is_own_card:
             # Own card: Play/Discard options - use grey buttons with black text for consistency
@@ -1601,7 +1601,7 @@ class GUIDisplay:
             play_btn.pack(pady=2)
 
             # Discard button (if hint tokens not at max)
-            if common_view.hintTokens < self._game.settings.maxHintTokens:
+            if common_view.hint_tokens < self._game.settings.max_hint_tokens:
                 discard_btn = tk.Button(
                     self._action_menu,
                     text="Discard",
@@ -1640,7 +1640,7 @@ class GUIDisplay:
                 explanation.pack(pady=2, fill=tk.X)
         else:
             # Other player's card: Hint options (Number first, then Color - Number closer to cursor)
-            if common_view.hintTokens > 0:
+            if common_view.hint_tokens > 0:
                 number_hint_btn = tk.Button(
                     self._action_menu,
                     text="Number Hint",
@@ -1705,15 +1705,15 @@ class GUIDisplay:
         state = self._game.state
         # If deck is exhausted, check turns_left - game should only end when turns_left == 0
         # (meaning all players have taken their final turn)
-        if state.turnsLeft is not None:
+        if state.turns_left is not None:
             # Deck is exhausted - game ends only when turns_left == 0
-            if state.turnsLeft == 0:
+            if state.turns_left == 0:
                 # All players have taken their final turn - game is finished
-                if self._game.isFinished:
+                if self._game.is_finished:
                     self._close_action_menu()
                     return
             # If turns_left > 0, allow the move (current player still has their final turn)
-        elif self._game.isFinished:
+        elif self._game.is_finished:
             # Game finished for other reasons (lives lost, perfect score, etc.)
             self._close_action_menu()
             return
@@ -1727,7 +1727,7 @@ class GUIDisplay:
             return
 
         # Get the current player (who is making the move) - refresh from game state
-        current_player = self._game.currentPlayer
+        current_player = self._game.current_player
 
         # Safety check: ensure we're not trying to hint ourselves
         if teammate_idx == current_player and action in ("color_hint", "number_hint"):
@@ -1755,10 +1755,10 @@ class GUIDisplay:
             if teammate_idx != current_player:
                 state = self._game.state
                 # Validate teammate index - must be different from current player
-                if (0 <= teammate_idx < len(state.playerHands) and
+                if (0 <= teammate_idx < len(state.player_hands) and
                     teammate_idx != current_player and
                     teammate_idx is not None):
-                    hand = state.playerHands[teammate_idx]
+                    hand = state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
                         matching = [i for i, c in enumerate(hand.cards) if c.color == card.color]
@@ -1777,10 +1777,10 @@ class GUIDisplay:
             if teammate_idx != current_player:
                 state = self._game.state
                 # Validate teammate index - must be different from current player
-                if (0 <= teammate_idx < len(state.playerHands) and
+                if (0 <= teammate_idx < len(state.player_hands) and
                     teammate_idx != current_player and
                     teammate_idx is not None):
-                    hand = state.playerHands[teammate_idx]
+                    hand = state.player_hands[teammate_idx]
                     if card_idx < len(hand.cards):
                         card = hand.cards[card_idx]
                         matching = [i for i, c in enumerate(hand.cards) if c.number == card.number]
@@ -1818,7 +1818,7 @@ class GUIDisplay:
             return
 
         state = self._game.state
-        deck_empty = (state.commonView.cardsToDraw == 0)
+        deck_empty = (state.common_view.cards_to_draw == 0)
 
         if deck_empty:
             # Show warning banner
@@ -1831,7 +1831,7 @@ class GUIDisplay:
 
     def display_game_end(self, game: Game) -> None:
         """Display game end information."""
-        score = game.getScore()
+        score = game.get_score()
         max_score = 25
 
         if score == max_score:
@@ -1857,7 +1857,7 @@ class GUIDisplay:
         if self._game and event.width > 1 and event.height > 1:
             # Only redraw if game is not finished (to preserve hints when game ends)
             # Also skip if animating (display_game_state will handle this, but be explicit)
-            if not self._game.isFinished and not (self._is_animating or self._active_animations):
+            if not self._game.is_finished and not (self._is_animating or self._active_animations):
                 self.display_game_state(self._game, self._current_player)
 
     def clear(self) -> None:
@@ -1971,16 +1971,16 @@ class GUIDisplay:
         center_x = width // 2
         center_y = height // 2
 
-        draw_deck_index = state.drawDeckIndex
-        initial_deck = self._game.state.startPosition.drawDeck.cards
+        draw_deck_index = state.draw_deck_index
+        initial_deck = self._game.state.start_position.draw_deck.cards
         total_deck_size = len(initial_deck)
 
         if total_deck_size == 0 or draw_deck_index >= total_deck_size:
             return None
 
         deck_y = center_y + 180
-        num_players = self._game.settings.numPlayers
-        cards_per_player = self._game.settings.maxCardsInHand
+        num_players = self._game.settings.num_players
+        cards_per_player = self._game.settings.max_cards_in_hand
         initial_remaining = total_deck_size - (num_players * cards_per_player)
 
         if initial_remaining == 0:
@@ -2038,10 +2038,10 @@ class GUIDisplay:
 
     def _get_card_position_in_hand(self, player_index: int, card_index: int, state: GameState) -> Optional[Tuple[int, int]]:
         """Calculate the position of a card in a player's hand based on the game state."""
-        if not self._canvas or player_index >= len(state.playerHands):
+        if not self._canvas or player_index >= len(state.player_hands):
             return None
 
-        hand = state.playerHands[player_index]
+        hand = state.player_hands[player_index]
         if card_index >= len(hand.cards):
             return None
 
@@ -2050,13 +2050,13 @@ class GUIDisplay:
         center_x = width // 2
         center_y = height // 2
         table_radius = min(width, height) // 4
-        num_players = len(state.playerHands)
+        num_players = len(state.player_hands)
 
         card_width = 50
         card_height = 70
         spacing = 10
 
-        max_cards = max(len(h.cards) for h in state.playerHands) if state.playerHands else 5
+        max_cards = max(len(h.cards) for h in state.player_hands) if state.player_hands else 5
         max_hand_width = max_cards * (card_width + spacing) - spacing
         max_half_width = max_hand_width // 2
         padding = 80
@@ -2384,7 +2384,7 @@ class GUIDisplay:
         source_x, source_y = source_pos
 
         # Get destination position (position 0 in player's hand) using new_state
-        if new_state is None or player_index >= len(new_state.playerHands):
+        if new_state is None or player_index >= len(new_state.player_hands):
             if callback:
                 callback()
             return
@@ -2649,8 +2649,8 @@ class GUIDisplay:
             # If hand size stayed the same, a card was drawn
             card_was_drawn = True  # Default assumption
             if old_state is not None and new_state is not None:
-                old_hand_size = len(old_state.playerHands[player_index].cards) if player_index < len(old_state.playerHands) else 0
-                new_hand_size = len(new_state.playerHands[player_index].cards) if player_index < len(new_state.playerHands) else 0
+                old_hand_size = len(old_state.player_hands[player_index].cards) if player_index < len(old_state.player_hands) else 0
+                new_hand_size = len(new_state.player_hands[player_index].cards) if player_index < len(new_state.player_hands) else 0
                 # If hand size decreased, no card was drawn
                 card_was_drawn = (new_hand_size == old_hand_size)
 

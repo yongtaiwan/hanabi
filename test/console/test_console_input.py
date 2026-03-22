@@ -48,7 +48,7 @@ class TestConsoleInput(unittest.TestCase):
     def test_parse_color_hint(self):
         """Test parsing color hint command."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         
         if teammate_hand.cards:
             color = teammate_hand.cards[0].color
@@ -62,7 +62,7 @@ class TestConsoleInput(unittest.TestCase):
     def test_parse_number_hint(self):
         """Test parsing number hint command."""
         state = self.game.state
-        teammate_hand = state.playerHands[1]
+        teammate_hand = state.player_hands[1]
         
         if teammate_hand.cards:
             number = teammate_hand.cards[0].number

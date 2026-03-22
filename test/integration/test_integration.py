@@ -35,26 +35,26 @@ class TestIntegration(unittest.TestCase):
         moves_made = 0
         max_moves = 10
         
-        while not engine.isFinished() and moves_made < max_moves:
-            current_player = engine.currentPlayer
+        while not engine.is_finished() and moves_made < max_moves:
+            current_player = engine.current_player
             state = engine.gameState
-            hand = state.playerHands[current_player]
+            hand = state.player_hands[current_player]
             
             if not hand.cards:
                 break
             
             # Try to make a move
-            if state.commonView.hintTokens > 0:
+            if state.common_view.hint_tokens > 0:
                 # Try a hint
                 teammate = 1 if current_player == 0 else 0
-                teammate_hand = state.playerHands[teammate]
+                teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     color = teammate_hand.cards[0].color
                     matching = [i for i, c in enumerate(teammate_hand.cards) if c.color == color]
                     if matching:
                         from hanabi.core.moves import ColorHint
                         move = ColorHint(teammate, matching, color)
-                        success, msg = engine.processMove(current_player, move)
+                        success, msg = engine.process_move(current_player, move)
                         if success:
                             history.record_move(current_player, move, msg, engine)
                             engine.advanceTurn()
@@ -63,7 +63,7 @@ class TestIntegration(unittest.TestCase):
             
             # Otherwise discard
             move = Discard(0)
-            success, msg = engine.processMove(current_player, move)
+            success, msg = engine.process_move(current_player, move)
             if success:
                 history.record_move(current_player, move, msg, engine)
                 engine.advanceTurn()
@@ -94,7 +94,7 @@ class TestIntegration(unittest.TestCase):
         # Get views for all players
         views = []
         for i in range(3):
-            view = engine.getPlayerView(i)
+            view = engine.get_player_view(i)
             views.append(view)
         
         # Each player should see other players' hands
@@ -112,17 +112,17 @@ class TestIntegration(unittest.TestCase):
         
         # Make a move and advance
         move = Discard(0)
-        engine.processMove(0, move)
+        engine.process_move(0, move)
         engine.advanceTurn()
-        self.assertEqual(engine.currentPlayer, 1)
+        self.assertEqual(engine.current_player, 1)
         
-        engine.processMove(1, Discard(0))
+        engine.process_move(1, Discard(0))
         engine.advanceTurn()
-        self.assertEqual(engine.currentPlayer, 2)
+        self.assertEqual(engine.current_player, 2)
         
-        engine.processMove(2, Discard(0))
+        engine.process_move(2, Discard(0))
         engine.advanceTurn()
-        self.assertEqual(engine.currentPlayer, 0)  # Should wrap around
+        self.assertEqual(engine.current_player, 0)  # Should wrap around
 
 
 if __name__ == '__main__':

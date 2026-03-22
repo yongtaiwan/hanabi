@@ -32,10 +32,10 @@ class GameStateValidator:
         state = self.game.state
 
         from hanabi.core.player import HintTrackingPlayer
-        for player_idx in range(self.game.settings.numPlayers):
-            hand = state.playerHands[player_idx]
+        for player_idx in range(self.game.settings.num_players):
+            hand = state.player_hands[player_idx]
             player = self.game.team.players[player_idx]
-            hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
+            hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
 
             # Check each card position
             for card_idx in range(len(hand.cards)):
@@ -65,11 +65,11 @@ class GameStateValidator:
         # This is more of a sanity check - cards should be in a valid list
         state = self.game.state
 
-        for player_idx in range(self.game.settings.numPlayers):
-            hand = state.playerHands[player_idx]
+        for player_idx in range(self.game.settings.num_players):
+            hand = state.player_hands[player_idx]
 
             # Check hand size is correct
-            expected_size = self.game.settings.maxCardsInHand
+            expected_size = self.game.settings.max_cards_in_hand
             if len(hand.cards) > expected_size:
                 self.errors.append(
                     f"BUG: Player {player_idx} has {len(hand.cards)} cards, "
@@ -83,10 +83,10 @@ class GameStateValidator:
         state = self.game.state
 
         from hanabi.core.player import HintTrackingPlayer
-        for player_idx in range(self.game.settings.numPlayers):
+        for player_idx in range(self.game.settings.num_players):
             player = self.game.team.players[player_idx]
-            hints = player.getHints() if isinstance(player, HintTrackingPlayer) else {}
-            hand = state.playerHands[player_idx]
+            hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
+            hand = state.player_hands[player_idx]
 
             # Check that hint indices are valid
             for hint_idx in hints.keys():
@@ -126,8 +126,8 @@ class AutomatedGamePlayer:
             "finished": False
         }
 
-        while not game.isFinished and move_count < max_moves:
-            current_player = game.currentPlayer
+        while not game.is_finished and move_count < max_moves:
+            current_player = game.current_player
             state = game.state
 
             # Validate state before move
@@ -143,7 +143,7 @@ class AutomatedGamePlayer:
                 break
 
             try:
-                game._processMove(current_player, move)
+                game._process_move(current_player, move)
                 result_msg = "Move successful"  # Game doesn't return messages anymore
                 move_count += 1
 
@@ -174,26 +174,26 @@ class AutomatedGamePlayer:
                 game_log["errors"].append(f"Invalid move or assertion: {e}")
                 break
 
-        game_log["final_score"] = game.getScore()
-        game_log["finished"] = game.isFinished
+        game_log["final_score"] = game.get_score()
+        game_log["finished"] = game.is_finished
 
         return game_log
 
     def _make_move(self, game: Game, player_index: int) -> Optional:
         """Make a move for the given player."""
         state = game.state
-        common_view = state.commonView
-        hand = state.playerHands[player_index]
+        common_view = state.common_view
+        hand = state.player_hands[player_index]
 
         if not hand.cards:
             return None
 
         # Try to give a hint if possible
-        if common_view.hintTokens > 0:
+        if common_view.hint_tokens > 0:
             # Find a teammate
             for teammate_idx in range(self.num_players):
                 if teammate_idx != player_index:
-                    teammate_hand = state.playerHands[teammate_idx]
+                    teammate_hand = state.player_hands[teammate_idx]
                     if teammate_hand.cards:
                         # Try color hint
                         colors = [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]
@@ -216,7 +216,7 @@ class AutomatedGamePlayer:
             return Play(random.randint(0, len(hand.cards) - 1))
         else:
             # Discard if we can't hint
-            if common_view.hintTokens < game.settings.maxHintTokens:
+            if common_view.hint_tokens < game.settings.max_hint_tokens:
                 return Discard(random.randint(0, len(hand.cards) - 1))
             else:
                 return Play(random.randint(0, len(hand.cards) - 1))

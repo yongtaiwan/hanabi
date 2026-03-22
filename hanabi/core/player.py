@@ -62,18 +62,18 @@ class BasePlayer(Observer, Player):
         self._common_view = None
 
     @property
-    def playerIndex(self) -> int:
+    def player_index(self) -> int:
         """Get the player index."""
         return self._player_index
 
     @property
-    def gameSettings(self) -> GameSettings:
+    def game_settings(self) -> GameSettings:
         """Get the game settings."""
         assert self._game_settings is not None, "Game settings not set"
         return self._game_settings
 
     @property
-    def commonView(self) -> CommonView:
+    def common_view(self) -> CommonView:
         """Get the common view of the game state."""
         assert self._common_view is not None, "Common view not set"
         return self._common_view
@@ -91,8 +91,8 @@ class BasePlayer(Observer, Player):
         return is_move_legal_from_view(
             move,
             player_view=player_view,
-            common_view=self.commonView,
-            game_settings=self.gameSettings,
+            common_view=self.common_view,
+            game_settings=self.game_settings,
             player_index=self._player_index,
         )
 
@@ -185,33 +185,33 @@ class HintTrackingPlayer(BasePlayer):
     ) -> None:
         super().observe_play_move(player_index, move, observer_view)
         if player_index == self._player_index:
-            self._updateHintsFromCardMove(move)
+            self._update_hints_from_card_move(move)
 
     def observe_discard_move(
         self, player_index: int, move: Discard, observer_view: PlayerView
     ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         if player_index == self._player_index:
-            self._updateHintsFromCardMove(move)
+            self._update_hints_from_card_move(move)
 
     def observe_color_hint_move(
         self, player_index: int, move: ColorHint, observer_view: PlayerView
     ) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
-            self._updateHintsFromHint(move)
+            self._update_hints_from_hint(move)
 
     def observe_number_hint_move(
         self, player_index: int, move: NumberHint, observer_view: PlayerView
     ) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
-            self._updateHintsFromHint(move)
+            self._update_hints_from_hint(move)
 
-    def _updateHintsFromHint(self, hint: Hint) -> None:
+    def _update_hints_from_hint(self, hint: Hint) -> None:
         """Update hints when receiving a hint."""
         # Get current hand size from game settings
-        hand_size = self.gameSettings.maxCardsInHand
+        hand_size = self.game_settings.max_cards_in_hand
 
         for card_idx in hint.cards:
             assert 0 <= card_idx < hand_size, (
@@ -227,7 +227,7 @@ class HintTrackingPlayer(BasePlayer):
             elif isinstance(hint, NumberHint):
                 self._hints[card_idx]["number"] = hint.number
 
-    def _updateHintsFromCardMove(self, move: CardMove) -> None:
+    def _update_hints_from_card_move(self, move: CardMove) -> None:
         """Update hints when playing/discarding a card."""
         card_index = move.card
 
@@ -254,7 +254,7 @@ class HintTrackingPlayer(BasePlayer):
                 new_hints[old_idx] = hint_data
         self._hints = new_hints
 
-    def getHints(self) -> Dict[int, Dict[str, Optional[Union[Color, Number]]]]:
+    def get_hints(self) -> Dict[int, Dict[str, Optional[Union[Color, Number]]]]:
         """
         Get hints for this player's hand.
 
@@ -320,10 +320,10 @@ class StrategyAlphaPlayer(BasePlayer):
         """
         # Placeholder for Alpha strategy implementation
         # This would contain the actual strategy logic
-        common_view = self.commonView
+        common_view = self.common_view
 
         # Simple strategy: try to play if we have hint tokens, otherwise discard
-        if common_view.hintTokens < self.gameSettings.maxHintTokens:
+        if common_view.hint_tokens < self.game_settings.max_hint_tokens:
             # Prefer discarding to gain hint tokens
             return Discard(0)  # Simplified - would need actual strategy
         else:
