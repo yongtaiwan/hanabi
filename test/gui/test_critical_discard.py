@@ -3,7 +3,7 @@ Unit tests for critical discard detection in GUI game.
 """
 import unittest
 from hanabi.core.game import Game, create_standard_game_settings
-from hanabi.core.player import PlayerTeam
+from hanabi.core.player import PlayerTeam, HumanPlayer
 from hanabi.gui.gui_game import GUIGame
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
@@ -17,7 +17,7 @@ class TestCriticalDiscard(unittest.TestCase):
         """Set up test fixtures."""
         # Create a game for testing
         settings = create_standard_game_settings(num_players=2)
-        team = PlayerTeam([None, None])  # Placeholder players
+        team = PlayerTeam([HumanPlayer(0), HumanPlayer(1)])
         self.game = Game.create(team, settings)
         # Create a GUIGame instance to access _is_critical_discard
         import tkinter as tk

@@ -59,15 +59,13 @@ class BasePlayer(Observer, Player):
     @property
     def gameSettings(self) -> GameSettings:
         """Get the game settings."""
-        if self._game_settings is None:
-            raise ValueError("Game settings not set")
+        assert self._game_settings is not None, "Game settings not set"
         return self._game_settings
 
     @property
     def commonView(self) -> CommonView:
         """Get the common view of the game state."""
-        if self._common_view is None:
-            raise ValueError("Common view not set")
+        assert self._common_view is not None, "Common view not set"
         return self._common_view
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
@@ -146,15 +144,10 @@ class HintTrackingPlayer(BasePlayer):
         hand_size = self.gameSettings.maxCardsInHand
 
         for card_idx in hint.cards:
-            # Validate card index is within bounds
-            if card_idx < 0 or card_idx >= hand_size:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"[HintTrackingPlayer {self._player_index}] Received hint with invalid card index {card_idx} "
-                    f"(hand size: {hand_size}). Ignoring this index."
-                )
-                continue
+            assert 0 <= card_idx < hand_size, (
+                f"[HintTrackingPlayer {self._player_index}] hint has invalid card index {card_idx} "
+                f"(hand size: {hand_size})"
+            )
 
             if card_idx not in self._hints:
                 self._hints[card_idx] = {"color": None, "number": None}

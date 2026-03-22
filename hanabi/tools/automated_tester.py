@@ -169,9 +169,9 @@ class AutomatedGamePlayer:
                         "move_type": type(move).__name__,
                         "result": result_msg
                     })
-            except ValueError as e:
-                # Invalid move - end game
-                game_log["errors"].append(f"Invalid move: {e}")
+            except AssertionError as e:
+                # Illegal move or invariant failure (bug in automated player / engine)
+                game_log["errors"].append(f"Invalid move or assertion: {e}")
                 break
 
         game_log["final_score"] = game.getScore()

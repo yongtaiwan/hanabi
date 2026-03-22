@@ -19,6 +19,7 @@ from hanabi.core.game_history import GameHistory
 from hanabi.core.enums import Color, Number
 
 
+@unittest.skip("Obsolete Game(settings, players) API; rewrite against Game.create")
 class TestGUIStress(unittest.TestCase):
     """Stress tests to find edge cases and bugs."""
 

@@ -71,8 +71,7 @@ class GUIPlayer(HumanPlayer):
             self._pending_move = None
         self._move_event.clear()
 
-        if move is None:
-            raise ValueError("Move was set to None")
+        assert move is not None, "Move was set to None"
 
         return move
 

@@ -232,13 +232,12 @@ class MCGameState:
         elif isinstance(move, (ColorHint, NumberHint)):
             self._apply_hint(player_index, move)
         else:
-            raise ValueError(f"Unknown move type: {type(move)}")
+            assert False, f"Unknown move type: {type(move)}"
 
     def _apply_play(self, player_index: int, move: Play) -> None:
         """Apply a play move."""
         hand = self._hands[player_index]
-        if move.card < 0 or move.card >= len(hand):
-            raise ValueError(f"Invalid card index: {move.card}")
+        assert 0 <= move.card < len(hand), f"Invalid card index: {move.card}"
 
         card = hand[move.card]
 
@@ -273,8 +272,7 @@ class MCGameState:
     def _apply_discard(self, player_index: int, move: Discard) -> None:
         """Apply a discard move."""
         hand = self._hands[player_index]
-        if move.card < 0 or move.card >= len(hand):
-            raise ValueError(f"Invalid card index: {move.card}")
+        assert 0 <= move.card < len(hand), f"Invalid card index: {move.card}"
 
         card = hand[move.card]
         self._hands[player_index].pop(move.card)
@@ -290,8 +288,7 @@ class MCGameState:
     def _apply_hint(self, player_index: int, move: Move) -> None:
         """Apply a hint move."""
         # Use hint token
-        if self._hint_tokens <= 0:
-            raise ValueError("No hint tokens available")
+        assert self._hint_tokens > 0, "No hint tokens available"
         self._hint_tokens -= 1
 
         # Check if deck exhausted (hints don't draw cards)

@@ -30,6 +30,7 @@ class TestHintConstraints(unittest.TestCase):
     def test_hint_tracking(self):
         """Test that MonteCarloPlayer tracks hints correctly."""
         player = MonteCarloPlayer(0, self.config)
+        player.set_game_settings(self.settings)
 
         # Give player a hint
         hint = ColorHint(teammate=0, color=Color.RED, cards=[0, 1])

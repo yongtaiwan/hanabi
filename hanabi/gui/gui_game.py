@@ -1574,17 +1574,17 @@ class GUIGame:
             # Get state before move
             old_state = self._game.state
 
-            # Apply the move
-            try:
-                self._game._processMove(current_player, move)
-                # Note: _processMove now calls _notify_players internally
-                # Advance to next player's turn (moves are deterministic)
-                self._game._advanceTurn()
-            except ValueError as e:
-                # Move might be invalid at this point in replay
-                logger.error(f"Replay: Failed to apply move '{move_str}': {e}")
-                # Continue anyway - might be able to recover
+            # Skip illegal moves in corrupt/desynced replay files (engine asserts on bugs)
+            if not old_state._validate(current_player, move):
+                logger.error(
+                    f"Replay: move '{move_str}' illegal in reconstructed state: "
+                    f"{old_state._get_validation_error_message(current_player, move)}"
+                )
                 continue
+
+            self._game._processMove(current_player, move)
+            # Note: _processMove calls _notify_players internally
+            self._game._advanceTurn()
 
             # Get state after move
             new_state = self._game.state

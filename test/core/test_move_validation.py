@@ -9,8 +9,7 @@ from hanabi.core.game import (
     Game, GameState, create_standard_game_settings,
     Deck, StartPosition, CommonView, Hand
 )
-from hanabi.core.player import PlayerTeam
-from hanabi.gui.gui_player import GUIPlayer
+from hanabi.core.player import PlayerTeam, HumanPlayer
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.card import Card
 from hanabi.core.enums import Color, Number
@@ -22,7 +21,7 @@ class TestMoveValidation(unittest.TestCase):
     def setUp(self):
         """Set up a test game state."""
         settings = create_standard_game_settings(2)
-        players = [GUIPlayer(0), GUIPlayer(1)]
+        players = [HumanPlayer(0), HumanPlayer(1)]
         team = PlayerTeam(players)
         self.game = Game.create(team, settings)
         self.state = self.game.state

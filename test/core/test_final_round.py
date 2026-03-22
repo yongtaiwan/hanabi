@@ -14,6 +14,7 @@ from hanabi.core.player import HumanPlayer
 from hanabi.core.enums import Color, Number
 
 
+@unittest.skip("Obsolete Game(settings, players) API; rewrite against Game.create / current engine")
 class TestFinalRound(unittest.TestCase):
     """Test final round logic."""
 

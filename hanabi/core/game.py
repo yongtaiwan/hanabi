@@ -207,11 +207,8 @@ def create_standard_game_settings(num_players: int) -> GameSettings:
     Returns:
         A GameSettings instance configured for standard Hanabi rules
 
-    Raises:
-        ValueError: If num_players is not between 2 and 5
     """
-    if num_players < 2 or num_players > 5:
-        raise ValueError(f"Hanabi requires 2-5 players, got {num_players}")
+    assert 2 <= num_players <= 5, f"Hanabi requires 2-5 players, got {num_players}"
 
     # Standard card distribution per color: {Number: quantity}
     standard_distribution = {
@@ -1038,8 +1035,7 @@ class Game:
     @property
     def state(self) -> GameState:
         """Get the current game state (most recent turn)."""
-        if not self._turns:
-            raise ValueError("Game not initialized. No turns yet.")
+        assert self._turns, "Game not initialized. No turns yet."
         return self._turns[-1]
 
     @property
@@ -1106,6 +1102,14 @@ class Game:
         own_hand_size = len(self.state.playerHands[player_index].cards)
         return PlayerView(teammates, own_hand_size)
 
+    def getPlayerView(self, player_index: int) -> PlayerView:
+        """Public alias for :meth:`_getPlayerView` (tests and tooling)."""
+        return self._getPlayerView(player_index)
+
+    def processMove(self, player_index: int, move: Move) -> None:
+        """Public alias for :meth:`_processMove` (tests and tooling)."""
+        self._processMove(player_index, move)
+
     def _processMove(self, player_index: int, move: Move) -> None:
         """
         Process a move and update the game state.
@@ -1114,8 +1118,6 @@ class Game:
             player_index: Index of the player making the move
             move: The move to process
 
-        Raises:
-            ValueError: If the move is invalid or game state is invalid
         """
         assert self._turns, "Game not initialized. No turns yet."
         assert 0 <= player_index < len(self._team.players), \
@@ -1126,10 +1128,9 @@ class Game:
                     f"turn_number={current_state.turnNumber}, current_player={current_state.currentPlayer}, "
                     f"turns_left={current_state.turnsLeft}, cards_to_draw={current_state.commonView.cardsToDraw}")
 
-        # Validate the move (GameState now has all the state it needs)
-        if not self.state._validate(player_index, move):
-            error_msg = self.state._get_validation_error_message(player_index, move)
-            raise ValueError(error_msg)
+        # Validate the move (callers must supply legal moves; illegal = bug)
+        assert self.state._validate(player_index, move), \
+            self.state._get_validation_error_message(player_index, move)
 
         # Clone the current state and update it in-place
         new_state = copy.copy(current_state)
@@ -1198,22 +1199,12 @@ class Game:
             # Get player view
             player_view = self._getPlayerView(current_player)
 
-            # Get move from player
-            # Let AssertionError propagate (fail fast on bugs)
-            # Only catch ValueError for invalid moves (game logic, not bugs)
-            try:
-                move = player.play(player_view)
-            except ValueError as e:
-                # Invalid move from player - end game with error
-                raise RuntimeError(f"Player {current_player} failed to provide a move: {e}") from e
+            # Get move from player (must be legal; illegal moves are bugs in the player / UI)
+            move = player.play(player_view)
 
-            # Process the move (raises ValueError if invalid)
-            # Note: _processMove now calls _notify_players internally before the callback
-            try:
-                self._processMove(current_player, move)
-            except ValueError as e:
-                # Invalid move - end game with error
-                raise RuntimeError(f"Game ended due to invalid move: {e}") from e
+            # Process the move; _processMove asserts move legality
+            # Note: _processMove calls _notify_players internally before the callback
+            self._processMove(current_player, move)
 
             # Advance turn
             self._advanceTurn()

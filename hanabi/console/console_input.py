@@ -43,22 +43,29 @@ class ConsoleInput:
         if not input_str:
             return None, "Empty input"
 
-        # Try simplified format first (single letter + optional number)
-        if len(input_str) >= 2 and input_str[0] in ['p', 'd', 'h']:
-            return self._parse_simplified(player_index, input_str)
-
-        # Otherwise parse as full command
         parts = input_str.split()
         if not parts:
             return None, "Invalid input format"
 
         command = parts[0]
 
-        if command in ["play", "p"]:
+        # Full words first — avoids treating "play 1" as simplified "p" + "lay 1"
+        if command == "play":
             return self._parse_play(parts)
-        elif command in ["discard", "d"]:
+        if command == "discard":
             return self._parse_discard(parts)
-        elif command in ["hint", "h"]:
+        if command == "hint":
+            return self._parse_hint(player_index, parts)
+
+        # Single-letter simplified: p1, d2, h3, hr, ...
+        if len(input_str) >= 2 and input_str[0] in ['p', 'd', 'h']:
+            return self._parse_simplified(player_index, input_str)
+
+        if command in ["p"]:
+            return self._parse_play(parts)
+        elif command in ["d"]:
+            return self._parse_discard(parts)
+        elif command in ["h"]:
             return self._parse_hint(player_index, parts)
         else:
             return None, f"Unknown command: {command}. Use 'play'/'p', 'discard'/'d', or 'hint'/'h'"

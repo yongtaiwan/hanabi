@@ -17,8 +17,7 @@ class TestRandomPlayer(unittest.TestCase):
         Test that RandomPlayer only returns valid moves.
 
         This test plays multiple games and verifies that RandomPlayer
-        never returns an invalid move that causes the game to raise
-        a RuntimeError.
+        never returns an invalid move that trips engine assertions.
         """
         settings = create_standard_game_settings(3)
 
@@ -29,17 +28,12 @@ class TestRandomPlayer(unittest.TestCase):
                 team = PlayerTeam(players)
                 game = Game.create(team, settings)
 
-                # Play the game - it should complete without RuntimeError
-                # (invalid moves cause RuntimeError)
                 try:
                     game.play()
-                    # Game completed successfully
                     self.assertTrue(game.isFinished)
-                except RuntimeError as e:
-                    # If we get a RuntimeError, it means RandomPlayer returned an invalid move
+                except AssertionError as e:
                     self.fail(f"RandomPlayer returned an invalid move in game {game_num}: {e}")
                 except Exception as e:
-                    # Other exceptions are unexpected
                     self.fail(f"Unexpected exception in game {game_num}: {e}")
 
     def test_random_player_handles_hint_token_exhaustion(self):

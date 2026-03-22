@@ -26,15 +26,13 @@ class ConsoleObserver(Observer):
     @property
     def gameSettings(self) -> GameSettings:
         """Get the game settings."""
-        if self._game_settings is None:
-            raise ValueError("Game settings not set")
+        assert self._game_settings is not None, "Game settings not set"
         return self._game_settings
 
     @property
     def commonView(self) -> CommonView:
         """Get the common view of the game state."""
-        if self._common_view is None:
-            raise ValueError("Common view not set")
+        assert self._common_view is not None, "Common view not set"
         return self._common_view
 
     def set_game_settings(self, game_settings: GameSettings) -> None:

@@ -6,6 +6,7 @@ Tests verify that hints are correctly tracked and shifted when cards are played/
 
 import unittest
 from hanabi.core.player import HumanPlayer
+from hanabi.core.game import create_standard_game_settings
 from hanabi.core.moves import ColorHint, NumberHint, Play, Discard
 from hanabi.core.enums import Color, Number
 
@@ -16,6 +17,7 @@ class TestHintTracking(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.player = HumanPlayer(0)
+        self.player.set_game_settings(create_standard_game_settings(3))
 
     def test_receive_color_hint(self):
         """Test receiving a color hint."""

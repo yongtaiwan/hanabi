@@ -3,10 +3,9 @@ Tests for ConsoleInput class.
 """
 
 import unittest
-from hanabi.core.game import create_standard_game_settings
-from hanabi.core.game import Game as GameEngine
+from hanabi.core.game import create_standard_game_settings, Game
 from hanabi.console.console_input import ConsoleInput
-from hanabi.core.player import HumanPlayer
+from hanabi.core.player import HumanPlayer, PlayerTeam
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
 
@@ -18,13 +17,14 @@ class TestConsoleInput(unittest.TestCase):
         """Set up test fixtures."""
         self.settings = create_standard_game_settings(3)
         self.players = [HumanPlayer(i) for i in range(3)]
-        self.engine = GameEngine(self.settings, self.players)
-        self.engine.initialize()
-        self.input_parser = ConsoleInput(self.engine)
+        team = PlayerTeam(self.players)
+        self.game = Game.create(team, self.settings)
+        self.input_parser = ConsoleInput(self.game, 0)
     
     def test_parse_play(self):
         """Test parsing play command."""
-        move, error = self.input_parser.parse_move(0, "play 0")
+        # Card indices in full commands are 1-based (UI)
+        move, error = self.input_parser.parse_move(0, "play 1")
         self.assertIsNotNone(move)
         self.assertIsNone(error)
         self.assertIsInstance(move, Play)
@@ -39,7 +39,7 @@ class TestConsoleInput(unittest.TestCase):
     
     def test_parse_discard(self):
         """Test parsing discard command."""
-        move, error = self.input_parser.parse_move(0, "discard 2")
+        move, error = self.input_parser.parse_move(0, "discard 3")
         self.assertIsNotNone(move)
         self.assertIsNone(error)
         self.assertIsInstance(move, Discard)
@@ -47,7 +47,7 @@ class TestConsoleInput(unittest.TestCase):
     
     def test_parse_color_hint(self):
         """Test parsing color hint command."""
-        state = self.engine.gameState
+        state = self.game.state
         teammate_hand = state.playerHands[1]
         
         if teammate_hand.cards:
@@ -61,7 +61,7 @@ class TestConsoleInput(unittest.TestCase):
     
     def test_parse_number_hint(self):
         """Test parsing number hint command."""
-        state = self.engine.gameState
+        state = self.game.state
         teammate_hand = state.playerHands[1]
         
         if teammate_hand.cards:

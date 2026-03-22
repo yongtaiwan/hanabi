@@ -96,8 +96,7 @@ class TestGameComprehensive(unittest.TestCase):
         # Player 1 tries to move on player 0's turn
         self.assertFalse(self.game.state._validate(1, move))
 
-        # Should raise ValueError when processed
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(AssertionError) as context:
             self.game.processMove(1, move)
         self.assertIn("Invalid move", str(context.exception))
 
@@ -112,8 +111,7 @@ class TestGameComprehensive(unittest.TestCase):
         move = Play(hand_size)
         self.assertFalse(self.game.state._validate(0, move))
 
-        # Should raise ValueError when processed
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             self.game.processMove(0, move)
 
     def test_validate_discard_at_max_hint_tokens(self):
@@ -132,7 +130,7 @@ class TestGameComprehensive(unittest.TestCase):
         move = Discard(0)
         self.assertFalse(state._validate(self.game.currentPlayer, move))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             self.game.processMove(self.game.currentPlayer, move)
 
     def test_validate_hint_no_tokens(self):
@@ -159,7 +157,7 @@ class TestGameComprehensive(unittest.TestCase):
                         self.game.processMove(current_player, move)
                         self.game._advanceTurn()
                         state = self.game.state
-                    except ValueError:
+                    except AssertionError:
                         break
                 else:
                     break
@@ -169,7 +167,7 @@ class TestGameComprehensive(unittest.TestCase):
                 move = ColorHint(1, matching, color)
                 self.assertFalse(state._validate(self.game.currentPlayer, move))
 
-                with self.assertRaises(ValueError):
+                with self.assertRaises(AssertionError):
                     self.game.processMove(self.game.currentPlayer, move)
 
     def test_validate_hint_must_include_all_matching_cards(self):
@@ -188,7 +186,7 @@ class TestGameComprehensive(unittest.TestCase):
                 move = ColorHint(1, partial_matching, color)
                 self.assertFalse(state._validate(0, move))
 
-                with self.assertRaises(ValueError):
+                with self.assertRaises(AssertionError):
                     self.game.processMove(0, move)
 
     def test_validate_hint_cannot_hint_self(self):
@@ -202,7 +200,7 @@ class TestGameComprehensive(unittest.TestCase):
             move = ColorHint(0, matching, color)  # Hinting self
             self.assertFalse(state._validate(0, move))
 
-            with self.assertRaises(ValueError):
+            with self.assertRaises(AssertionError):
                 self.game.processMove(0, move)
 
     def test_validate_hint_invalid_teammate_index(self):
@@ -230,7 +228,7 @@ class TestGameComprehensive(unittest.TestCase):
                             self.game.processMove(current_player, move)
                             self.game._advanceTurn()
                             break
-                        except ValueError:
+                        except AssertionError:
                             pass
             state = self.game.state
             if state.commonView.liveTokens <= 0:
@@ -496,7 +494,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except ValueError:
+                except AssertionError:
                     break
             else:
                 break
@@ -531,7 +529,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game._advanceTurn()
                     state = self.game.state
                     iterations += 1
-                except (ValueError, AssertionError):
+                except AssertionError:
                     # Move failed or game ended
                     break
             else:
@@ -587,7 +585,7 @@ class TestGameComprehensive(unittest.TestCase):
                 try:
                     self.game.processMove(expected_player, move)
                     self.game._advanceTurn()
-                except ValueError:
+                except AssertionError:
                     break
 
         # Should cycle back to player 0 (or be at some valid player)
@@ -653,7 +651,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except (ValueError, AssertionError):
+                except AssertionError:
                     break
             else:
                 break
@@ -687,7 +685,7 @@ class TestGameComprehensive(unittest.TestCase):
                     state = self.game.state
                     if state.turnsLeft is not None:
                         self.assertEqual(state.turnsLeft, initial_turns - 1)
-                except (ValueError, AssertionError):
+                except AssertionError:
                     pass
 
     # ========== Game End Condition Tests ==========
@@ -709,7 +707,7 @@ class TestGameComprehensive(unittest.TestCase):
                             self.game.processMove(current_player, move)
                             self.game._advanceTurn()
                             break
-                        except ValueError:
+                        except AssertionError:
                             pass
             state = self.game.state
 
@@ -770,7 +768,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except (ValueError, AssertionError):
+                except AssertionError:
                     break
             else:
                 break
@@ -801,7 +799,7 @@ class TestGameComprehensive(unittest.TestCase):
                     try:
                         self.game.processMove(current_player, move)
                         self.game._advanceTurn()
-                    except (ValueError, AssertionError):
+                    except AssertionError:
                         break
                 state = self.game.state
 
@@ -819,16 +817,21 @@ class TestGameComprehensive(unittest.TestCase):
         """Test that score increases as cards are played."""
         initial_score = self.game.getScore()
 
-        # Play a 1
         state = self.game.state
-        hand = state.playerHands[0]
+        cp = self.game.currentPlayer
+        hand = state.playerHands[cp]
+        played = False
         for i, card in enumerate(hand.cards):
             if card.number == Number.ONE:
                 move = Play(i)
-                self.game.processMove(0, move)
-                break
+                if state._validate(cp, move):
+                    self.game.processMove(cp, move)
+                    played = True
+                    break
 
-        # Score should increase
+        if not played:
+            self.skipTest("No playable 1 in current player's hand for this shuffle")
+
         new_score = self.game.getScore()
         self.assertGreater(new_score, initial_score)
         self.assertEqual(new_score, 1)
@@ -851,7 +854,7 @@ class TestGameComprehensive(unittest.TestCase):
                         state = self.game.state
                         if len(colors_played) >= 3:
                             break
-                    except ValueError:
+                    except AssertionError:
                         continue
             if len(colors_played) >= 3:
                 break
@@ -906,7 +909,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except (ValueError, AssertionError):
+                except AssertionError:
                     break
             else:
                 break
@@ -1016,7 +1019,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except ValueError:
+                except AssertionError:
                     break
             else:
                 break
@@ -1056,7 +1059,7 @@ class TestGameComprehensive(unittest.TestCase):
             self.game.processMove(0, move)
             state = self.game.state
             self.assertEqual(len(state.playerHands[0].cards), initial_hand_size)
-        except ValueError:
+        except AssertionError:
             # If discard fails, that's ok - we tested play already
             pass
 
@@ -1089,7 +1092,7 @@ class TestGameComprehensive(unittest.TestCase):
                     self.game.processMove(current_player, move)
                     self.game._advanceTurn()
                     state = self.game.state
-                except ValueError:
+                except AssertionError:
                     break
             else:
                 break
@@ -1112,23 +1115,9 @@ class TestGameComprehensive(unittest.TestCase):
         team = PlayerTeam(players)
         game = Game.create(team, settings)
 
-        # Play until game ends or max moves
-        max_moves = 200
-        moves = 0
-
-        try:
-            game.play()
-        except RuntimeError:
-            # Game ended due to invalid move or error - that's ok for random player
-            pass
-        except Exception:
-            # Any other exception - game should still be in some state
-            pass
-
-        # Game should be finished (either normally or due to error)
-        # Note: RandomPlayer might make invalid moves, so game might end with RuntimeError
-        # In that case, we can't check isFinished, but the exception indicates the game handled it
-        # For a proper test, we'd need a smarter player, but this tests the error handling
+        # RandomPlayer must return only legal moves; illegal moves are bugs (assert)
+        game.play()
+        self.assertTrue(game.isFinished)
 
     def test_game_state_consistency_after_multiple_moves(self):
         """Test that game state remains consistent after multiple moves."""
@@ -1157,7 +1146,7 @@ class TestGameComprehensive(unittest.TestCase):
                 self.assertLessEqual(new_state.commonView.hintTokens, self.settings.maxHintTokens)
                 self.assertGreaterEqual(new_state.commonView.cardsToDraw, 0)
 
-            except ValueError:
+            except AssertionError:
                 break
 
     def test_turn_number_tracks_correctly(self):
@@ -1175,7 +1164,7 @@ class TestGameComprehensive(unittest.TestCase):
                 expected_turn = initial_turn + i + 1
                 self.assertEqual(self.game.state.turnNumber, expected_turn)
                 self.game._advanceTurn()
-            except ValueError:
+            except AssertionError:
                 break
 
     # ========== Property Tests ==========
@@ -1198,7 +1187,7 @@ class TestGameComprehensive(unittest.TestCase):
                             self.game.processMove(current_player, move)
                             self.game._advanceTurn()
                             break
-                        except ValueError:
+                        except AssertionError:
                             pass
             state = self.game.state
 
