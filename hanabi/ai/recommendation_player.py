@@ -11,6 +11,9 @@ C4 = rightmost (newest). In this codebase, index 0 = newest (C4), index 3 = olde
 
 This encoding only supports 4 card positions (0-3 play, 4-7 discard). This player is
 only supported for standard 5-player games (4 cards per hand).
+
+Multicolor (``Color.MULTI``) cards are not supported; hint encoding uses the same five
+standard suits as :func:`hanabi.core.game.create_standard_game_settings`.
 """
 
 from __future__ import annotations
@@ -32,6 +35,15 @@ from hanabi.core.card import Card
 
 # Slots in paper tie-break order (C1 first through C4): C1=idx 3 ... C4=idx 0.
 _REC_SLOT_ORDER = (3, 2, 1, 0)
+
+# Standard suits only (matches ``create_standard_game_settings``); MULTI is not used for hints.
+_STANDARD_HINT_COLORS = (
+    Color.WHITE,
+    Color.RED,
+    Color.BLUE,
+    Color.YELLOW,
+    Color.GREEN,
+)
 
 
 class RecommendationPlayer(BasePlayer):
@@ -357,8 +369,8 @@ class RecommendationPlayer(BasePlayer):
                     return NumberHint(target, indices, num)
             assert False, "non-empty hand has a rank; encoding rank hint should exist"
 
-        for color in Color:
+        for color in _STANDARD_HINT_COLORS:
             indices = [i for i, c in enumerate(hand.cards) if color == c.color]
             if indices:
                 return ColorHint(target, indices, color)
-        assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
+        assert False, "encoding color hint should exist for a non-empty standard-color hand"
