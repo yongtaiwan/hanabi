@@ -11,8 +11,10 @@ except ImportError:
         "tkinter is not available. On macOS, install it with: brew install python-tk\n"
         "Or use the CLI version: python -m hanabi"
     )
-from typing import List, Optional
+from typing import Callable, List, Optional
 import logging
+import queue
+import threading
 from hanabi.core.game import create_standard_game_settings, Game
 from hanabi.core.player import PlayerTeam
 from .gui_display import GUIDisplay
@@ -46,6 +48,9 @@ class GUIGame:
         self._replay_move_index: int = 0
         self._suppress_dialogs: bool = False  # Set to True to disable messageboxes (for testing)
         self._game_ended: bool = False  # Track if game has ended to prevent duplicate end screens
+        # Jobs from the game worker thread; drained only on the Tk main thread (_process_gui_updates)
+        self._tk_job_queue: queue.Queue = queue.Queue()
+        self._gui_updates_after_id: Optional[str] = None
 
         self._setup_menu()
         self._setup_ui()
@@ -464,15 +469,8 @@ class GUIGame:
                         is_critical_discard = self._is_critical_discard(card, old_state)
 
             if should_animate and card:
-                # CRITICAL: Freeze old state and mark as animating IMMEDIATELY
-                # This must happen before any display updates to prevent race conditions
-                # Set animating flag and freeze old state BEFORE scheduling animation
-                self._display._is_animating = True
-                if old_state is not None:
-                    self._display._frozen_state = old_state
-                    # Also keep game object reference for settings access
-                    if self._display._game:
-                        self._display._frozen_game_state = self._display._game
+                # All Tk work must run on the main thread; the worker blocks until animations finish.
+                animation_done = threading.Event()
 
                 # Determine edge color based on move type
                 # Use clearly distinct colors that don't match card colors:
@@ -504,63 +502,54 @@ class GUIGame:
                     if len(new_hand.cards) > 0:
                         drawn_card = new_hand.cards[0]
 
-                # Use a variable to track when all animations are complete (blocking)
-                import tkinter as tk
+                def run_card_animation_on_gui():
+                    # CRITICAL: Freeze old state and mark as animating on the Tk thread before any display updates
+                    self._display._is_animating = True
+                    if old_state is not None:
+                        self._display._frozen_state = old_state
+                        if self._display._game:
+                            self._display._frozen_game_state = self._display._game
 
-                animation_done = tk.BooleanVar(value=False)
+                    def play_discard_animation_complete():
+                        if is_invalid_play:
+                            dest_pos = self._display._get_discard_position()
+                            if dest_pos:
+                                self._display.show_explosion(dest_pos[0], dest_pos[1])
 
-                # Animate the card movement, then draw animation (if needed), then update display
-                def play_discard_animation_complete():
-                    # If invalid play, show explosion effect
-                    if is_invalid_play:
-                        dest_pos = self._display._get_discard_position()
-                        if dest_pos:
-                            self._display.show_explosion(dest_pos[0], dest_pos[1])
+                        if card_was_drawn and drawn_card:
 
-                    # If card was drawn, animate the draw
-                    if card_was_drawn and drawn_card:
+                            def draw_animation_complete():
+                                update_display()
+                                animation_done.set()
 
-                        def draw_animation_complete():
-                            # After draw animation, update display
+                            self._display.animate_card_draw(
+                                player_index,
+                                drawn_card,
+                                edge_color="#00FF00",
+                                callback=draw_animation_complete,
+                                old_state=old_state,
+                                new_state=new_state,
+                            )
+                        else:
                             update_display()
-                            # Signal completion - all animations done
-                            animation_done.set(True)
+                            animation_done.set()
 
-                        # Animate card draw (queued - will play after play/discard animation)
-                        self._display.animate_card_draw(
-                            player_index,
-                            drawn_card,
-                            edge_color="#00FF00",  # Green for drawing
-                            callback=draw_animation_complete,
-                            old_state=old_state,
-                            new_state=new_state,
-                        )
-                    else:
-                        # No card drawn - update display and signal completion
-                        update_display()
-                        animation_done.set(True)
+                    self._display.animate_card_move(
+                        player_index,
+                        move.card,
+                        card,
+                        destination,
+                        color=firework_color,
+                        edge_color=edge_color,
+                        callback=play_discard_animation_complete,
+                        old_state=old_state,
+                    )
 
-                # Start play/discard animation (queued - callback will queue draw if needed)
-                self._display.animate_card_move(
-                    player_index,
-                    move.card,
-                    card,
-                    destination,
-                    color=firework_color,
-                    edge_color=edge_color,
-                    callback=play_discard_animation_complete,
-                    old_state=old_state,
-                )
-
-                # BLOCK until all animations are complete
-                # wait_variable processes events internally, allowing animations to play
-                self._display.root.wait_variable(animation_done)
+                self._schedule_tk(run_card_animation_on_gui)
+                animation_done.wait()
             else:
-                # No animation needed - update display immediately
-                # Schedule update immediately (0 = highest priority, runs as soon as possible)
-                # The callback will call update_idletasks() to force immediate processing
-                # This ensures the display refreshes after each move, not just after all AI players move
-                self._display.root.after(0, update_display)
+                # No animation needed - refresh display on the main thread
+                self._schedule_tk(update_display)
 
             # Print move message and decision summary to terminal
             # Format: "[HH:MM:SS T##] P1 plays red 1." (same as Game Events, with color coding)
@@ -652,6 +641,7 @@ class GUIGame:
         self._display.set_game(self._game)
         self._display.set_show_all_cards(False)
         self._display.set_suppress_dialogs(self._suppress_dialogs)
+        self._display.set_schedule_gui(self._schedule_tk)
         # Connect display's move callback to set move on current player
         self._display.set_move_callback(self._on_move_made)
 
@@ -665,8 +655,6 @@ class GUIGame:
         self._input_handler.setup_canvas_clicks()
 
         # Start game in a separate thread (non-blocking)
-        import threading
-
         self._game_thread = threading.Thread(target=self._run_game, daemon=True)
         self._game_thread.start()
 
@@ -724,6 +712,15 @@ class GUIGame:
 
     def _abandon_game(self):
         """Abandon current game/replay and return to start screen."""
+        if self._display and self._gui_updates_after_id is not None:
+            try:
+                self._display.root.after_cancel(self._gui_updates_after_id)
+            except tk.TclError:
+                pass
+            self._gui_updates_after_id = None
+        self._clear_tk_job_queue()
+        if self._display:
+            self._display.set_schedule_gui(None)
         # Clear game state
         self._game = None
         self._players = []
@@ -1116,21 +1113,45 @@ class GUIGame:
         )
         player.set_move(move)
 
+    def _schedule_tk(self, fn: Callable[[], None]) -> None:
+        """Queue work to run on the Tk main thread (safe from the game worker thread)."""
+        self._tk_job_queue.put(fn)
+
+    def _drain_tk_job_queue(self) -> None:
+        """Run all pending GUI jobs (must run on the Tk main thread)."""
+        while True:
+            try:
+                fn = self._tk_job_queue.get_nowait()
+            except queue.Empty:
+                break
+            fn()
+
+    def _clear_tk_job_queue(self) -> None:
+        while True:
+            try:
+                self._tk_job_queue.get_nowait()
+            except queue.Empty:
+                break
+
     def _process_gui_updates(self):
         """Periodically process GUI updates to ensure display refreshes immediately."""
-        # Only continue if game is active and not finished
+        if not self._display:
+            return
+        self._gui_updates_after_id = None
+        self._drain_tk_job_queue()
+        # Idle processing only while the match is in progress (not after natural game-over)
         if self._game and not self._game.is_finished:
-            # Process any pending GUI events
-            # This ensures display updates are processed even when AI players move quickly
             try:
                 self._display.root.update_idletasks()
-            except:
-                # Ignore errors (e.g., if window was closed)
+            except tk.TclError:
                 pass
-            # Schedule next check (every 50ms to ensure responsive updates)
-            # This helps ensure the display refreshes immediately after each move
-            self._display.root.after(50, self._process_gui_updates)
-        # If game is finished or doesn't exist, stop the periodic updates
+        # Keep polling while a Game object exists (including finished) so worker-queued jobs
+        # (e.g. _on_game_end) still run; _abandon_game clears _game and cancels the after.
+        if self._game is not None:
+            try:
+                self._gui_updates_after_id = self._display.root.after(50, self._process_gui_updates)
+            except tk.TclError:
+                pass
 
     def _run_game(self):
         """Run the game in a separate thread (non-blocking for GUI)."""
@@ -1139,7 +1160,7 @@ class GUIGame:
         self._game.play()
         # Game finished normally
         if self._game and self._game.is_finished:
-            self._on_game_end()
+            self._schedule_tk(self._on_game_end)
 
     def _update_display(self):
         """Update the display."""

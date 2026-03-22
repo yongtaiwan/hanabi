@@ -58,7 +58,7 @@ class GUIPlayer(HumanPlayer):
                 if not (self._display._is_animating or self._display._active_animations):
                     self._display.display_game_state(self._game, self.player_index)
 
-            self._display.root.after(0, safe_display_update)
+            self._display.schedule_gui(safe_display_update)
 
         # Wait for move to be set from GUI
         self._move_event.wait()

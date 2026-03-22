@@ -75,6 +75,8 @@ class GUIDisplay:
         self._move_callback: Optional[Callable] = None
         self._input_handler: Optional[Callable] = None  # Input handler for card clicks
         self._suppress_dialogs: bool = False  # Set to True to disable messageboxes (for testing)
+        # Marshals callables onto the Tk main thread from the game worker thread (Tkinter is not thread-safe)
+        self._schedule_gui_fn: Optional[Callable[[Callable[[], None]], None]] = None
 
         # Event history
         self._event_history: List[Tuple[str, str]] = []  # List of (timestamp, message) tuples
@@ -498,6 +500,22 @@ class GUIDisplay:
 
         # Add newline
         self._history_text.insert(tk.END, "\n")
+
+    def set_schedule_gui(self, scheduler: Optional[Callable[[Callable[[], None]], None]]) -> None:
+        """Register a function that queues work to run on the Tk main thread (from GUIGame)."""
+        self._schedule_gui_fn = scheduler
+
+    def schedule_gui(self, job: Callable[[], None]) -> None:
+        """Run job on the Tk main thread. Safe to call from the game worker thread."""
+        import threading
+
+        if threading.current_thread() is threading.main_thread():
+            job()
+            return
+        if self._schedule_gui_fn is not None:
+            self._schedule_gui_fn(job)
+        else:
+            self.root.after(0, job)
 
     def set_game(self, game: Game):
         """Set the game instance."""
