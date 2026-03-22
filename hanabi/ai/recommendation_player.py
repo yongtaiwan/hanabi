@@ -94,7 +94,7 @@ class RecommendationPlayer(BasePlayer):
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_discard_recommendation(player_view, recommendation)
-            or self._try_discard_c1(player_view)
+            or self._discard_c1(player_view)
         )
         assert move is not None, (
             "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"
@@ -336,7 +336,7 @@ class RecommendationPlayer(BasePlayer):
         )
         return Discard(discard_idx)
 
-    def _try_discard_c1(self, player_view: PlayerView) -> Move:
+    def _discard_c1(self, player_view: PlayerView) -> Move:
         """Paper rule 5: discard C1 (oldest, internal index 3)."""
         assert self.is_move_legal(player_view, Discard(3)), (
             "default discard C1 should be legal when rule 5 applies"
