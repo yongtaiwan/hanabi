@@ -31,11 +31,6 @@ from hanabi.core.card import Card
 # 4-7 = suit hint to position 1-4.
 
 
-def _four_card_slot_name(internal_idx: int) -> str:
-    """Paper-style slot for a 4-card hand: C1 (index 3) .. C4 (index 0)."""
-    return f"C{4 - internal_idx}"
-
-
 class RecommendationPlayer(BasePlayer):
     """
     Recommendation strategy from Cox et al. (paper Strategy 1).
@@ -326,3 +321,8 @@ class RecommendationPlayer(BasePlayer):
             if indices:
                 return ColorHint(target, indices, color)
         assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
+
+
+def _four_card_slot_name(internal_idx: int) -> str:
+    """Paper-style slot for a 4-card hand: C1 (index 3) .. C4 (index 0)."""
+    return f"C{4 - internal_idx}"
