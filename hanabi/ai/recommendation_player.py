@@ -108,37 +108,28 @@ class RecommendationPlayer(BasePlayer):
         self._my_decoded_recommendation = (
             None
             if self._player_index == player_index
-            else (self._decode_recommendation_with_view(observer_view, self._last_hint_value, self._last_hinter))
+            else self._decode_recommendation_with_view(observer_view, self._last_hint_value, player_index)
         )
 
     def _decode_recommendation_with_view(
-        self, player_view: PlayerView, hint_value: int, hinter: Optional[int]
-    ) -> Optional[int]:
+        self, player_view: PlayerView, hint_value: int, hinter: int
+    ) -> int:
         """
         Decode my recommendation from hint value.
 
         Uses ``player_view`` for visible teammate hands and :attr:`BasePlayer.common_view`
         for shared piles and tokens (no access to full :class:`~hanabi.core.game.Game`).
         """
-        others_sum = 0
-        for p in range(NUM_PLAYERS_FOR_RECOMMENDATION):
-            if p == self._player_index:
-                continue
-            if p not in player_view.teammates:
-                continue
-            hand = player_view.teammates[p].cards
-            rec = self._get_recommendation_for_hand(
-                hand, self.common_view, self.game_settings
-            )
-            others_sum += rec
-        rec_hinter = 0
-        if hinter is not None and hinter in player_view.teammates:
-            rec_hinter = self._get_recommendation_for_hand(
-                player_view.teammates[hinter].cards,
+        others_sum = sum(
+            self._get_recommendation_for_hand(
+                player_view.teammates[p].cards,
                 self.common_view,
                 self.game_settings,
             )
-        return (hint_value - others_sum + rec_hinter) % 8
+            for p in range(NUM_PLAYERS_FOR_RECOMMENDATION)
+            if p != self._player_index and p != hinter and p in player_view.teammates
+        )
+        return (hint_value - others_sum) % 8
 
     def _get_my_recommendation(self) -> Optional[int]:
         """Return recommendation decoded at hint time for receivers; ``None`` if no hint yet or we were the hinter."""
