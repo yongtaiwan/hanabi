@@ -31,15 +31,34 @@ class GUIInput:
         # Set up card click handlers
         self._setup_card_clicks()
 
-    def _setup_card_clicks(self):
-        """Set up card click event handlers."""
-        # This will be called after display is set up
-        pass
-
     def setup_canvas_clicks(self):
         """Set up canvas click handlers (called after display is ready)."""
         # Card clicks are handled via the canvas click handler in display
         # which calls _on_canvas_click here
+        pass
+
+    def set_move_callback(self, callback: Callable[[Move], None]):
+        """Set callback for when a move is made."""
+        self._move_callback = callback
+
+    def get_move(self, player_index: int) -> Optional[Move]:
+        """
+        Get a move from the player (non-blocking, returns None if no move ready).
+
+        This is called by the game controller to check for moves.
+        The actual move is made via callbacks when buttons are clicked.
+        """
+        # In GUI mode, moves are made via callbacks, not polling
+        # This method is kept for interface compatibility
+        return None
+
+    def display_prompt(self, player_index: int) -> None:
+        """Display input prompt (no-op in GUI mode)."""
+        pass
+
+    def _setup_card_clicks(self):
+        """Set up card click event handlers."""
+        # This will be called after display is set up
         pass
 
     def _on_canvas_click(self, event):
@@ -131,10 +150,6 @@ class GUIInput:
             # Handle any errors gracefully
             pass
 
-    def set_move_callback(self, callback: Callable[[Move], None]):
-        """Set callback for when a move is made."""
-        self._move_callback = callback
-
     def _is_gui_player_turn(self) -> bool:
         """
         Check if it's currently a GUI player's turn.
@@ -151,18 +166,3 @@ class GUIInput:
 
         current_player = self._game.team.players[current_player_idx]
         return isinstance(current_player, GUIPlayer)
-
-    def get_move(self, player_index: int) -> Optional[Move]:
-        """
-        Get a move from the player (non-blocking, returns None if no move ready).
-
-        This is called by the game controller to check for moves.
-        The actual move is made via callbacks when buttons are clicked.
-        """
-        # In GUI mode, moves are made via callbacks, not polling
-        # This method is kept for interface compatibility
-        return None
-
-    def display_prompt(self, player_index: int) -> None:
-        """Display input prompt (no-op in GUI mode)."""
-        pass

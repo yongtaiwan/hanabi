@@ -295,7 +295,6 @@ class TestGUIPlaythrough(unittest.TestCase):
         # Card selected
         display._selected_card = 0
         display._update_action_buttons()
-        # Should not crash
 
     def test_display_after_multiple_moves(self):
         """Test that display works correctly after multiple moves."""

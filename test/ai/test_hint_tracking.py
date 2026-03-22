@@ -96,7 +96,6 @@ class TestHintTracking(unittest.TestCase):
         # Hints at positions > 1 should stay the same
         self.assertEqual(hints[2]["color"], Color.GREEN)  # Was at 2, stays at 2
         self.assertEqual(hints[3]["color"], Color.YELLOW)  # Was at 3, stays at 3
-        # Position 1 now has RED (from position 0), not BLUE (which was removed)
 
     def test_play_card_at_position_2(self):
         """Test playing card at position 2 - hints < 2 shift right, hints > 2 stay same."""
@@ -119,7 +118,6 @@ class TestHintTracking(unittest.TestCase):
         self.assertEqual(hints[2]["color"], Color.BLUE)  # Was at 1, shifted to 2
         # Hints at positions > 2 should stay the same
         self.assertEqual(hints[3]["color"], Color.YELLOW)  # Was at 3, stays at 3
-        # Position 2 now has BLUE (from position 1), not GREEN (which was removed)
 
     def test_play_card_at_last_position(self):
         """Test playing card at last position - all other hints shift right."""
@@ -141,7 +139,6 @@ class TestHintTracking(unittest.TestCase):
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
         self.assertEqual(hints[2]["color"], Color.BLUE)  # Was at 1, shifted to 2
         self.assertEqual(hints[3]["color"], Color.GREEN)  # Was at 2, shifted to 3
-        # Position 3 now has GREEN (from position 2), not YELLOW (which was removed)
 
     def test_discard_card_shifts_hints(self):
         """Test that discarding a card also shifts hints."""
@@ -161,7 +158,6 @@ class TestHintTracking(unittest.TestCase):
         # Hints should shift correctly
         self.assertEqual(hints[1]["color"], Color.RED)  # Was at 0, shifted to 1
         self.assertEqual(hints[2]["color"], Color.GREEN)  # Was at 2, stays at 2
-        # Position 1 now has RED (from position 0), not BLUE (which was removed)
 
     def test_multiple_plays_shift_hints_correctly(self):
         """Test that multiple plays shift hints correctly."""

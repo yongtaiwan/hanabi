@@ -13,16 +13,6 @@ class Card:
         self._color = color
         self._number = number
 
-    @property
-    def color(self) -> Color:
-        """Get the color of the card."""
-        return self._color
-
-    @property
-    def number(self) -> Number:
-        """Get the number of the card."""
-        return self._number
-
     def __repr__(self) -> str:
         return f"Card({self._color.name}, {self._number.value})"
 
@@ -33,6 +23,16 @@ class Card:
 
     def __hash__(self) -> int:
         return hash((self._color, self._number))
+
+    @property
+    def color(self) -> Color:
+        """Get the color of the card."""
+        return self._color
+
+    @property
+    def number(self) -> Number:
+        """Get the number of the card."""
+        return self._number
 
 
 class Suit:
@@ -47,10 +47,10 @@ class Suit:
         """
         self._cards = cards.copy()
 
+    def __repr__(self) -> str:
+        return f"Suit({self._cards})"
+
     @property
     def cards(self) -> Dict[Number, int]:
         """Get the cards mapping (Number -> quantity)."""
         return self._cards.copy()
-
-    def __repr__(self) -> str:
-        return f"Suit({self._cards})"

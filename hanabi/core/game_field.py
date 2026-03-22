@@ -33,9 +33,13 @@ class GameResult:
     """Result from a single game."""
 
     score: int
+
     moves_count: int
+
     duration_seconds: float
+
     end_reason: str
+
     game_record_path: Optional[str] = None
 
 
@@ -44,7 +48,9 @@ class RunResult:
     """Results from one deck shuffle across all AIs."""
 
     run_id: int
+
     deck_seed: Optional[int]
+
     ai_results: Dict[str, GameResult] = field(default_factory=dict)
 
 
@@ -53,12 +59,19 @@ class AIStatistics:
     """Aggregated statistics for one AI."""
 
     games_played: int
+
     average_score: float
+
     best_score: int
+
     worst_score: int
+
     win_rate: float  # Perfect scores (25 points)
+
     std_dev: float
+
     average_moves: float
+
     average_duration: float
 
 
@@ -67,33 +80,219 @@ class ExperimentResults:
     """Results from running multiple experiments."""
 
     experiment_id: str
+
     settings: Dict[str, Any]
+
     num_runs: int
+
     runs: List[RunResult] = field(default_factory=list)
+
     summary: Dict[str, AIStatistics] = field(default_factory=dict)
+
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 class GameField:
     """Manages multiple games and game initialization for AI performance comparisons."""
 
-    # Root directory for all AI comparison experiments.
-    # Layout:
-    #   game_records/
-    #     exp_ai_comparison/
-    #       <timestamp>/
-    #         2p/
-    #           settings.yaml
-    #           statistics.yaml
-    #           games/
-    #             all-games/
-    #             <run_id>/
-    #           ai/
-    #             <ai_name>/
-    #         3p/
-    #         4p/
-    #         5p/
     EXPERIMENTS_BASE_DIR = os.path.join("game_records", "exp_ai_comparison")
+
+    def __init__(self, start_position: StartPosition):
+        """
+        Initialize a game field.
+
+        Args:
+            start_position: The starting position (settings and initial deck)
+        """
+        self._start_position = start_position
+        self._games: Dict[str, Game] = {}
+
+    def __repr__(self) -> str:
+        return f"GameField(start_position={self._start_position}, games={len(self._games)})"
+
+    @staticmethod
+    def create_from_settings(settings: GameSettings, seed: Optional[int] = None) -> GameField:
+        """
+        Create a GameField from game settings.
+
+        Args:
+            settings: Game settings
+            seed: Optional random seed for deck shuffling
+
+        Returns:
+            A new GameField instance
+        """
+        start_position = GameField._create_start_position(settings, seed=seed)
+        return GameField(start_position)
+
+    @property
+    def start_position(self) -> StartPosition:
+        """Get the starting position."""
+        return self._start_position
+
+    @property
+    def games(self) -> Dict[str, Game]:
+        """Get the dictionary of games."""
+        return self._games.copy()
+
+    def run_experiment(
+        self,
+        ai_factories: Dict[str, Callable[[int], BasePlayer]],
+        num_runs: int = 100,
+        save_records: bool = True,
+        random_seed: Optional[int] = None,
+        experiment_id: Optional[str] = None,
+    ) -> ExperimentResults:
+        """
+        Run an experiment: shuffle a deck, then let different AIs play the same deck.
+
+        Args:
+            ai_factories: Dictionary mapping AI name to factory function that creates a player
+                         Factory signature: (player_index: int) -> BasePlayer
+            num_runs: Number of experiment runs (each with a new deck shuffle)
+            save_records: Whether to save individual game records
+            random_seed: Optional seed for the first run (subsequent runs use sequential seeds)
+            experiment_id: Optional experiment ID (defaults to timestamp)
+
+        Returns:
+            ExperimentResults with all run results and aggregated statistics
+        """
+        if experiment_id is None:
+            experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Save settings.yaml for this experiment
+        self.save_settings(experiment_id, self._start_position.settings)
+
+        # Convert settings to dict for serialization
+        settings_dict = {
+            "num_players": self._start_position.settings.num_players,
+            "max_live_tokens": self._start_position.settings.max_live_tokens,
+            "max_hint_tokens": self._start_position.settings.max_hint_tokens,
+            "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
+        }
+
+        runs: List[RunResult] = []
+        all_scores: Dict[str, List[int]] = {ai_name: [] for ai_name in ai_factories.keys()}
+        all_moves: Dict[str, List[int]] = {ai_name: [] for ai_name in ai_factories.keys()}
+        all_durations: Dict[str, List[float]] = {ai_name: [] for ai_name in ai_factories.keys()}
+        wins: Dict[str, int] = {ai_name: 0 for ai_name in ai_factories.keys()}
+
+        # Run experiments
+        for run_id in range(num_runs):
+            # Create a new shuffled deck for this run
+            deck_seed = (random_seed + run_id) if random_seed is not None else None
+            start_position = self._create_start_position(self._start_position.settings, seed=deck_seed)
+
+            # Create a temporary GameField for this run
+            run_field = GameField(start_position)
+
+            run_result = RunResult(run_id=run_id, deck_seed=deck_seed)
+            runs.append(run_result)
+
+            # Play the same deck with each AI
+            for ai_name, factory in ai_factories.items():
+                # Create team of AI players
+                num_players = self._start_position.settings.num_players
+                players = [factory(i) for i in range(num_players)]
+                team = PlayerTeam(players)
+
+                # Play game
+                game_result = run_field._play_game_with_team(
+                    team, save_record=save_records, experiment_id=experiment_id, run_id=run_id, ai_name=ai_name
+                )
+                run_result.ai_results[ai_name] = game_result
+
+                # Collect statistics
+                all_scores[ai_name].append(game_result.score)
+                all_moves[ai_name].append(game_result.moves_count)
+                all_durations[ai_name].append(game_result.duration_seconds)
+                if 25 == game_result.score:
+                    wins[ai_name] += 1
+
+        # Calculate aggregated statistics
+        summary: Dict[str, AIStatistics] = {}
+        for ai_name in ai_factories.keys():
+            scores = all_scores[ai_name]
+            if scores:
+                summary[ai_name] = AIStatistics(
+                    games_played=len(scores),
+                    average_score=statistics.mean(scores),
+                    best_score=max(scores),
+                    worst_score=min(scores),
+                    win_rate=wins[ai_name] / len(scores) if scores else 0.0,
+                    std_dev=statistics.stdev(scores) if len(scores) > 1 else 0.0,
+                    average_moves=statistics.mean(all_moves[ai_name]),
+                    average_duration=statistics.mean(all_durations[ai_name]),
+                )
+
+        return ExperimentResults(
+            experiment_id=experiment_id, settings=settings_dict, num_runs=num_runs, runs=runs, summary=summary
+        )
+
+    def save_settings(self, experiment_id: str, settings: GameSettings) -> str:
+        """
+        Save experiment settings to settings.yaml in the experiment directory.
+
+        Args:
+            experiment_id: The experiment identifier
+            settings: The game settings
+
+        Returns:
+            The path where settings were saved
+        """
+        experiment_dir = self._get_experiment_dir(experiment_id)
+        filepath = os.path.join(experiment_dir, "settings.yaml" if YAML_AVAILABLE else "settings.json")
+
+        # Convert settings to dict
+        settings_dict = {
+            "num_players": settings.num_players,
+            "max_live_tokens": settings.max_live_tokens,
+            "max_hint_tokens": settings.max_hint_tokens,
+            "max_cards_in_hand": settings.max_cards_in_hand,
+        }
+
+        with open(filepath, "w") as f:
+            if YAML_AVAILABLE:
+                yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
+            else:
+                json.dump(settings_dict, f, indent=2)
+
+        return filepath
+
+    def save_statistics(self, results: ExperimentResults, filename: Optional[str] = None) -> str:
+        """
+        Save experiment statistics to a file in the experiment directory.
+
+        Args:
+            results: The experiment results to save
+            filename: Optional filename (defaults to "statistics.yaml" or "statistics.json")
+
+        Returns:
+            The path where statistics were saved
+        """
+        # Get experiment directory
+        experiment_dir = self._get_experiment_dir(results.experiment_id)
+
+        if filename is None:
+            filename = "statistics.yaml" if YAML_AVAILABLE else "statistics.json"
+
+        if os.path.isabs(filename):
+            # If absolute path, use as-is
+            filepath = filename
+        else:
+            # If relative path, save in experiment directory
+            filepath = os.path.join(experiment_dir, filename)
+
+        # Convert to dict for serialization
+        data = asdict(results)
+
+        with open(filepath, "w") as f:
+            if YAML_AVAILABLE:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            else:
+                json.dump(data, f, indent=2)
+
+        return filepath
 
     @staticmethod
     def _get_experiment_dir(experiment_id: str) -> str:
@@ -318,41 +517,6 @@ class GameField:
 
         return game
 
-    def __init__(self, start_position: StartPosition):
-        """
-        Initialize a game field.
-
-        Args:
-            start_position: The starting position (settings and initial deck)
-        """
-        self._start_position = start_position
-        self._games: Dict[str, Game] = {}
-
-    @staticmethod
-    def create_from_settings(settings: GameSettings, seed: Optional[int] = None) -> GameField:
-        """
-        Create a GameField from game settings.
-
-        Args:
-            settings: Game settings
-            seed: Optional random seed for deck shuffling
-
-        Returns:
-            A new GameField instance
-        """
-        start_position = GameField._create_start_position(settings, seed=seed)
-        return GameField(start_position)
-
-    @property
-    def start_position(self) -> StartPosition:
-        """Get the starting position."""
-        return self._start_position
-
-    @property
-    def games(self) -> Dict[str, Game]:
-        """Get the dictionary of games."""
-        return self._games.copy()
-
     def _play_game_with_team(
         self,
         team: PlayerTeam,
@@ -464,165 +628,3 @@ class GameField:
             end_reason=end_reason,
             game_record_path=game_record_path,
         )
-
-    def run_experiment(
-        self,
-        ai_factories: Dict[str, Callable[[int], BasePlayer]],
-        num_runs: int = 100,
-        save_records: bool = True,
-        random_seed: Optional[int] = None,
-        experiment_id: Optional[str] = None,
-    ) -> ExperimentResults:
-        """
-        Run an experiment: shuffle a deck, then let different AIs play the same deck.
-
-        Args:
-            ai_factories: Dictionary mapping AI name to factory function that creates a player
-                         Factory signature: (player_index: int) -> BasePlayer
-            num_runs: Number of experiment runs (each with a new deck shuffle)
-            save_records: Whether to save individual game records
-            random_seed: Optional seed for the first run (subsequent runs use sequential seeds)
-            experiment_id: Optional experiment ID (defaults to timestamp)
-
-        Returns:
-            ExperimentResults with all run results and aggregated statistics
-        """
-        if experiment_id is None:
-            experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Save settings.yaml for this experiment
-        self.save_settings(experiment_id, self._start_position.settings)
-
-        # Convert settings to dict for serialization
-        settings_dict = {
-            "num_players": self._start_position.settings.num_players,
-            "max_live_tokens": self._start_position.settings.max_live_tokens,
-            "max_hint_tokens": self._start_position.settings.max_hint_tokens,
-            "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
-        }
-
-        runs: List[RunResult] = []
-        all_scores: Dict[str, List[int]] = {ai_name: [] for ai_name in ai_factories.keys()}
-        all_moves: Dict[str, List[int]] = {ai_name: [] for ai_name in ai_factories.keys()}
-        all_durations: Dict[str, List[float]] = {ai_name: [] for ai_name in ai_factories.keys()}
-        wins: Dict[str, int] = {ai_name: 0 for ai_name in ai_factories.keys()}
-
-        # Run experiments
-        for run_id in range(num_runs):
-            # Create a new shuffled deck for this run
-            deck_seed = (random_seed + run_id) if random_seed is not None else None
-            start_position = self._create_start_position(self._start_position.settings, seed=deck_seed)
-
-            # Create a temporary GameField for this run
-            run_field = GameField(start_position)
-
-            run_result = RunResult(run_id=run_id, deck_seed=deck_seed)
-            runs.append(run_result)
-
-            # Play the same deck with each AI
-            for ai_name, factory in ai_factories.items():
-                # Create team of AI players
-                num_players = self._start_position.settings.num_players
-                players = [factory(i) for i in range(num_players)]
-                team = PlayerTeam(players)
-
-                # Play game
-                game_result = run_field._play_game_with_team(
-                    team, save_record=save_records, experiment_id=experiment_id, run_id=run_id, ai_name=ai_name
-                )
-                run_result.ai_results[ai_name] = game_result
-
-                # Collect statistics
-                all_scores[ai_name].append(game_result.score)
-                all_moves[ai_name].append(game_result.moves_count)
-                all_durations[ai_name].append(game_result.duration_seconds)
-                if 25 == game_result.score:
-                    wins[ai_name] += 1
-
-        # Calculate aggregated statistics
-        summary: Dict[str, AIStatistics] = {}
-        for ai_name in ai_factories.keys():
-            scores = all_scores[ai_name]
-            if scores:
-                summary[ai_name] = AIStatistics(
-                    games_played=len(scores),
-                    average_score=statistics.mean(scores),
-                    best_score=max(scores),
-                    worst_score=min(scores),
-                    win_rate=wins[ai_name] / len(scores) if scores else 0.0,
-                    std_dev=statistics.stdev(scores) if len(scores) > 1 else 0.0,
-                    average_moves=statistics.mean(all_moves[ai_name]),
-                    average_duration=statistics.mean(all_durations[ai_name]),
-                )
-
-        return ExperimentResults(
-            experiment_id=experiment_id, settings=settings_dict, num_runs=num_runs, runs=runs, summary=summary
-        )
-
-    def save_settings(self, experiment_id: str, settings: GameSettings) -> str:
-        """
-        Save experiment settings to settings.yaml in the experiment directory.
-
-        Args:
-            experiment_id: The experiment identifier
-            settings: The game settings
-
-        Returns:
-            The path where settings were saved
-        """
-        experiment_dir = self._get_experiment_dir(experiment_id)
-        filepath = os.path.join(experiment_dir, "settings.yaml" if YAML_AVAILABLE else "settings.json")
-
-        # Convert settings to dict
-        settings_dict = {
-            "num_players": settings.num_players,
-            "max_live_tokens": settings.max_live_tokens,
-            "max_hint_tokens": settings.max_hint_tokens,
-            "max_cards_in_hand": settings.max_cards_in_hand,
-        }
-
-        with open(filepath, "w") as f:
-            if YAML_AVAILABLE:
-                yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
-            else:
-                json.dump(settings_dict, f, indent=2)
-
-        return filepath
-
-    def save_statistics(self, results: ExperimentResults, filename: Optional[str] = None) -> str:
-        """
-        Save experiment statistics to a file in the experiment directory.
-
-        Args:
-            results: The experiment results to save
-            filename: Optional filename (defaults to "statistics.yaml" or "statistics.json")
-
-        Returns:
-            The path where statistics were saved
-        """
-        # Get experiment directory
-        experiment_dir = self._get_experiment_dir(results.experiment_id)
-
-        if filename is None:
-            filename = "statistics.yaml" if YAML_AVAILABLE else "statistics.json"
-
-        if os.path.isabs(filename):
-            # If absolute path, use as-is
-            filepath = filename
-        else:
-            # If relative path, save in experiment directory
-            filepath = os.path.join(experiment_dir, filename)
-
-        # Convert to dict for serialization
-        data = asdict(results)
-
-        with open(filepath, "w") as f:
-            if YAML_AVAILABLE:
-                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-            else:
-                json.dump(data, f, indent=2)
-
-        return filepath
-
-    def __repr__(self) -> str:
-        return f"GameField(start_position={self._start_position}, games={len(self._games)})"

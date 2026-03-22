@@ -22,32 +22,7 @@ from .card import Card
 class GameHistory:
     """Tracks and saves game history for replay."""
 
-    # Subdirectory for ad-hoc game records (single games, GUI/CLI saves, etc.)
-    # Organized separately from structured experiment outputs.
     RECORDS_DIR = os.path.join("game_records", "ad_hoc")
-
-    @staticmethod
-    def _get_records_dir() -> str:
-        """Get the path to the game records directory, creating it if necessary."""
-        records_dir = GameHistory.RECORDS_DIR
-        if not os.path.exists(records_dir):
-            os.makedirs(records_dir)
-        return records_dir
-
-    @staticmethod
-    def _get_file_path(filename: str) -> str:
-        """
-        Get the full path for a game record file.
-        If filename is already a full path, returns it as-is.
-        Otherwise, places it in the game_records subdirectory.
-        """
-        # If filename is already a full path (contains path separator), use it as-is
-        if os.path.sep in filename or (os.path.altsep and os.path.altsep in filename):
-            return filename
-
-        # Otherwise, place it in the game_records subdirectory
-        records_dir = GameHistory._get_records_dir()
-        return os.path.join(records_dir, filename)
 
     def __init__(self, settings: Dict[str, Any]):
         """
@@ -89,6 +64,206 @@ class GameHistory:
         # Convert move to short format string
         move_str = self._move_to_short(move)
         self._moves.append(move_str)
+
+    def record_final_score(self, game: Game) -> None:
+        """Record the final score when the game ends."""
+        self._final_score = game.get_score()
+
+    def save_to_file(self, filename: Optional[str] = None, final_score: Optional[int] = None) -> str:
+        """
+        Save game history to a YAML file (or JSON if YAML is not available).
+
+        Args:
+            filename: Optional filename. If None, generates a timestamped filename.
+            final_score: Optional final score. If None, uses recorded final score.
+
+        Returns:
+            The filename where the history was saved.
+        """
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if YAML_AVAILABLE:
+                filename = f"hanabi_game_{timestamp}.yaml"
+            else:
+                filename = f"hanabi_game_{timestamp}.json"
+        elif not filename.endswith(".yaml") and not filename.endswith(".json") and not filename.endswith(".yml"):
+            # Add appropriate extension if none provided
+            if YAML_AVAILABLE:
+                filename = filename + ".yaml"
+            else:
+                filename = filename + ".json"
+        elif filename.endswith(".json") and YAML_AVAILABLE:
+            # Convert .json to .yaml if YAML is available
+            filename = filename[:-5] + ".yaml"
+        elif (filename.endswith(".yaml") or filename.endswith(".yml")) and not YAML_AVAILABLE:
+            # Convert .yaml to .json if YAML is not available
+            filename = filename.rsplit(".", 1)[0] + ".json"
+
+        # Get the full path (in game_records subdirectory if not already a full path)
+        filepath = self._get_file_path(filename)
+
+        # Use provided final_score or recorded one
+        score = final_score if final_score is not None else self._final_score
+
+        history_data = {
+            "settings": self._settings,
+            "time": {"begin": self._start_time.isoformat(), "end": datetime.now().isoformat()},
+            "deck": self._deck,
+            "players": self._players,
+            "moves": self._moves,  # List of strings like ["p3", "d4", "h11", "h4w"]
+        }
+
+        # Add final score if available
+        if score is not None:
+            history_data["final_score"] = score
+
+        with open(filepath, "w") as f:
+            if YAML_AVAILABLE:
+                # Custom dumper to use flow style for leaf arrays (hands, card indices)
+                class FlowStyleDumper(yaml.SafeDumper):
+                    def represent_list(self, data):
+                        # Use flow style for simple lists (leaf arrays)
+                        # Check if it's a list of strings/numbers (leaf array)
+                        if data and all(isinstance(x, (str, int)) for x in data):
+                            return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+                        # Otherwise use block style
+                        return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=False)
+
+                FlowStyleDumper.add_representer(list, FlowStyleDumper.represent_list)
+                yaml.dump(history_data, f, Dumper=FlowStyleDumper, sort_keys=False, allow_unicode=True, width=120)
+            else:
+                json.dump(history_data, f, indent=2)
+
+        return filepath
+
+    def load_from_file(self, filename: str) -> Dict[str, Any]:
+        """
+        Load game history from a YAML or JSON file.
+
+        Args:
+            filename: The filename to load from (can be just filename or full path)
+
+        Returns:
+            The loaded history data
+        """
+        # Try the filename as-is first (in case it's a full path from file dialog)
+        filepath = filename
+        if not os.path.exists(filepath):
+            # If not found, try in the game_records subdirectory
+            filepath = self._get_file_path(filename)
+            if not os.path.exists(filepath):
+                # If still not found, try in the root directory (for backward compatibility)
+                if not os.path.exists(filename):
+                    raise FileNotFoundError(f"Game history file not found: {filename}")
+                filepath = filename
+
+        with open(filepath, "r") as f:
+            if (filename.endswith(".yaml") or filename.endswith(".yml")) and YAML_AVAILABLE:
+                return yaml.safe_load(f)
+            else:
+                # Fallback to JSON
+                if not YAML_AVAILABLE:
+                    import json
+                return json.load(f)
+
+    @staticmethod
+    def create_game_from_history(history_data: dict, team, on_move=None) -> Game:
+        """
+        Create a Game instance from history data for replay.
+
+        Args:
+            history_data: The loaded history data dictionary
+            team: PlayerTeam to use for the game
+            on_move: Optional move callback
+
+        Returns:
+            A Game instance reconstructed from history
+        """
+        from .game import create_standard_game_settings
+        from .game import create_deck_from_settings, Hand, CommonView, GameState
+
+        # Get deck from root level
+        deck_short = history_data.get("deck", [])
+        if not deck_short:
+            raise ValueError("History data missing deck")
+
+        # Get settings
+        settings_dict = history_data.get("settings", {})
+        num_players = settings_dict.get("num_players", 3)
+        settings = create_standard_game_settings(num_players)
+        # Reconstruct deck from saved cards
+        deck_cards = [GameHistory._short_to_card(short) for short in deck_short]
+        deck = Deck(deck_cards)
+
+        # Create start position with the reconstructed deck
+        start_position = StartPosition(settings, deck)
+
+        # Reconstruct initial player hands from deck (deal cards in order)
+        player_hands = []
+        draw_deck_index = 0
+        deck_cards = deck.cards
+        cards_per_player = settings.max_cards_in_hand
+
+        for player_idx in range(num_players):
+            hand_cards = []
+            for _ in range(cards_per_player):
+                if draw_deck_index < len(deck_cards):
+                    hand_cards.append(deck_cards[draw_deck_index])
+                    draw_deck_index += 1
+                else:
+                    raise ValueError(f"Not enough cards in deck to deal to player {player_idx}")
+            player_hands.append(Hand(hand_cards))
+
+        # Initialize common view
+        remaining_cards = len(deck_cards) - draw_deck_index
+        common_view = CommonView(
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
+            cards_to_draw=remaining_cards,
+            cards_discarded={},
+            cards_played={},
+        )
+
+        # Reconstruct initial game state
+        state = GameState(
+            start_position=start_position,
+            common_view=common_view,
+            player_hands=player_hands,
+            draw_deck_index=draw_deck_index,
+            turn_number=0,
+            current_player=0,
+            turns_left=None,
+        )
+
+        # Create game instance
+        game = Game(start_position, team, on_move)
+        game._turns.append(state)
+        game._set_common_view_for_players()
+
+        return game
+
+    @staticmethod
+    def _get_records_dir() -> str:
+        """Get the path to the game records directory, creating it if necessary."""
+        records_dir = GameHistory.RECORDS_DIR
+        if not os.path.exists(records_dir):
+            os.makedirs(records_dir)
+        return records_dir
+
+    @staticmethod
+    def _get_file_path(filename: str) -> str:
+        """
+        Get the full path for a game record file.
+        If filename is already a full path, returns it as-is.
+        Otherwise, places it in the game_records subdirectory.
+        """
+        # If filename is already a full path (contains path separator), use it as-is
+        if os.path.sep in filename or (os.path.altsep and os.path.altsep in filename):
+            return filename
+
+        # Otherwise, place it in the game_records subdirectory
+        records_dir = GameHistory._get_records_dir()
+        return os.path.join(records_dir, filename)
 
     def _card_to_short(self, card) -> str:
         """Convert a card to short notation (e.g., G5)."""
@@ -369,180 +544,3 @@ class GameHistory:
                 "score": game.get_score(),
                 "is_finished": game.is_finished,
             }
-
-    def record_final_score(self, game: Game) -> None:
-        """Record the final score when the game ends."""
-        self._final_score = game.get_score()
-
-    def save_to_file(self, filename: Optional[str] = None, final_score: Optional[int] = None) -> str:
-        """
-        Save game history to a YAML file (or JSON if YAML is not available).
-
-        Args:
-            filename: Optional filename. If None, generates a timestamped filename.
-            final_score: Optional final score. If None, uses recorded final score.
-
-        Returns:
-            The filename where the history was saved.
-        """
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            if YAML_AVAILABLE:
-                filename = f"hanabi_game_{timestamp}.yaml"
-            else:
-                filename = f"hanabi_game_{timestamp}.json"
-        elif not filename.endswith(".yaml") and not filename.endswith(".json") and not filename.endswith(".yml"):
-            # Add appropriate extension if none provided
-            if YAML_AVAILABLE:
-                filename = filename + ".yaml"
-            else:
-                filename = filename + ".json"
-        elif filename.endswith(".json") and YAML_AVAILABLE:
-            # Convert .json to .yaml if YAML is available
-            filename = filename[:-5] + ".yaml"
-        elif (filename.endswith(".yaml") or filename.endswith(".yml")) and not YAML_AVAILABLE:
-            # Convert .yaml to .json if YAML is not available
-            filename = filename.rsplit(".", 1)[0] + ".json"
-
-        # Get the full path (in game_records subdirectory if not already a full path)
-        filepath = self._get_file_path(filename)
-
-        # Use provided final_score or recorded one
-        score = final_score if final_score is not None else self._final_score
-
-        history_data = {
-            "settings": self._settings,
-            "time": {"begin": self._start_time.isoformat(), "end": datetime.now().isoformat()},
-            "deck": self._deck,
-            "players": self._players,
-            "moves": self._moves,  # List of strings like ["p3", "d4", "h11", "h4w"]
-        }
-
-        # Add final score if available
-        if score is not None:
-            history_data["final_score"] = score
-
-        with open(filepath, "w") as f:
-            if YAML_AVAILABLE:
-                # Custom dumper to use flow style for leaf arrays (hands, card indices)
-                class FlowStyleDumper(yaml.SafeDumper):
-                    def represent_list(self, data):
-                        # Use flow style for simple lists (leaf arrays)
-                        # Check if it's a list of strings/numbers (leaf array)
-                        if data and all(isinstance(x, (str, int)) for x in data):
-                            return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
-                        # Otherwise use block style
-                        return self.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=False)
-
-                FlowStyleDumper.add_representer(list, FlowStyleDumper.represent_list)
-                yaml.dump(history_data, f, Dumper=FlowStyleDumper, sort_keys=False, allow_unicode=True, width=120)
-            else:
-                json.dump(history_data, f, indent=2)
-
-        return filepath
-
-    def load_from_file(self, filename: str) -> Dict[str, Any]:
-        """
-        Load game history from a YAML or JSON file.
-
-        Args:
-            filename: The filename to load from (can be just filename or full path)
-
-        Returns:
-            The loaded history data
-        """
-        # Try the filename as-is first (in case it's a full path from file dialog)
-        filepath = filename
-        if not os.path.exists(filepath):
-            # If not found, try in the game_records subdirectory
-            filepath = self._get_file_path(filename)
-            if not os.path.exists(filepath):
-                # If still not found, try in the root directory (for backward compatibility)
-                if not os.path.exists(filename):
-                    raise FileNotFoundError(f"Game history file not found: {filename}")
-                filepath = filename
-
-        with open(filepath, "r") as f:
-            if (filename.endswith(".yaml") or filename.endswith(".yml")) and YAML_AVAILABLE:
-                return yaml.safe_load(f)
-            else:
-                # Fallback to JSON
-                if not YAML_AVAILABLE:
-                    import json
-                return json.load(f)
-
-    @staticmethod
-    def create_game_from_history(history_data: dict, team, on_move=None) -> Game:
-        """
-        Create a Game instance from history data for replay.
-
-        Args:
-            history_data: The loaded history data dictionary
-            team: PlayerTeam to use for the game
-            on_move: Optional move callback
-
-        Returns:
-            A Game instance reconstructed from history
-        """
-        from .game import create_standard_game_settings
-        from .game import create_deck_from_settings, Hand, CommonView, GameState
-
-        # Get deck from root level
-        deck_short = history_data.get("deck", [])
-        if not deck_short:
-            raise ValueError("History data missing deck")
-
-        # Get settings
-        settings_dict = history_data.get("settings", {})
-        num_players = settings_dict.get("num_players", 3)
-        settings = create_standard_game_settings(num_players)
-        # Reconstruct deck from saved cards
-        deck_cards = [GameHistory._short_to_card(short) for short in deck_short]
-        deck = Deck(deck_cards)
-
-        # Create start position with the reconstructed deck
-        start_position = StartPosition(settings, deck)
-
-        # Reconstruct initial player hands from deck (deal cards in order)
-        player_hands = []
-        draw_deck_index = 0
-        deck_cards = deck.cards
-        cards_per_player = settings.max_cards_in_hand
-
-        for player_idx in range(num_players):
-            hand_cards = []
-            for _ in range(cards_per_player):
-                if draw_deck_index < len(deck_cards):
-                    hand_cards.append(deck_cards[draw_deck_index])
-                    draw_deck_index += 1
-                else:
-                    raise ValueError(f"Not enough cards in deck to deal to player {player_idx}")
-            player_hands.append(Hand(hand_cards))
-
-        # Initialize common view
-        remaining_cards = len(deck_cards) - draw_deck_index
-        common_view = CommonView(
-            live_tokens=settings.max_live_tokens,
-            hint_tokens=settings.max_hint_tokens,
-            cards_to_draw=remaining_cards,
-            cards_discarded={},
-            cards_played={},
-        )
-
-        # Reconstruct initial game state
-        state = GameState(
-            start_position=start_position,
-            common_view=common_view,
-            player_hands=player_hands,
-            draw_deck_index=draw_deck_index,
-            turn_number=0,
-            current_player=0,
-            turns_left=None,
-        )
-
-        # Create game instance
-        game = Game(start_position, team, on_move)
-        game._turns.append(state)
-        game._set_common_view_for_players()
-
-        return game

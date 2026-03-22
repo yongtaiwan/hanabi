@@ -31,8 +31,6 @@ class TestGameComprehensive(unittest.TestCase):
         team = PlayerTeam(self.players)
         self.game = Game.create(team, self.settings)
 
-    # ========== Initialization Tests ==========
-
     def test_game_create_with_different_player_counts(self):
         """Test game creation with 2-5 players."""
         for num_players in range(2, 6):
@@ -90,8 +88,6 @@ class TestGameComprehensive(unittest.TestCase):
         # (very unlikely all 5 are identical)
         unique_decks = set(decks)
         self.assertGreater(len(unique_decks), 1, "Decks should be shuffled differently")
-
-    # ========== Move Validation Tests ==========
 
     def test_validate_wrong_player_turn(self):
         """Test that wrong player cannot make a move."""
@@ -240,8 +236,6 @@ class TestGameComprehensive(unittest.TestCase):
                     move = Play(0)
                     self.assertFalse(self.game.state._validate(0, move))
 
-    # ========== Move Processing Tests ==========
-
     def test_play_valid_card_sequence(self):
         """Test playing cards in correct sequence."""
 
@@ -319,21 +313,6 @@ class TestGameComprehensive(unittest.TestCase):
 
     def test_play_completes_firework_grants_hint_token(self):
         """Test that completing a firework (playing 5) grants hint token if not at max."""
-
-        # Manually set up a firework at 4
-        # This is complex, so we'll test the logic directly
-        # First, let's play cards to get to 4
-        # Actually, let's test the firework completion logic more directly
-
-        # Find a color and play 1, 2, 3, 4, then 5
-        # This is complex, so let's test the completion bonus logic
-        # by checking the code path when a 5 is played after a 4
-
-        # For now, test that playing a 5 when there's a 4 grants a token
-        # We'll need to set up the state manually or play many moves
-
-        # Simpler test: verify the logic exists
-        # The actual firework completion is tested in integration tests
 
     def test_discard_gains_hint_token(self):
         """Test that discarding gains a hint token."""
@@ -519,10 +498,6 @@ class TestGameComprehensive(unittest.TestCase):
                 # turns_left should be num_players (all players get one final turn)
                 self.assertGreaterEqual(self.game.state.turns_left, 0)
                 self.assertLessEqual(self.game.state.turns_left, self.settings.num_players)
-        # If deck wasn't exhausted, that's acceptable - the test verifies the logic
-        # when exhaustion occurs, but we can't guarantee it in all scenarios
-
-    # ========== Turn Advancement Tests ==========
 
     def test_turn_advancement_cycles(self):
         """Test that turns cycle through players correctly."""
@@ -652,8 +627,6 @@ class TestGameComprehensive(unittest.TestCase):
                 except AssertionError:
                     pass
 
-    # ========== Game End Condition Tests ==========
-
     def test_game_ends_when_no_lives(self):
         """Test that game ends when all lives are lost."""
 
@@ -764,8 +737,6 @@ class TestGameComprehensive(unittest.TestCase):
             if 0 == self.game.state.turns_left:
                 self.assertTrue(self.game.is_finished)
 
-    # ========== Score Calculation Tests ==========
-
     def test_initial_score_is_zero(self):
         """Test that initial score is zero."""
         self.assertEqual(self.game.get_score(), 0)
@@ -816,8 +787,6 @@ class TestGameComprehensive(unittest.TestCase):
         # Score should equal number of cards played
         score = self.game.get_score()
         self.assertEqual(score, len(colors_played))
-
-    # ========== State Management Tests ==========
 
     def test_state_copy_creates_independent_copy(self):
         """Test that copy.copy() creates an independent copy."""
@@ -879,8 +848,6 @@ class TestGameComprehensive(unittest.TestCase):
         self.assertIn(1, view.teammates)
         self.assertIn(2, view.teammates)
 
-    # ========== Error Handling Tests ==========
-
     def test_process_move_on_uninitialized_game(self):
         """Test that process_move raises error on uninitialized game."""
         # Create game but don't initialize
@@ -931,8 +898,6 @@ class TestGameComprehensive(unittest.TestCase):
             self.game.state.update(0, fake_move)  # type: ignore
         self.assertIn("Unknown move type", str(context.exception))
 
-    # ========== Edge Cases Tests ==========
-
     def test_discard_when_hint_tokens_at_max_assertion(self):
         """Test that discard when hint tokens at max raises assertion."""
 
@@ -941,13 +906,6 @@ class TestGameComprehensive(unittest.TestCase):
             move = Discard(0)
             self.game.process_move(self.game.current_player, move)
             self.game._advance_turn()
-
-        # Now _update_discard should assert (but validation should prevent this)
-        # This tests the assertion in _update_discard
-        # Since validation prevents it, we test the assertion by calling update directly
-        # (which should never happen in normal flow)
-        # We can't easily test the assertion without bypassing validation
-        # But the validation ensures this path is never reached
 
     def test_hint_when_no_tokens_assertion(self):
         """Test that hint when no tokens raises assertion."""
@@ -969,10 +927,6 @@ class TestGameComprehensive(unittest.TestCase):
                     break
             else:
                 break
-
-        # Validation should prevent this, but test the assertion exists
-        # Similar to above, we can't easily test without bypassing validation
-        # The assertion is in _update_hint, but validation prevents reaching it
 
     def test_hand_size_maintained_after_moves(self):
         """Test that hand size is maintained after all move types."""
@@ -1045,8 +999,6 @@ class TestGameComprehensive(unittest.TestCase):
                 # Should have at least one of this card type
                 self.assertGreater(count, 0)
 
-    # ========== Integration Tests ==========
-
     def test_full_game_flow_with_random_player(self):
         """Test a full game flow with RandomPlayer."""
         settings = create_standard_game_settings(2)
@@ -1105,8 +1057,6 @@ class TestGameComprehensive(unittest.TestCase):
                 self.game._advance_turn()
             except AssertionError:
                 break
-
-    # ========== Property Tests ==========
 
     def test_is_finished_property(self):
         """Test is_finished property."""

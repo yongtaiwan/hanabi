@@ -26,25 +26,6 @@ class TestGameHistory(unittest.TestCase):
         self.history = GameHistory({"num_players": 3, "max_live_tokens": 3, "max_hint_tokens": 8})
         self.history.record_initial_state(self.game)
 
-    def _spend_hint_if_at_max_tokens(self) -> None:
-        """Discard is illegal when hint tokens are at maximum; spend one if needed."""
-        if self.game.state.common_view.hint_tokens < self.settings.max_hint_tokens:
-            return
-        cp = self.game.current_player
-        for tgt in range(self.settings.num_players):
-            if tgt == cp:
-                continue
-            th = self.game.state.player_hands[tgt]
-            if not th.cards:
-                continue
-            col = th.cards[0].color
-            matching = [i for i, c in enumerate(th.cards) if c.color == col]
-            move = ColorHint(tgt, matching, col)
-            if self.game.state._validate(cp, move):
-                self.game._process_move(cp, move)
-                self.game._advance_turn()
-                return
-
     def test_record_initial_state(self):
         """Test recording initial state."""
         # Verify deck is stored at root level
@@ -324,6 +305,25 @@ class TestGameHistory(unittest.TestCase):
         finally:
             if os.path.exists(filename):
                 os.remove(filename)
+
+    def _spend_hint_if_at_max_tokens(self) -> None:
+        """Discard is illegal when hint tokens are at maximum; spend one if needed."""
+        if self.game.state.common_view.hint_tokens < self.settings.max_hint_tokens:
+            return
+        cp = self.game.current_player
+        for tgt in range(self.settings.num_players):
+            if tgt == cp:
+                continue
+            th = self.game.state.player_hands[tgt]
+            if not th.cards:
+                continue
+            col = th.cards[0].color
+            matching = [i for i, c in enumerate(th.cards) if c.color == col]
+            move = ColorHint(tgt, matching, col)
+            if self.game.state._validate(cp, move):
+                self.game._process_move(cp, move)
+                self.game._advance_turn()
+                return
 
 
 if __name__ == "__main__":

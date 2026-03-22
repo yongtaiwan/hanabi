@@ -711,8 +711,6 @@ class GUIGame:
         display_player = 0 if one_player_mode else self._game.current_player
         self._display.display_game_state(self._game, display_player)
 
-    # Removed _add_abandon_button - home button now serves this purpose
-
     def _abandon_game(self):
         """Abandon current game/replay and return to start screen."""
         if self._display and self._gui_updates_after_id is not None:

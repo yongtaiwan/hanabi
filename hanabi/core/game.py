@@ -36,6 +36,13 @@ class Deck:
         """
         self._cards = cards.copy()
 
+    def __len__(self) -> int:
+        """Get the number of cards in the deck."""
+        return len(self._cards)
+
+    def __repr__(self) -> str:
+        return f"Deck({len(self._cards)} cards)"
+
     @property
     def cards(self) -> List[Card]:
         """Get the list of cards in the deck."""
@@ -50,13 +57,6 @@ class Deck:
         import random
 
         random.shuffle(self._cards)
-
-    def __len__(self) -> int:
-        """Get the number of cards in the deck."""
-        return len(self._cards)
-
-    def __repr__(self) -> str:
-        return f"Deck({len(self._cards)} cards)"
 
 
 class StartPosition:
@@ -73,6 +73,9 @@ class StartPosition:
         self._settings = settings
         self._draw_deck = draw_deck
 
+    def __repr__(self) -> str:
+        return f"StartPosition(settings={self._settings}, deck={self._draw_deck})"
+
     @property
     def settings(self) -> GameSettings:
         """Get the game settings."""
@@ -83,9 +86,6 @@ class StartPosition:
         """Get the initial draw deck."""
         return self._draw_deck
 
-    def __repr__(self) -> str:
-        return f"StartPosition(settings={self._settings}, deck={self._draw_deck})"
-
 
 class Hand:
     """Represents a player's hand of cards."""
@@ -93,16 +93,16 @@ class Hand:
     def __init__(self, cards: List[Card]):
         self._cards = cards.copy()
 
-    @property
-    def cards(self) -> List[Card]:
-        """Get the list of cards in the hand."""
-        return self._cards.copy()
-
     def __repr__(self) -> str:
         return f"Hand({self._cards})"
 
     def __len__(self) -> int:
         return len(self._cards)
+
+    @property
+    def cards(self) -> List[Card]:
+        """Get the list of cards in the hand."""
+        return self._cards.copy()
 
 
 class GameSettings:
@@ -135,6 +135,13 @@ class GameSettings:
         self._cards = cards.copy()
         self._auto_end_when_no_points_possible = auto_end_when_no_points_possible
 
+    def __repr__(self) -> str:
+        return (
+            f"GameSettings(players={self._num_players}, "
+            f"max_live={self._max_live_tokens}, "
+            f"max_hint={self._max_hint_tokens})"
+        )
+
     @property
     def num_players(self) -> int:
         """Get the number of players."""
@@ -164,13 +171,6 @@ class GameSettings:
     def auto_end_when_no_points_possible(self) -> bool:
         """Get whether to auto-end when no more points are possible."""
         return self._auto_end_when_no_points_possible
-
-    def __repr__(self) -> str:
-        return (
-            f"GameSettings(players={self._num_players}, "
-            f"max_live={self._max_live_tokens}, "
-            f"max_hint={self._max_hint_tokens})"
-        )
 
 
 def create_deck_from_settings(settings: GameSettings) -> Deck:
@@ -284,6 +284,9 @@ class CommonView:
         self._cards_discarded = cards_discarded.copy()
         self._cards_played = cards_played.copy()
 
+    def __repr__(self) -> str:
+        return f"CommonView(live={self._live_tokens}, hint={self._hint_tokens}, to_draw={self._cards_to_draw})"
+
     @property
     def live_tokens(self) -> int:
         """Get the current number of live tokens."""
@@ -367,9 +370,6 @@ class CommonView:
                 return True
         return False
 
-    def __repr__(self) -> str:
-        return f"CommonView(live={self._live_tokens}, hint={self._hint_tokens}, to_draw={self._cards_to_draw})"
-
 
 class PlayerView:
     """View of the game state from a player's perspective."""
@@ -384,6 +384,9 @@ class PlayerView:
         """
         self._teammates = {k: Hand(v.cards) for k, v in teammates.items()}
         self._own_hand_size = own_hand_size
+
+    def __repr__(self) -> str:
+        return f"PlayerView(teammates={list(self._teammates.keys())}, own_hand_size={self._own_hand_size})"
 
     @property
     def teammates(self) -> Dict[int, Hand]:
@@ -402,9 +405,6 @@ class PlayerView:
             for card in hand.cards:
                 c[card] += 1
         return c
-
-    def __repr__(self) -> str:
-        return f"PlayerView(teammates={list(self._teammates.keys())}, own_hand_size={self._own_hand_size})"
 
 
 class GameState:
@@ -439,6 +439,49 @@ class GameState:
         self._turn_number = turn_number
         self._current_player = current_player
         self._turns_left = turns_left
+
+    def __copy__(self) -> GameState:
+        """
+        Support for copy.copy() - creates a shallow copy of the game state.
+
+        Returns:
+            A new GameState instance with copied data
+        """
+        # Create a new CommonView with copies of mutable data
+        # This is necessary because CommonView contains mutable dictionaries
+        new_common_view = CommonView(
+            live_tokens=self._common_view._live_tokens,
+            hint_tokens=self._common_view._hint_tokens,
+            cards_to_draw=self._common_view._cards_to_draw,
+            cards_discarded=self._common_view._cards_discarded,
+            cards_played=self._common_view._cards_played,
+        )
+
+        return GameState(
+            start_position=self._start_position,
+            common_view=new_common_view,
+            player_hands=self._player_hands,
+            draw_deck_index=self._draw_deck_index,
+            turn_number=self._turn_number,
+            current_player=self._current_player,
+            turns_left=self._turns_left,
+        )
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> GameState:
+        """Support for copy.deepcopy()."""
+        # Create a new instance with deep copies of mutable data
+        return GameState(
+            start_position=copy.deepcopy(self._start_position, memo),
+            common_view=copy.deepcopy(self._common_view, memo),
+            player_hands=[Hand(h.cards.copy()) for h in self._player_hands],
+            draw_deck_index=self._draw_deck_index,
+            turn_number=self._turn_number,
+            current_player=self._current_player,
+            turns_left=self._turns_left,
+        )
+
+    def __repr__(self) -> str:
+        return f"GameState(draw_deck_index={self._draw_deck_index})"
 
     @property
     def start_position(self) -> StartPosition:
@@ -479,6 +522,123 @@ class GameState:
     def settings(self) -> GameSettings:
         """Get the game settings."""
         return self._start_position.settings
+
+    def update(self, player_index: int, move: Move) -> None:
+        """
+        Update the game state in-place with a move.
+
+        Args:
+            player_index: Index of the player making the move
+            move: The move to apply
+        """
+        assert 0 <= player_index < len(self._player_hands), (
+            f"player_index {player_index} out of range [0, {len(self._player_hands)})"
+        )
+
+        if isinstance(move, Play):
+            self._update_play(player_index, move)
+        elif isinstance(move, Discard):
+            self._update_discard(player_index, move)
+        elif isinstance(move, (ColorHint, NumberHint)):
+            self._update_hint(player_index, move)
+        else:
+            assert False, f"Unknown move type: {type(move)}"
+
+    def is_finished(self) -> bool:
+        """
+        Check if the game is finished.
+
+        Returns:
+            True if the game is finished, False otherwise
+        """
+        logger.debug(
+            f"[is_finished] Checking game end conditions: live_tokens={self._common_view.live_tokens}, "
+            f"turns_left={self._turns_left}, turn_number={self._turn_number}, "
+            f"current_player={self._current_player}"
+        )
+
+        # 1. All life tokens are lost
+        if self._common_view.live_tokens <= 0:
+            logger.debug("[is_finished] Game finished: All life tokens lost")
+            return True
+
+        # 2. All fireworks are completed (perfect score)
+        cards_played = self._common_view.cards_played
+        if 5 == len(cards_played):  # All 5 colors
+            all_fives = all(num == Number.FIVE for num in cards_played.values())
+            if all_fives:
+                logger.debug("[is_finished] Game finished: All fireworks completed (perfect score)")
+                return True
+
+        # 3. Deck is exhausted and all players have taken final turn
+        # Assert invariant: if deck is exhausted (no cards to draw), turns_left must be set
+        original_deck_size = len(self._start_position.draw_deck.cards)
+        if self._draw_deck_index >= original_deck_size:
+            assert self._turns_left is not None, (
+                f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}, "
+                f"cards_to_draw={self._common_view._cards_to_draw}) but turns_left is None"
+            )
+        if 0 == self._turns_left:
+            logger.debug(
+                f"[is_finished] Game finished: 0 == turns_left (deck exhausted, all players took final turn)"
+            )
+            return True
+
+        # 4. Auto-end when no more points possible (if setting enabled)
+        if self.settings.auto_end_when_no_points_possible:
+            if self._is_no_more_points_possible():
+                logger.debug("[is_finished] Game finished: No more points possible")
+                return True
+
+        logger.debug("[is_finished] Game not finished")
+        return False
+
+    def score(self) -> int:
+        """
+        Calculate the game score.
+
+        Returns:
+            The current game score
+        """
+        cards_played = self._common_view.cards_played
+        score = 0
+        for number in cards_played.values():
+            score += number.value
+        return score
+
+    def advance_player(self, num_players: int) -> None:
+        """
+        Advance to the next player's turn (in-place update).
+
+        Args:
+            num_players: Total number of players in the game
+        """
+        assert num_players > 0, f"num_players must be positive, got {num_players}"
+        assert 0 <= self._current_player < num_players, (
+            f"current_player {self._current_player} out of range [0, {num_players})"
+        )
+
+        old_player = self._current_player
+        self._current_player = (self._current_player + 1) % num_players
+        logger.debug(f"[advance_player] Player {old_player} -> {self._current_player}, turns_left={self._turns_left}")
+
+        # If deck is exhausted, decrement turns remaining
+        # Assert invariant: if deck is exhausted, turns_left must be set
+        original_deck_size = len(self._start_position.draw_deck.cards)
+        if self._draw_deck_index >= original_deck_size:
+            assert self._turns_left is not None, (
+                f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}) "
+                f"but turns_left is None in advance_player"
+            )
+
+        if self._turns_left is not None:
+            assert self._turns_left > 0, f"turns_left should be > 0 when deck is exhausted, got {self._turns_left}"
+            old_turns_left = self._turns_left
+            self._turns_left -= 1
+            assert self._turns_left >= 0, f"turns_left became negative: {self._turns_left}"
+            logger.debug(f"[advance_player] Decremented turns_left: {old_turns_left} -> {self._turns_left}")
+        else:
+            logger.debug(f"[advance_player] turns_left is None (deck not exhausted)")
 
     def _validate(self, player_index: int, move: Move) -> bool:
         """
@@ -593,27 +753,6 @@ class GameState:
                 error_msg += f" (not player {player_index}'s turn, current player is {self._current_player})"
             return error_msg
         assert False, f"unexpected move type in _get_validation_error_message: {type(move)}"
-
-    def update(self, player_index: int, move: Move) -> None:
-        """
-        Update the game state in-place with a move.
-
-        Args:
-            player_index: Index of the player making the move
-            move: The move to apply
-        """
-        assert 0 <= player_index < len(self._player_hands), (
-            f"player_index {player_index} out of range [0, {len(self._player_hands)})"
-        )
-
-        if isinstance(move, Play):
-            self._update_play(player_index, move)
-        elif isinstance(move, Discard):
-            self._update_discard(player_index, move)
-        elif isinstance(move, (ColorHint, NumberHint)):
-            self._update_hint(player_index, move)
-        else:
-            assert False, f"Unknown move type: {type(move)}"
 
     def _update_play(self, player_index: int, move: Play) -> None:
         """Update state for a play move (in-place)."""
@@ -852,55 +991,6 @@ class GameState:
         # Update the discard pile dict
         self._common_view._cards_discarded[card.color] = Suit(new_counts)
 
-    def is_finished(self) -> bool:
-        """
-        Check if the game is finished.
-
-        Returns:
-            True if the game is finished, False otherwise
-        """
-        logger.debug(
-            f"[is_finished] Checking game end conditions: live_tokens={self._common_view.live_tokens}, "
-            f"turns_left={self._turns_left}, turn_number={self._turn_number}, "
-            f"current_player={self._current_player}"
-        )
-
-        # 1. All life tokens are lost
-        if self._common_view.live_tokens <= 0:
-            logger.debug("[is_finished] Game finished: All life tokens lost")
-            return True
-
-        # 2. All fireworks are completed (perfect score)
-        cards_played = self._common_view.cards_played
-        if 5 == len(cards_played):  # All 5 colors
-            all_fives = all(num == Number.FIVE for num in cards_played.values())
-            if all_fives:
-                logger.debug("[is_finished] Game finished: All fireworks completed (perfect score)")
-                return True
-
-        # 3. Deck is exhausted and all players have taken final turn
-        # Assert invariant: if deck is exhausted (no cards to draw), turns_left must be set
-        original_deck_size = len(self._start_position.draw_deck.cards)
-        if self._draw_deck_index >= original_deck_size:
-            assert self._turns_left is not None, (
-                f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}, "
-                f"cards_to_draw={self._common_view._cards_to_draw}) but turns_left is None"
-            )
-        if 0 == self._turns_left:
-            logger.debug(
-                f"[is_finished] Game finished: 0 == turns_left (deck exhausted, all players took final turn)"
-            )
-            return True
-
-        # 4. Auto-end when no more points possible (if setting enabled)
-        if self.settings.auto_end_when_no_points_possible:
-            if self._is_no_more_points_possible():
-                logger.debug("[is_finished] Game finished: No more points possible")
-                return True
-
-        logger.debug("[is_finished] Game not finished")
-        return False
-
     def _is_no_more_points_possible(self) -> bool:
         """Check if no more points are possible based on discarded cards."""
         cards_played = self._common_view.cards_played
@@ -938,96 +1028,6 @@ class GameState:
         # All colors are blocked
         return True
 
-    def score(self) -> int:
-        """
-        Calculate the game score.
-
-        Returns:
-            The current game score
-        """
-        cards_played = self._common_view.cards_played
-        score = 0
-        for number in cards_played.values():
-            score += number.value
-        return score
-
-    def advance_player(self, num_players: int) -> None:
-        """
-        Advance to the next player's turn (in-place update).
-
-        Args:
-            num_players: Total number of players in the game
-        """
-        assert num_players > 0, f"num_players must be positive, got {num_players}"
-        assert 0 <= self._current_player < num_players, (
-            f"current_player {self._current_player} out of range [0, {num_players})"
-        )
-
-        old_player = self._current_player
-        self._current_player = (self._current_player + 1) % num_players
-        logger.debug(f"[advance_player] Player {old_player} -> {self._current_player}, turns_left={self._turns_left}")
-
-        # If deck is exhausted, decrement turns remaining
-        # Assert invariant: if deck is exhausted, turns_left must be set
-        original_deck_size = len(self._start_position.draw_deck.cards)
-        if self._draw_deck_index >= original_deck_size:
-            assert self._turns_left is not None, (
-                f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}) "
-                f"but turns_left is None in advance_player"
-            )
-
-        if self._turns_left is not None:
-            assert self._turns_left > 0, f"turns_left should be > 0 when deck is exhausted, got {self._turns_left}"
-            old_turns_left = self._turns_left
-            self._turns_left -= 1
-            assert self._turns_left >= 0, f"turns_left became negative: {self._turns_left}"
-            logger.debug(f"[advance_player] Decremented turns_left: {old_turns_left} -> {self._turns_left}")
-        else:
-            logger.debug(f"[advance_player] turns_left is None (deck not exhausted)")
-
-    def __copy__(self) -> GameState:
-        """
-        Support for copy.copy() - creates a shallow copy of the game state.
-
-        Returns:
-            A new GameState instance with copied data
-        """
-        # Create a new CommonView with copies of mutable data
-        # This is necessary because CommonView contains mutable dictionaries
-        new_common_view = CommonView(
-            live_tokens=self._common_view._live_tokens,
-            hint_tokens=self._common_view._hint_tokens,
-            cards_to_draw=self._common_view._cards_to_draw,
-            cards_discarded=self._common_view._cards_discarded,
-            cards_played=self._common_view._cards_played,
-        )
-
-        return GameState(
-            start_position=self._start_position,
-            common_view=new_common_view,
-            player_hands=self._player_hands,
-            draw_deck_index=self._draw_deck_index,
-            turn_number=self._turn_number,
-            current_player=self._current_player,
-            turns_left=self._turns_left,
-        )
-
-    def __deepcopy__(self, memo: Dict[int, Any]) -> GameState:
-        """Support for copy.deepcopy()."""
-        # Create a new instance with deep copies of mutable data
-        return GameState(
-            start_position=copy.deepcopy(self._start_position, memo),
-            common_view=copy.deepcopy(self._common_view, memo),
-            player_hands=[Hand(h.cards.copy()) for h in self._player_hands],
-            draw_deck_index=self._draw_deck_index,
-            turn_number=self._turn_number,
-            current_player=self._current_player,
-            turns_left=self._turns_left,
-        )
-
-    def __repr__(self) -> str:
-        return f"GameState(draw_deck_index={self._draw_deck_index})"
-
 
 class Game:
     """Represents a single game instance and drives the game loop."""
@@ -1055,6 +1055,11 @@ class Game:
         # Initialize players with game settings
         self._initialize_players()
 
+    def __repr__(self) -> str:
+        if not self._turns:
+            return f"Game(team={self._team.name()}, turns=0)"
+        return f"Game(team={self._team.name()}, turns={len(self._turns)})"
+
     @property
     def team(self) -> PlayerTeam:
         """Get the player team."""
@@ -1077,64 +1082,6 @@ class Game:
         assert self._turns, "Game not initialized. No turns yet."
         return self.state.current_player
 
-    def _initialize_players(self) -> None:
-        """Initialize players with game settings."""
-        assert len(self._team.players) == self.settings.num_players, (
-            f"Number of players ({len(self._team.players)}) does not match settings ({self.settings.num_players})"
-        )
-        # Set game settings for all players (they are BasePlayer instances and observe all moves)
-        for player in self._team.players:
-            player.set_game_settings(self.settings)
-
-    def _set_common_view_for_players(self) -> None:
-        """
-        Set common view for all players (called after state is created and after each move).
-
-        IMPORTANT: This must be called after each move because GameState.__copy__() creates
-        a new CommonView object. Players need to reference the current state's CommonView,
-        not a stale one from a previous state.
-
-        Without this, players will see stale hint token counts and may generate invalid moves.
-        """
-        assert self._turns, "Game not initialized. No turns yet."
-        # Set common view - players need the current state's common_view
-        # Note: Each GameState has its own CommonView, so we must update players' references
-        # after each state transition to ensure they see current values
-        for player in self._team.players:
-            player.set_common_view(self.state.common_view)
-
-    def _notify_players(self, player_index: int, move: Move) -> None:
-        """Notify all players about a move (all players observe all moves)."""
-        for observer_index, player in enumerate(self._team.players):
-            player.observe(
-                player_index,
-                move,
-                observer_view=self._get_player_view(observer_index),
-            )
-
-    def _get_player_view(self, player_index: int) -> PlayerView:
-        """
-        Get the view of the game from a player's perspective (private).
-
-        Args:
-            player_index: Index of the player
-
-        Returns:
-            PlayerView showing teammates' hands and own hand size
-        """
-        assert self._turns, "Game not initialized. No turns yet."
-        assert 0 <= player_index < len(self._team.players), (
-            f"player_index {player_index} out of range [0, {len(self._team.players)})"
-        )
-
-        teammates: Dict[int, Hand] = {}
-        for i, hand in enumerate(self.state.player_hands):
-            if i != player_index:
-                teammates[i] = hand
-
-        own_hand_size = len(self.state.player_hands[player_index].cards)
-        return PlayerView(teammates, own_hand_size)
-
     def get_player_view(self, player_index: int) -> PlayerView:
         """Public alias for :meth:`_get_player_view` (tests and tooling)."""
         return self._get_player_view(player_index)
@@ -1142,79 +1089,6 @@ class Game:
     def process_move(self, player_index: int, move: Move) -> None:
         """Public alias for :meth:`_process_move` (tests and tooling)."""
         self._process_move(player_index, move)
-
-    def _process_move(self, player_index: int, move: Move) -> None:
-        """
-        Process a move and update the game state.
-
-        Args:
-            player_index: Index of the player making the move
-            move: The move to process
-
-        """
-        assert self._turns, "Game not initialized. No turns yet."
-        assert 0 <= player_index < len(self._team.players), (
-            f"player_index {player_index} out of range [0, {len(self._team.players)})"
-        )
-
-        # Snapshot before appending to history (callback needs pre-move state; self.state changes after append).
-        state_before_move = self.state
-        logger.debug(
-            f"[process_move] Processing move: player={player_index}, move={move}, "
-            f"turn_number={state_before_move.turn_number}, current_player={state_before_move.current_player}, "
-            f"turns_left={state_before_move.turns_left}, "
-            f"cards_to_draw={state_before_move.common_view.cards_to_draw}"
-        )
-
-        # Validate the move (callers must supply legal moves; illegal = bug)
-        assert self.state._validate(player_index, move), self.state._get_validation_error_message(player_index, move)
-
-        # Clone the current state and update it in-place
-        new_state = copy.copy(state_before_move)
-        new_state._turn_number += 1  # Increment turn number (0-based)
-        logger.debug(f"[process_move] After cloning: new turn_number={new_state._turn_number}")
-
-        # Update the cloned state in-place
-        new_state.update(player_index, move)
-        logger.debug(
-            f"[process_move] After update: turn_number={new_state._turn_number}, "
-            f"current_player={new_state.current_player}, turns_left={new_state.turns_left}, "
-            f"cards_to_draw={new_state.common_view.cards_to_draw}, "
-            f"is_finished={new_state.is_finished()}"
-        )
-
-        # Add new state to turns history
-        self._turns.append(new_state)
-
-        # Update players' common_view references to point to the new state's common_view
-        # This is critical because GameState.__copy__ creates a new CommonView object
-        # Players need to see the updated common_view from the current state
-        self._set_common_view_for_players()
-
-        # Notify players about the move BEFORE the callback
-        # This ensures hints are updated before display is refreshed
-        self._notify_players(player_index, move)
-
-        # Notify global callback with old and new state (for display, logging, etc.)
-        if self._on_move is not None:
-            self._on_move(player_index, move, state_before_move, new_state)
-
-    def _advance_turn(self) -> None:
-        """Advance to the next player's turn (internal method)."""
-        assert self._turns, "Cannot advance turn: no turns yet"
-        num_players = self.settings.num_players
-        assert num_players > 0, f"num_players must be positive, got {num_players}"
-        last_state = self._turns[-1]
-        logger.debug(
-            f"[_advance_turn] Before advance: current_player={last_state.current_player}, "
-            f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}"
-        )
-        last_state.advance_player(num_players)
-        logger.debug(
-            f"[_advance_turn] After advance: current_player={last_state.current_player}, "
-            f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}, "
-            f"is_finished={last_state.is_finished()}"
-        )
 
     @property
     def is_finished(self) -> bool:
@@ -1330,7 +1204,133 @@ class Game:
 
         return game
 
-    def __repr__(self) -> str:
-        if not self._turns:
-            return f"Game(team={self._team.name()}, turns=0)"
-        return f"Game(team={self._team.name()}, turns={len(self._turns)})"
+    def _initialize_players(self) -> None:
+        """Initialize players with game settings."""
+        assert len(self._team.players) == self.settings.num_players, (
+            f"Number of players ({len(self._team.players)}) does not match settings ({self.settings.num_players})"
+        )
+        # Set game settings for all players (they are BasePlayer instances and observe all moves)
+        for player in self._team.players:
+            player.set_game_settings(self.settings)
+
+    def _set_common_view_for_players(self) -> None:
+        """
+        Set common view for all players (called after state is created and after each move).
+
+        IMPORTANT: This must be called after each move because GameState.__copy__() creates
+        a new CommonView object. Players need to reference the current state's CommonView,
+        not a stale one from a previous state.
+
+        Without this, players will see stale hint token counts and may generate invalid moves.
+        """
+        assert self._turns, "Game not initialized. No turns yet."
+        # Set common view - players need the current state's common_view
+        # Note: Each GameState has its own CommonView, so we must update players' references
+        # after each state transition to ensure they see current values
+        for player in self._team.players:
+            player.set_common_view(self.state.common_view)
+
+    def _notify_players(self, player_index: int, move: Move) -> None:
+        """Notify all players about a move (all players observe all moves)."""
+        for observer_index, player in enumerate(self._team.players):
+            player.observe(
+                player_index,
+                move,
+                observer_view=self._get_player_view(observer_index),
+            )
+
+    def _get_player_view(self, player_index: int) -> PlayerView:
+        """
+        Get the view of the game from a player's perspective (private).
+
+        Args:
+            player_index: Index of the player
+
+        Returns:
+            PlayerView showing teammates' hands and own hand size
+        """
+        assert self._turns, "Game not initialized. No turns yet."
+        assert 0 <= player_index < len(self._team.players), (
+            f"player_index {player_index} out of range [0, {len(self._team.players)})"
+        )
+
+        teammates: Dict[int, Hand] = {}
+        for i, hand in enumerate(self.state.player_hands):
+            if i != player_index:
+                teammates[i] = hand
+
+        own_hand_size = len(self.state.player_hands[player_index].cards)
+        return PlayerView(teammates, own_hand_size)
+
+    def _process_move(self, player_index: int, move: Move) -> None:
+        """
+        Process a move and update the game state.
+
+        Args:
+            player_index: Index of the player making the move
+            move: The move to process
+
+        """
+        assert self._turns, "Game not initialized. No turns yet."
+        assert 0 <= player_index < len(self._team.players), (
+            f"player_index {player_index} out of range [0, {len(self._team.players)})"
+        )
+
+        # Snapshot before appending to history (callback needs pre-move state; self.state changes after append).
+        state_before_move = self.state
+        logger.debug(
+            f"[process_move] Processing move: player={player_index}, move={move}, "
+            f"turn_number={state_before_move.turn_number}, current_player={state_before_move.current_player}, "
+            f"turns_left={state_before_move.turns_left}, "
+            f"cards_to_draw={state_before_move.common_view.cards_to_draw}"
+        )
+
+        # Validate the move (callers must supply legal moves; illegal = bug)
+        assert self.state._validate(player_index, move), self.state._get_validation_error_message(player_index, move)
+
+        # Clone the current state and update it in-place
+        new_state = copy.copy(state_before_move)
+        new_state._turn_number += 1  # Increment turn number (0-based)
+        logger.debug(f"[process_move] After cloning: new turn_number={new_state._turn_number}")
+
+        # Update the cloned state in-place
+        new_state.update(player_index, move)
+        logger.debug(
+            f"[process_move] After update: turn_number={new_state._turn_number}, "
+            f"current_player={new_state.current_player}, turns_left={new_state.turns_left}, "
+            f"cards_to_draw={new_state.common_view.cards_to_draw}, "
+            f"is_finished={new_state.is_finished()}"
+        )
+
+        # Add new state to turns history
+        self._turns.append(new_state)
+
+        # Update players' common_view references to point to the new state's common_view
+        # This is critical because GameState.__copy__ creates a new CommonView object
+        # Players need to see the updated common_view from the current state
+        self._set_common_view_for_players()
+
+        # Notify players about the move BEFORE the callback
+        # This ensures hints are updated before display is refreshed
+        self._notify_players(player_index, move)
+
+        # Notify global callback with old and new state (for display, logging, etc.)
+        if self._on_move is not None:
+            self._on_move(player_index, move, state_before_move, new_state)
+
+    def _advance_turn(self) -> None:
+        """Advance to the next player's turn (internal method)."""
+        assert self._turns, "Cannot advance turn: no turns yet"
+        num_players = self.settings.num_players
+        assert num_players > 0, f"num_players must be positive, got {num_players}"
+        last_state = self._turns[-1]
+        logger.debug(
+            f"[_advance_turn] Before advance: current_player={last_state.current_player}, "
+            f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}"
+        )
+        last_state.advance_player(num_players)
+        logger.debug(
+            f"[_advance_turn] After advance: current_player={last_state.current_player}, "
+            f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}, "
+            f"is_finished={last_state.is_finished()}"
+        )

@@ -25,53 +25,6 @@ class TestFinalRound(unittest.TestCase):
         self.engine = GameEngine(self.settings, self.players)
         self.engine.initialize()
 
-    def _exhaust_deck(self):
-        """Helper to exhaust the deck by discarding/playing until empty."""
-        # Keep making moves until deck is exhausted
-        # _player_exhausting_deck is set when a move tries to draw from an empty deck
-        while self.engine._player_exhausting_deck is None:
-            if 0 == len(self.engine._draw_deck):
-                # Deck is empty, but we need to make one more move to trigger exhaustion
-                # Make a move that will try to draw
-                current = self.engine.current_player
-                hand = self.engine.gameState.player_hands[current]
-                if hand.cards:
-                    if self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
-                        move = Discard(0)
-                    else:
-                        move = Play(0)
-                    success, _ = self.engine.process_move(current, move)
-                    if success:
-                        # Now _player_exhausting_deck should be set
-                        break
-                break
-
-            current = self.engine.current_player
-            hand = self.engine.gameState.player_hands[current]
-            if hand.cards and self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
-                move = Discard(0)
-                success, _ = self.engine.process_move(current, move)
-                if success:
-                    # Check if deck was exhausted (before advancing turn)
-                    if self.engine._player_exhausting_deck is not None:
-                        return  # Deck exhausted during this move
-                    self.engine.advanceTurn()
-                else:
-                    break
-            elif hand.cards:
-                # Can't discard, try playing
-                move = Play(0)
-                success, _ = self.engine.process_move(current, move)
-                if success:
-                    # Check if deck was exhausted (before advancing turn)
-                    if self.engine._player_exhausting_deck is not None:
-                        return  # Deck exhausted during this move
-                    self.engine.advanceTurn()
-                else:
-                    break
-            else:
-                break
-
     def test_deck_exhaustion_sets_player_exhausting_deck(self):
         """Test that when deck becomes empty, _player_exhausting_deck is set."""
         # Exhaust the deck
@@ -265,6 +218,53 @@ class TestFinalRound(unittest.TestCase):
             # Game should be finished (lives = 0)
             self.assertTrue(self.engine.is_finished())
             self.assertEqual(self.engine.gameState.common_view.live_tokens, 0)
+
+    def _exhaust_deck(self):
+        """Helper to exhaust the deck by discarding/playing until empty."""
+        # Keep making moves until deck is exhausted
+        # _player_exhausting_deck is set when a move tries to draw from an empty deck
+        while self.engine._player_exhausting_deck is None:
+            if 0 == len(self.engine._draw_deck):
+                # Deck is empty, but we need to make one more move to trigger exhaustion
+                # Make a move that will try to draw
+                current = self.engine.current_player
+                hand = self.engine.gameState.player_hands[current]
+                if hand.cards:
+                    if self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
+                        move = Discard(0)
+                    else:
+                        move = Play(0)
+                    success, _ = self.engine.process_move(current, move)
+                    if success:
+                        # Now _player_exhausting_deck should be set
+                        break
+                break
+
+            current = self.engine.current_player
+            hand = self.engine.gameState.player_hands[current]
+            if hand.cards and self.engine.gameState.common_view.hint_tokens < self.settings.max_hint_tokens:
+                move = Discard(0)
+                success, _ = self.engine.process_move(current, move)
+                if success:
+                    # Check if deck was exhausted (before advancing turn)
+                    if self.engine._player_exhausting_deck is not None:
+                        return  # Deck exhausted during this move
+                    self.engine.advanceTurn()
+                else:
+                    break
+            elif hand.cards:
+                # Can't discard, try playing
+                move = Play(0)
+                success, _ = self.engine.process_move(current, move)
+                if success:
+                    # Check if deck was exhausted (before advancing turn)
+                    if self.engine._player_exhausting_deck is not None:
+                        return  # Deck exhausted during this move
+                    self.engine.advanceTurn()
+                else:
+                    break
+            else:
+                break
 
 
 if __name__ == "__main__":

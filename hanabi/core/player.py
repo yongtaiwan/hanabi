@@ -192,6 +192,15 @@ class HintTrackingPlayer(BasePlayer):
         if move.teammate == self._player_index:
             self._update_hints_from_hint(move)
 
+    def get_hints(self) -> Dict[int, Dict[str, Optional[Union[Color, Number]]]]:
+        """
+        Get hints for this player's hand.
+
+        Returns:
+            Dictionary mapping card index to hint data (color and/or number)
+        """
+        return {idx: {"color": h.get("color"), "number": h.get("number")} for idx, h in self._hints.items()}
+
     def _update_hints_from_hint(self, hint: Hint) -> None:
         """Update hints when receiving a hint."""
         # Get current hand size from game settings
@@ -239,15 +248,6 @@ class HintTrackingPlayer(BasePlayer):
                 # This includes the special case when card_index = 0 (all remaining cards have old_idx > 0)
                 new_hints[old_idx] = hint_data
         self._hints = new_hints
-
-    def get_hints(self) -> Dict[int, Dict[str, Optional[Union[Color, Number]]]]:
-        """
-        Get hints for this player's hand.
-
-        Returns:
-            Dictionary mapping card index to hint data (color and/or number)
-        """
-        return {idx: {"color": h.get("color"), "number": h.get("number")} for idx, h in self._hints.items()}
 
 
 class HumanPlayer(HintTrackingPlayer):
@@ -322,6 +322,9 @@ class PlayerTeam:
         """
         self._players = players.copy()
 
+    def __repr__(self) -> str:
+        return f"PlayerTeam(players={len(self._players)})"
+
     @property
     def players(self) -> List[BasePlayer]:
         """Get the list of players in the team."""
@@ -336,6 +339,3 @@ class PlayerTeam:
         """
         # Default implementation - can be overridden or extended
         return f"Team({len(self._players)} players)"
-
-    def __repr__(self) -> str:
-        return f"PlayerTeam(players={len(self._players)})"

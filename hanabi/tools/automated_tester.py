@@ -174,6 +174,36 @@ class AutomatedGamePlayer:
 
         return game_log
 
+    def run_tests(self) -> Dict:
+        """Run multiple games and collect bugs."""
+        all_errors = []
+        games_with_errors = 0
+
+        for game_num in range(self.max_games):
+            print(f"Playing game {game_num + 1}/{self.max_games}...", end=" ")
+            game_log = self.play_and_validate()
+
+            if game_log["errors"]:
+                games_with_errors += 1
+                all_errors.append(
+                    {
+                        "game": game_num + 1,
+                        "errors": game_log["errors"],
+                        "final_score": game_log["final_score"],
+                        "moves": len(game_log["moves"]),
+                    }
+                )
+                print(f"❌ Found {len(game_log['errors'])} errors")
+            else:
+                print(f"✓ Score: {game_log['final_score']}")
+
+        return {
+            "total_games": self.max_games,
+            "games_with_errors": games_with_errors,
+            "total_errors": sum(len(g["errors"]) for g in all_errors),
+            "error_details": all_errors,
+        }
+
     def _make_move(self, game: Game, player_index: int) -> Optional:
         """Make a move for the given player."""
         state = game.state
@@ -215,36 +245,6 @@ class AutomatedGamePlayer:
                 return Discard(random.randint(0, len(hand.cards) - 1))
             else:
                 return Play(random.randint(0, len(hand.cards) - 1))
-
-    def run_tests(self) -> Dict:
-        """Run multiple games and collect bugs."""
-        all_errors = []
-        games_with_errors = 0
-
-        for game_num in range(self.max_games):
-            print(f"Playing game {game_num + 1}/{self.max_games}...", end=" ")
-            game_log = self.play_and_validate()
-
-            if game_log["errors"]:
-                games_with_errors += 1
-                all_errors.append(
-                    {
-                        "game": game_num + 1,
-                        "errors": game_log["errors"],
-                        "final_score": game_log["final_score"],
-                        "moves": len(game_log["moves"]),
-                    }
-                )
-                print(f"❌ Found {len(game_log['errors'])} errors")
-            else:
-                print(f"✓ Score: {game_log['final_score']}")
-
-        return {
-            "total_games": self.max_games,
-            "games_with_errors": games_with_errors,
-            "total_errors": sum(len(g["errors"]) for g in all_errors),
-            "error_details": all_errors,
-        }
 
 
 def main():

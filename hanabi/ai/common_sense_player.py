@@ -82,6 +82,214 @@ class CommonSensePlayer(HintTrackingPlayer):
                 self._teammate_hints[teammate_idx] = []
             self._teammate_hints[teammate_idx].append(("number", move.number))
 
+    def play(self, player_view: PlayerView) -> Move:
+        """
+        Make a move using common sense rules.
+
+        Args:
+            player_view: The current view of the game from this player's perspective
+
+        Returns:
+            A move selected using common sense rules
+        """
+        # Update seen cards
+        self._update_seen_cards(player_view)
+
+        # Generate all valid moves
+        valid_moves = generate_all_valid_moves(
+            player_view=player_view,
+            common_view=self.common_view,
+            game_settings=self.game_settings,
+            player_index=self._player_index,
+        )
+
+        # Filter to actually valid moves
+        valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
+
+        if not valid_moves:
+            # Fallback: return a play move
+            hand_size = player_view.own_hand_size
+            return Play(0) if hand_size > 0 else Play(0)
+
+        # Rule 1: Never play a card that could lose a life
+        # EXCEPTION: If a card is definitely playable, it's always safe (all possible cards are playable)
+        safe_play_moves = []
+        for move in valid_moves:
+            if isinstance(move, Play):
+                # If definitely playable, it's always safe (all possible cards are playable)
+                if self._is_card_definitely_playable(move.card, player_view):
+                    safe_play_moves.append(move)
+                elif not self._could_lose_life(move.card, player_view):
+                    safe_play_moves.append(move)
+
+        # Rule 2: Play a 5 to finish a suit (highest priority)
+        finishing_five_moves = []
+        for move in safe_play_moves:
+            if self._is_card_finishing_five(move.card, player_view):
+                finishing_five_moves.append(move)
+
+        if finishing_five_moves:
+            self._last_decision_summary = "Play 5 to finish suit (highest priority)"
+            return finishing_five_moves[0]  # Pick first one
+
+        # Rule 3: Play a playable card
+        # Prioritize cards we've received hints about (teammates are likely hinting us to play them)
+        playable_moves = []
+        hinted_playable_moves = []
+        for move in safe_play_moves:
+            if self._is_card_definitely_playable(move.card, player_view):
+                # Check if we've received hints about this card
+                if self._has_hints_about_position(move.card, player_view):
+                    hinted_playable_moves.append(move)
+                else:
+                    playable_moves.append(move)
+
+        # Prioritize hinted cards
+        if hinted_playable_moves:
+            self._last_decision_summary = "Play hinted playable card"
+            return hinted_playable_moves[0]  # Pick first one
+
+        if playable_moves:
+            self._last_decision_summary = "Play safe playable card"
+            return playable_moves[0]  # Pick first one
+
+        # Rule 4: Hint that identifies most new playable cards, tiebreak by player playing soon
+        # Avoid duplicate hints (don't give hints teammates already have)
+        hint_moves = [m for m in valid_moves if isinstance(m, (ColorHint, NumberHint))]
+        if hint_moves and self.common_view.hint_tokens > 0:
+            # Filter out duplicate hints
+            non_duplicate_hints = []
+            for hint in hint_moves:
+                if not self._is_duplicate_hint(hint, player_view):
+                    non_duplicate_hints.append(hint)
+
+            # If no non-duplicate hints, still consider all hints (better than nothing)
+            hints_to_consider = non_duplicate_hints if non_duplicate_hints else hint_moves
+
+            # Score hints by number of new playable cards
+            best_hint = None
+            best_score = -1
+            num_players = self.game_settings.num_players
+
+            for hint in hints_to_consider:
+                playable_count = self._count_new_playable_cards_from_hint(hint, player_view)
+                if playable_count > 0:
+                    # Score = playable_count * 100 - turns_until_player
+                    # Bonus for non-duplicate hints
+                    duplicate_penalty = 0 if hint in non_duplicate_hints else 50
+                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
+                    score = playable_count * 100 - turns_until - duplicate_penalty
+                    if score > best_score:
+                        best_score = score
+                        best_hint = hint
+
+            if best_hint:
+                playable_count = self._count_new_playable_cards_from_hint(best_hint, player_view)
+                if isinstance(best_hint, ColorHint):
+                    self._last_decision_summary = (
+                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
+                        f"(identifies {playable_count} new playable cards)"
+                    )
+                else:
+                    self._last_decision_summary = (
+                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} "
+                        f"(identifies {playable_count} new playable cards)"
+                    )
+                return best_hint
+
+        # Rule 5: Discard least risky card, tiebreak by oldest
+        # NEVER discard a card that is definitely playable
+        # NEVER discard a card that we have hints about AND could be playable
+        # (If teammate hinted us about a card, they likely want us to play it)
+        if self.common_view.hint_tokens < self.game_settings.max_hint_tokens:
+            discard_moves = [m for m in valid_moves if isinstance(m, Discard)]
+            # Filter out playable cards - never discard cards we know are playable
+            safe_discard_moves = []
+            for discard in discard_moves:
+                # Don't discard if definitely playable
+                if self._is_card_definitely_playable(discard.card, player_view):
+                    continue
+                # Don't discard if we have hints about it AND it could be playable
+                # This prevents discarding cards teammates hinted us about
+                if self._has_hints_about_position(discard.card, player_view):
+                    if self._could_be_playable(discard.card, player_view):
+                        continue  # Teammate hinted this, and it could be playable - don't discard
+                safe_discard_moves.append(discard)
+
+            if safe_discard_moves:
+                # Score discards: lower risk = better, older position = better (tiebreak)
+                best_discard = None
+                best_risk = float("inf")
+
+                for discard in safe_discard_moves:
+                    risk = self._get_discard_risk_score(discard.card, player_view)
+                    # Lower position = older card (drawn earlier)
+                    age_bonus = discard.card  # Lower index = older
+                    score = risk - age_bonus * 0.1  # Prefer older cards
+
+                    if score < best_risk:
+                        best_risk = score
+                        best_discard = discard
+
+                if best_discard:
+                    self._last_decision_summary = (
+                        f"Discard card at position {best_discard.card + 1} (least risky, oldest)"
+                    )
+                    return best_discard
+
+        # Rule 6: Give hint that covers most cards, tiebreak by player playing soon
+        # Avoid duplicate hints
+        if hint_moves and self.common_view.hint_tokens > 0:
+            # Filter out duplicate hints
+            non_duplicate_hints = []
+            for hint in hint_moves:
+                if not self._is_duplicate_hint(hint, player_view):
+                    non_duplicate_hints.append(hint)
+
+            # If no non-duplicate hints, still consider all hints (better than nothing)
+            hints_to_consider = non_duplicate_hints if non_duplicate_hints else hint_moves
+
+            best_hint = None
+            best_score = -1
+            num_players = self.game_settings.num_players
+
+            for hint in hints_to_consider:
+                card_count = self._get_hint_card_count(hint, player_view)
+                if card_count > 0:
+                    # Bonus for non-duplicate hints
+                    duplicate_penalty = 0 if hint in non_duplicate_hints else 20
+                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
+                    score = card_count * 10 - turns_until - duplicate_penalty
+                    if score > best_score:
+                        best_score = score
+                        best_hint = hint
+
+            if best_hint:
+                card_count = self._get_hint_card_count(best_hint, player_view)
+                if isinstance(best_hint, ColorHint):
+                    self._last_decision_summary = (
+                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
+                        f"(covers {card_count} cards)"
+                    )
+                else:
+                    self._last_decision_summary = (
+                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (covers {card_count} cards)"
+                    )
+                return best_hint
+
+        # Fallback: return first valid move
+        self._last_decision_summary = "Fallback: first valid move"
+        return valid_moves[0]
+
+    def get_decision_summary(self) -> Optional[str]:
+        """
+        Get a summary of the last decision made.
+
+        Returns:
+            Summary string describing the reasoning, or None if no decision made yet
+        """
+        return self._last_decision_summary
+
     def _get_all_possible_cards(self) -> List[Card]:
         """Get all possible cards in the game from settings."""
         if not self._all_possible_cards:
@@ -464,211 +672,3 @@ class CommonSensePlayer(HintTrackingPlayer):
                     return True
 
         return False
-
-    def play(self, player_view: PlayerView) -> Move:
-        """
-        Make a move using common sense rules.
-
-        Args:
-            player_view: The current view of the game from this player's perspective
-
-        Returns:
-            A move selected using common sense rules
-        """
-        # Update seen cards
-        self._update_seen_cards(player_view)
-
-        # Generate all valid moves
-        valid_moves = generate_all_valid_moves(
-            player_view=player_view,
-            common_view=self.common_view,
-            game_settings=self.game_settings,
-            player_index=self._player_index,
-        )
-
-        # Filter to actually valid moves
-        valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
-
-        if not valid_moves:
-            # Fallback: return a play move
-            hand_size = player_view.own_hand_size
-            return Play(0) if hand_size > 0 else Play(0)
-
-        # Rule 1: Never play a card that could lose a life
-        # EXCEPTION: If a card is definitely playable, it's always safe (all possible cards are playable)
-        safe_play_moves = []
-        for move in valid_moves:
-            if isinstance(move, Play):
-                # If definitely playable, it's always safe (all possible cards are playable)
-                if self._is_card_definitely_playable(move.card, player_view):
-                    safe_play_moves.append(move)
-                elif not self._could_lose_life(move.card, player_view):
-                    safe_play_moves.append(move)
-
-        # Rule 2: Play a 5 to finish a suit (highest priority)
-        finishing_five_moves = []
-        for move in safe_play_moves:
-            if self._is_card_finishing_five(move.card, player_view):
-                finishing_five_moves.append(move)
-
-        if finishing_five_moves:
-            self._last_decision_summary = "Play 5 to finish suit (highest priority)"
-            return finishing_five_moves[0]  # Pick first one
-
-        # Rule 3: Play a playable card
-        # Prioritize cards we've received hints about (teammates are likely hinting us to play them)
-        playable_moves = []
-        hinted_playable_moves = []
-        for move in safe_play_moves:
-            if self._is_card_definitely_playable(move.card, player_view):
-                # Check if we've received hints about this card
-                if self._has_hints_about_position(move.card, player_view):
-                    hinted_playable_moves.append(move)
-                else:
-                    playable_moves.append(move)
-
-        # Prioritize hinted cards
-        if hinted_playable_moves:
-            self._last_decision_summary = "Play hinted playable card"
-            return hinted_playable_moves[0]  # Pick first one
-
-        if playable_moves:
-            self._last_decision_summary = "Play safe playable card"
-            return playable_moves[0]  # Pick first one
-
-        # Rule 4: Hint that identifies most new playable cards, tiebreak by player playing soon
-        # Avoid duplicate hints (don't give hints teammates already have)
-        hint_moves = [m for m in valid_moves if isinstance(m, (ColorHint, NumberHint))]
-        if hint_moves and self.common_view.hint_tokens > 0:
-            # Filter out duplicate hints
-            non_duplicate_hints = []
-            for hint in hint_moves:
-                if not self._is_duplicate_hint(hint, player_view):
-                    non_duplicate_hints.append(hint)
-
-            # If no non-duplicate hints, still consider all hints (better than nothing)
-            hints_to_consider = non_duplicate_hints if non_duplicate_hints else hint_moves
-
-            # Score hints by number of new playable cards
-            best_hint = None
-            best_score = -1
-            num_players = self.game_settings.num_players
-
-            for hint in hints_to_consider:
-                playable_count = self._count_new_playable_cards_from_hint(hint, player_view)
-                if playable_count > 0:
-                    # Score = playable_count * 100 - turns_until_player
-                    # Bonus for non-duplicate hints
-                    duplicate_penalty = 0 if hint in non_duplicate_hints else 50
-                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
-                    score = playable_count * 100 - turns_until - duplicate_penalty
-                    if score > best_score:
-                        best_score = score
-                        best_hint = hint
-
-            if best_hint:
-                playable_count = self._count_new_playable_cards_from_hint(best_hint, player_view)
-                if isinstance(best_hint, ColorHint):
-                    self._last_decision_summary = (
-                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
-                        f"(identifies {playable_count} new playable cards)"
-                    )
-                else:
-                    self._last_decision_summary = (
-                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} "
-                        f"(identifies {playable_count} new playable cards)"
-                    )
-                return best_hint
-
-        # Rule 5: Discard least risky card, tiebreak by oldest
-        # NEVER discard a card that is definitely playable
-        # NEVER discard a card that we have hints about AND could be playable
-        # (If teammate hinted us about a card, they likely want us to play it)
-        if self.common_view.hint_tokens < self.game_settings.max_hint_tokens:
-            discard_moves = [m for m in valid_moves if isinstance(m, Discard)]
-            # Filter out playable cards - never discard cards we know are playable
-            safe_discard_moves = []
-            for discard in discard_moves:
-                # Don't discard if definitely playable
-                if self._is_card_definitely_playable(discard.card, player_view):
-                    continue
-                # Don't discard if we have hints about it AND it could be playable
-                # This prevents discarding cards teammates hinted us about
-                if self._has_hints_about_position(discard.card, player_view):
-                    if self._could_be_playable(discard.card, player_view):
-                        continue  # Teammate hinted this, and it could be playable - don't discard
-                safe_discard_moves.append(discard)
-
-            if safe_discard_moves:
-                # Score discards: lower risk = better, older position = better (tiebreak)
-                best_discard = None
-                best_risk = float("inf")
-
-                for discard in safe_discard_moves:
-                    risk = self._get_discard_risk_score(discard.card, player_view)
-                    # Lower position = older card (drawn earlier)
-                    age_bonus = discard.card  # Lower index = older
-                    score = risk - age_bonus * 0.1  # Prefer older cards
-
-                    if score < best_risk:
-                        best_risk = score
-                        best_discard = discard
-
-                if best_discard:
-                    self._last_decision_summary = (
-                        f"Discard card at position {best_discard.card + 1} (least risky, oldest)"
-                    )
-                    return best_discard
-
-        # Rule 6: Give hint that covers most cards, tiebreak by player playing soon
-        # Avoid duplicate hints
-        if hint_moves and self.common_view.hint_tokens > 0:
-            # Filter out duplicate hints
-            non_duplicate_hints = []
-            for hint in hint_moves:
-                if not self._is_duplicate_hint(hint, player_view):
-                    non_duplicate_hints.append(hint)
-
-            # If no non-duplicate hints, still consider all hints (better than nothing)
-            hints_to_consider = non_duplicate_hints if non_duplicate_hints else hint_moves
-
-            best_hint = None
-            best_score = -1
-            num_players = self.game_settings.num_players
-
-            for hint in hints_to_consider:
-                card_count = self._get_hint_card_count(hint, player_view)
-                if card_count > 0:
-                    # Bonus for non-duplicate hints
-                    duplicate_penalty = 0 if hint in non_duplicate_hints else 20
-                    turns_until = self._get_turns_until_player(hint.teammate, self._player_index, num_players)
-                    score = card_count * 10 - turns_until - duplicate_penalty
-                    if score > best_score:
-                        best_score = score
-                        best_hint = hint
-
-            if best_hint:
-                card_count = self._get_hint_card_count(best_hint, player_view)
-                if isinstance(best_hint, ColorHint):
-                    self._last_decision_summary = (
-                        f"Hint color {best_hint.color.name.lower()} to P{best_hint.teammate + 1} "
-                        f"(covers {card_count} cards)"
-                    )
-                else:
-                    self._last_decision_summary = (
-                        f"Hint number {best_hint.number.value} to P{best_hint.teammate + 1} (covers {card_count} cards)"
-                    )
-                return best_hint
-
-        # Fallback: return first valid move
-        self._last_decision_summary = "Fallback: first valid move"
-        return valid_moves[0]
-
-    def get_decision_summary(self) -> Optional[str]:
-        """
-        Get a summary of the last decision made.
-
-        Returns:
-            Summary string describing the reasoning, or None if no decision made yet
-        """
-        return self._last_decision_summary

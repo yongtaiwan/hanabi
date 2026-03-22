@@ -14,36 +14,52 @@ from hanabi.core.moves import Move, ColorHint, NumberHint
 class Colors:
     """ANSI color codes for terminal output."""
 
-    # Reset
     RESET = "\033[0m"
 
-    # Text colors
     BLACK = "\033[30m"
+
     RED = "\033[31m"
+
     GREEN = "\033[32m"
+
     YELLOW = "\033[33m"
+
     BLUE = "\033[34m"
+
     MAGENTA = "\033[35m"
+
     CYAN = "\033[36m"
+
     WHITE = "\033[37m"
 
-    # Bright colors
     BRIGHT_BLACK = "\033[90m"
+
     BRIGHT_RED = "\033[91m"
+
     BRIGHT_GREEN = "\033[92m"
+
     BRIGHT_YELLOW = "\033[93m"
+
     BRIGHT_BLUE = "\033[94m"
+
     BRIGHT_MAGENTA = "\033[95m"
+
     BRIGHT_CYAN = "\033[96m"
+
     BRIGHT_WHITE = "\033[97m"
 
-    # Background colors
     BG_RED = "\033[41m"
+
     BG_GREEN = "\033[42m"
+
     BG_YELLOW = "\033[43m"
+
     BG_BLUE = "\033[44m"
+
     BG_MAGENTA = "\033[45m"
+
     BG_CYAN = "\033[46m"
+
     BG_WHITE = "\033[47m"
 
 
@@ -63,6 +79,225 @@ class ConsoleDisplay:
         self._all_moves: List[tuple[int, Move, int]] = []  # List of (player_index, move, turn_number) tuples
         self._last_player_turn: Dict[int, int] = {}  # Track last turn number for each player
 
+    def clear_screen(self) -> None:
+        """Clear the console screen."""
+        os.system("cls" if "nt" == os.name else "clear")
+
+    def display_game_state(self, game: Game, player_index: int) -> None:
+        """
+        Display the game state from a player's perspective.
+
+        Args:
+            game: The game instance
+            player_index: Index of the current player
+        """
+        state = game.state
+        common_view = state.common_view
+        settings = game.settings
+
+        print("\n" + "=" * 70)
+        print(f"{Colors.BRIGHT_CYAN}HANABI - Player {player_index + 1}'s Turn{Colors.RESET}")
+        print("=" * 70)
+
+        # Display moves from previous round (all players' moves since this player's last turn)
+        self._display_previous_round_moves(player_index)
+
+        # Display tokens
+        self._display_tokens(common_view, settings)
+
+        # Display current score
+        current_score = game.get_score()
+        max_score = 25  # Perfect score
+        print(f"\n{Colors.BRIGHT_WHITE}Current Score: {Colors.BRIGHT_CYAN}{current_score}/{max_score}{Colors.RESET}")
+
+        # Display fireworks (played cards)
+        self._display_fireworks(common_view)
+
+        # Display discard pile details (reconstruct from common view)
+        discard_pile = []
+        for color, suit in common_view.cards_discarded.items():
+            for number, count in suit.cards.items():
+                for _ in range(count):
+                    discard_pile.append(Card(color, number))
+        self._display_discard_pile(discard_pile)
+
+        # Display draw deck count (make it more visible)
+        deck_count = common_view.cards_to_draw
+        if 0 == deck_count:
+            # Deck is exhausted - show warning
+            # Check if this is the final turn phase (deck exhausted but game not finished)
+            if not game.is_finished:
+                # Other players get their final turn
+                print(f"\n{Colors.BRIGHT_RED}⚠️  Draw deck is empty! This is your FINAL TURN! ⚠️{Colors.RESET}")
+            else:
+                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  Draw deck is empty. Final turn phase.{Colors.RESET}")
+            print(f"{Colors.BRIGHT_CYAN}Draw Deck: {deck_count} cards{Colors.RESET}")
+        else:
+            print(f"\n{Colors.BRIGHT_CYAN}Draw Deck: {deck_count} cards{Colors.RESET}")
+
+        # Display other players' hands (starting from the next player)
+        print(f"\n{Colors.BRIGHT_WHITE}Other Players' Hands:{Colors.RESET}")
+        # Get player view directly from state (same as _get_player_view but we can access it here)
+        from hanabi.core.game import PlayerView
+
+        state = game.state
+        teammates: Dict[int, Hand] = {}
+        for i, hand in enumerate(state.player_hands):
+            if i != player_index:
+                teammates[i] = hand
+        own_hand_size = len(state.player_hands[player_index].cards)
+        player_view = PlayerView(teammates, own_hand_size)
+        num_players = game.settings.num_players
+
+        # Reorder teammates to start from the next player after current player
+        teammates_list = list(player_view.teammates.items())
+        ordered_teammates = []
+
+        # Start from the next player (player_index + 1) and wrap around
+        for offset in range(1, num_players):
+            other_idx = (player_index + offset) % num_players
+            if other_idx in player_view.teammates:
+                ordered_teammates.append((other_idx, player_view.teammates[other_idx]))
+
+        # Display in the reordered sequence
+        for other_idx, hand in ordered_teammates:
+            self._display_other_player_hand(other_idx, hand)
+
+        # Display current player's hand with hints
+        print(f"\n{Colors.BRIGHT_WHITE}Your Hand:{Colors.RESET}")
+        own_hand = state.player_hands[player_index]
+        from hanabi.core.player import HintTrackingPlayer
+
+        player = game.team.players[player_index]
+        player_hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
+        self._display_own_hand_with_hints(own_hand, player_hints)
+
+        print("\n" + "=" * 70)
+
+    def display_available_moves(self, game: Game, player_index: int) -> None:
+        """Display available moves for the current player."""
+        state = game.state
+        common_view = state.common_view
+        hand = state.player_hands[player_index]
+        num_players = game.settings.num_players
+
+        print(f"\n{Colors.BRIGHT_WHITE}Available Moves:{Colors.RESET}")
+
+        # Play a card
+        if hand.cards:
+            print(
+                f"  {Colors.BRIGHT_GREEN}p<index> or play <index>{Colors.RESET} - "
+                f"Play a card (indices 1-{len(hand.cards)})"
+            )
+            print(f"    Examples: {Colors.BRIGHT_GREEN}p1{Colors.RESET}, {Colors.BRIGHT_GREEN}play 1{Colors.RESET}")
+
+        # Discard a card (only available if hint tokens are not at maximum)
+        if hand.cards and common_view.hint_tokens < game.settings.max_hint_tokens:
+            print(
+                f"  {Colors.BRIGHT_YELLOW}d<index> or discard <index>{Colors.RESET} - "
+                f"Discard a card (indices 1-{len(hand.cards)})"
+            )
+            print(
+                f"    Examples: {Colors.BRIGHT_YELLOW}d2{Colors.RESET}, {Colors.BRIGHT_YELLOW}discard 2{Colors.RESET}"
+            )
+        elif hand.cards and common_view.hint_tokens >= game.settings.max_hint_tokens:
+            print(f"  {Colors.BRIGHT_BLACK}discard (not available - hint tokens at maximum){Colors.RESET}")
+
+        # Give a hint
+        if common_view.hint_tokens > 0:
+            if 2 == num_players:
+                print(f"  {Colors.BRIGHT_CYAN}h<value>{Colors.RESET} - Give a hint to other player")
+                print(
+                    f"    Examples: {Colors.BRIGHT_CYAN}h3{Colors.RESET} (number 3), "
+                    f"{Colors.BRIGHT_CYAN}hr{Colors.RESET} (red), {Colors.BRIGHT_CYAN}hy{Colors.RESET} (yellow)"
+                )
+            else:
+                print(
+                    f"  {Colors.BRIGHT_CYAN}h<player><value> or hint <player> <color|number> "
+                    f"<value>{Colors.RESET}"
+                )
+                print(
+                    f"    Examples: {Colors.BRIGHT_CYAN}h23{Colors.RESET} (player 2, number 3), "
+                    f"{Colors.BRIGHT_CYAN}h1r{Colors.RESET} (player 1, red)"
+                )
+                print(
+                    f"    Available players: {', '.join(str(i + 1) for i in range(num_players) if i != player_index)}"
+                )
+        else:
+            print(f"  {Colors.BRIGHT_BLACK}hint (not available - no hint tokens){Colors.RESET}")
+
+    def display_move_result(self, success: bool, message: str) -> None:
+        """Display the result of a move."""
+        # Colorize the message content
+        colorized_msg = self._colorize_message(message)
+
+        if success:
+            # Wrap in green for success, but message itself is already colorized
+            print(f"\n{Colors.BRIGHT_GREEN}{colorized_msg}{Colors.RESET}\n")
+        else:
+            # Wrap in red for error, but message itself is already colorized
+            print(f"\n{Colors.BRIGHT_RED}{colorized_msg}{Colors.RESET}\n")
+
+    def display_game_end(self, game: Game) -> None:
+        """Display game end information with score and rating."""
+        state = game.state
+        score = game.get_score()
+        max_score = 25  # Perfect score
+
+        print("\n" + "=" * 70)
+        print(f"{Colors.BRIGHT_CYAN}GAME OVER{Colors.RESET}")
+        print("=" * 70)
+
+        # Determine game end reason and score comment
+        if state.common_view.live_tokens <= 0:
+            end_reason = f"{Colors.BRIGHT_RED}You lost! Ran out of life tokens.{Colors.RESET}"
+        elif score == max_score:
+            end_reason = f"{Colors.BRIGHT_GREEN}Perfect Score! All fireworks completed!{Colors.RESET}"
+        elif game.settings.auto_end_when_no_points_possible and state._is_no_more_points_possible():
+            end_reason = (
+                f"{Colors.BRIGHT_YELLOW}Game ended. No more points possible (all needed cards discarded).{Colors.RESET}"
+            )
+        else:
+            end_reason = f"{Colors.BRIGHT_YELLOW}Game ended.{Colors.RESET}"
+
+        print(end_reason)
+        print()
+
+        # Display score with rating comment
+        score_comment = self._get_score_comment(score, max_score)
+        print(f"{Colors.BRIGHT_WHITE}Final Score: {Colors.BRIGHT_CYAN}{score}/{max_score}{Colors.RESET}")
+        print(f"{Colors.BRIGHT_WHITE}Rating: {score_comment}{Colors.RESET}")
+        print()
+
+        # Display final fireworks
+        self._display_fireworks(state.common_view)
+        print("=" * 70 + "\n")
+
+    def record_move(self, player_index: int, move: Move, turn_number: int) -> None:
+        """
+        Record a move for tracking previous round moves.
+
+        Args:
+            player_index: Index of the player who made the move
+            move: The move that was made
+            turn_number: Turn number when the move was made
+        """
+        # Record this move with turn number
+        self._all_moves.append((player_index, move, turn_number))
+        # Update last turn: store the turn number BEFORE this move
+        # So when the player comes back, we show moves with turn > (turn_number - 1)
+        # This includes their own move from the previous turn
+        self._last_player_turn[player_index] = turn_number - 1
+
+    def clear_previous_round_moves(self) -> None:
+        """Clear the previous round moves (e.g., at start of new game)."""
+        self._all_moves = []
+        self._last_player_turn = {}
+
+    def display_prompt(self, player_index: int) -> None:
+        """Display input prompt."""
+        print(f"{Colors.BRIGHT_CYAN}Player {player_index + 1}, enter your move: {Colors.RESET}", end="")
+
     def _supports_colors(self) -> bool:
         """Check if terminal supports colors."""
         return hasattr(os, "isatty") and os.isatty(1)
@@ -80,10 +315,6 @@ class ConsoleDisplay:
             Color.WHITE: Colors.BRIGHT_WHITE,
             Color.MULTI: Colors.BRIGHT_MAGENTA,
         }
-
-    def clear_screen(self) -> None:
-        """Clear the console screen."""
-        os.system("cls" if "nt" == os.name else "clear")
 
     def _card_to_short_notation(self, card_str: str) -> str:
         """
@@ -276,97 +507,6 @@ class ConsoleDisplay:
         )
 
         return result
-
-    def display_game_state(self, game: Game, player_index: int) -> None:
-        """
-        Display the game state from a player's perspective.
-
-        Args:
-            game: The game instance
-            player_index: Index of the current player
-        """
-        state = game.state
-        common_view = state.common_view
-        settings = game.settings
-
-        print("\n" + "=" * 70)
-        print(f"{Colors.BRIGHT_CYAN}HANABI - Player {player_index + 1}'s Turn{Colors.RESET}")
-        print("=" * 70)
-
-        # Display moves from previous round (all players' moves since this player's last turn)
-        self._display_previous_round_moves(player_index)
-
-        # Display tokens
-        self._display_tokens(common_view, settings)
-
-        # Display current score
-        current_score = game.get_score()
-        max_score = 25  # Perfect score
-        print(f"\n{Colors.BRIGHT_WHITE}Current Score: {Colors.BRIGHT_CYAN}{current_score}/{max_score}{Colors.RESET}")
-
-        # Display fireworks (played cards)
-        self._display_fireworks(common_view)
-
-        # Display discard pile details (reconstruct from common view)
-        discard_pile = []
-        for color, suit in common_view.cards_discarded.items():
-            for number, count in suit.cards.items():
-                for _ in range(count):
-                    discard_pile.append(Card(color, number))
-        self._display_discard_pile(discard_pile)
-
-        # Display draw deck count (make it more visible)
-        deck_count = common_view.cards_to_draw
-        if 0 == deck_count:
-            # Deck is exhausted - show warning
-            # Check if this is the final turn phase (deck exhausted but game not finished)
-            if not game.is_finished:
-                # Other players get their final turn
-                print(f"\n{Colors.BRIGHT_RED}⚠️  Draw deck is empty! This is your FINAL TURN! ⚠️{Colors.RESET}")
-            else:
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  Draw deck is empty. Final turn phase.{Colors.RESET}")
-            print(f"{Colors.BRIGHT_CYAN}Draw Deck: {deck_count} cards{Colors.RESET}")
-        else:
-            print(f"\n{Colors.BRIGHT_CYAN}Draw Deck: {deck_count} cards{Colors.RESET}")
-
-        # Display other players' hands (starting from the next player)
-        print(f"\n{Colors.BRIGHT_WHITE}Other Players' Hands:{Colors.RESET}")
-        # Get player view directly from state (same as _get_player_view but we can access it here)
-        from hanabi.core.game import PlayerView
-
-        state = game.state
-        teammates: Dict[int, Hand] = {}
-        for i, hand in enumerate(state.player_hands):
-            if i != player_index:
-                teammates[i] = hand
-        own_hand_size = len(state.player_hands[player_index].cards)
-        player_view = PlayerView(teammates, own_hand_size)
-        num_players = game.settings.num_players
-
-        # Reorder teammates to start from the next player after current player
-        teammates_list = list(player_view.teammates.items())
-        ordered_teammates = []
-
-        # Start from the next player (player_index + 1) and wrap around
-        for offset in range(1, num_players):
-            other_idx = (player_index + offset) % num_players
-            if other_idx in player_view.teammates:
-                ordered_teammates.append((other_idx, player_view.teammates[other_idx]))
-
-        # Display in the reordered sequence
-        for other_idx, hand in ordered_teammates:
-            self._display_other_player_hand(other_idx, hand)
-
-        # Display current player's hand with hints
-        print(f"\n{Colors.BRIGHT_WHITE}Your Hand:{Colors.RESET}")
-        own_hand = state.player_hands[player_index]
-        from hanabi.core.player import HintTrackingPlayer
-
-        player = game.team.players[player_index]
-        player_hints = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
-        self._display_own_hand_with_hints(own_hand, player_hints)
-
-        print("\n" + "=" * 70)
 
     def _display_tokens(self, common_view: CommonView, settings: GameSettings) -> None:
         """Display hint and life tokens with emojis (uniform width with spacing)."""
@@ -568,105 +708,6 @@ class ConsoleDisplay:
         # This can be added later if needed
         pass
 
-    def display_available_moves(self, game: Game, player_index: int) -> None:
-        """Display available moves for the current player."""
-        state = game.state
-        common_view = state.common_view
-        hand = state.player_hands[player_index]
-        num_players = game.settings.num_players
-
-        print(f"\n{Colors.BRIGHT_WHITE}Available Moves:{Colors.RESET}")
-
-        # Play a card
-        if hand.cards:
-            print(
-                f"  {Colors.BRIGHT_GREEN}p<index> or play <index>{Colors.RESET} - "
-                f"Play a card (indices 1-{len(hand.cards)})"
-            )
-            print(f"    Examples: {Colors.BRIGHT_GREEN}p1{Colors.RESET}, {Colors.BRIGHT_GREEN}play 1{Colors.RESET}")
-
-        # Discard a card (only available if hint tokens are not at maximum)
-        if hand.cards and common_view.hint_tokens < game.settings.max_hint_tokens:
-            print(
-                f"  {Colors.BRIGHT_YELLOW}d<index> or discard <index>{Colors.RESET} - "
-                f"Discard a card (indices 1-{len(hand.cards)})"
-            )
-            print(
-                f"    Examples: {Colors.BRIGHT_YELLOW}d2{Colors.RESET}, {Colors.BRIGHT_YELLOW}discard 2{Colors.RESET}"
-            )
-        elif hand.cards and common_view.hint_tokens >= game.settings.max_hint_tokens:
-            print(f"  {Colors.BRIGHT_BLACK}discard (not available - hint tokens at maximum){Colors.RESET}")
-
-        # Give a hint
-        if common_view.hint_tokens > 0:
-            if 2 == num_players:
-                print(f"  {Colors.BRIGHT_CYAN}h<value>{Colors.RESET} - Give a hint to other player")
-                print(
-                    f"    Examples: {Colors.BRIGHT_CYAN}h3{Colors.RESET} (number 3), "
-                    f"{Colors.BRIGHT_CYAN}hr{Colors.RESET} (red), {Colors.BRIGHT_CYAN}hy{Colors.RESET} (yellow)"
-                )
-            else:
-                print(
-                    f"  {Colors.BRIGHT_CYAN}h<player><value> or hint <player> <color|number> "
-                    f"<value>{Colors.RESET}"
-                )
-                print(
-                    f"    Examples: {Colors.BRIGHT_CYAN}h23{Colors.RESET} (player 2, number 3), "
-                    f"{Colors.BRIGHT_CYAN}h1r{Colors.RESET} (player 1, red)"
-                )
-                print(
-                    f"    Available players: {', '.join(str(i + 1) for i in range(num_players) if i != player_index)}"
-                )
-        else:
-            print(f"  {Colors.BRIGHT_BLACK}hint (not available - no hint tokens){Colors.RESET}")
-
-    def display_move_result(self, success: bool, message: str) -> None:
-        """Display the result of a move."""
-        # Colorize the message content
-        colorized_msg = self._colorize_message(message)
-
-        if success:
-            # Wrap in green for success, but message itself is already colorized
-            print(f"\n{Colors.BRIGHT_GREEN}{colorized_msg}{Colors.RESET}\n")
-        else:
-            # Wrap in red for error, but message itself is already colorized
-            print(f"\n{Colors.BRIGHT_RED}{colorized_msg}{Colors.RESET}\n")
-
-    def display_game_end(self, game: Game) -> None:
-        """Display game end information with score and rating."""
-        state = game.state
-        score = game.get_score()
-        max_score = 25  # Perfect score
-
-        print("\n" + "=" * 70)
-        print(f"{Colors.BRIGHT_CYAN}GAME OVER{Colors.RESET}")
-        print("=" * 70)
-
-        # Determine game end reason and score comment
-        if state.common_view.live_tokens <= 0:
-            end_reason = f"{Colors.BRIGHT_RED}You lost! Ran out of life tokens.{Colors.RESET}"
-        elif score == max_score:
-            end_reason = f"{Colors.BRIGHT_GREEN}Perfect Score! All fireworks completed!{Colors.RESET}"
-        elif game.settings.auto_end_when_no_points_possible and state._is_no_more_points_possible():
-            end_reason = (
-                f"{Colors.BRIGHT_YELLOW}Game ended. No more points possible (all needed cards discarded).{Colors.RESET}"
-            )
-        else:
-            end_reason = f"{Colors.BRIGHT_YELLOW}Game ended.{Colors.RESET}"
-
-        print(end_reason)
-        print()
-
-        # Display score with rating comment
-        score_comment = self._get_score_comment(score, max_score)
-        print(f"{Colors.BRIGHT_WHITE}Final Score: {Colors.BRIGHT_CYAN}{score}/{max_score}{Colors.RESET}")
-        print(f"{Colors.BRIGHT_WHITE}Rating: {score_comment}{Colors.RESET}")
-        print()
-
-        # Display final fireworks
-        self._display_fireworks(state.common_view)
-        print("=" * 70 + "\n")
-
     def _get_score_comment(self, score: int, max_score: int) -> str:
         """
         Get a comment/rating based on the final score.
@@ -691,22 +732,6 @@ class ConsoleDisplay:
             return f"{Colors.YELLOW}mediocre, just a hint of scattered applause...{Colors.RESET}"
         else:
             return f"{Colors.BRIGHT_BLACK}horrible, booed by the crowd...{Colors.RESET}"
-
-    def record_move(self, player_index: int, move: Move, turn_number: int) -> None:
-        """
-        Record a move for tracking previous round moves.
-
-        Args:
-            player_index: Index of the player who made the move
-            move: The move that was made
-            turn_number: Turn number when the move was made
-        """
-        # Record this move with turn number
-        self._all_moves.append((player_index, move, turn_number))
-        # Update last turn: store the turn number BEFORE this move
-        # So when the player comes back, we show moves with turn > (turn_number - 1)
-        # This includes their own move from the previous turn
-        self._last_player_turn[player_index] = turn_number - 1
 
     def _display_previous_round_moves(self, current_player_index: int) -> None:
         """
@@ -775,12 +800,3 @@ class ConsoleDisplay:
                 f"(cards: {cards_str})"
             )
         assert False, f"unexpected move type in _format_move_for_display: {type(move)}"
-
-    def clear_previous_round_moves(self) -> None:
-        """Clear the previous round moves (e.g., at start of new game)."""
-        self._all_moves = []
-        self._last_player_turn = {}
-
-    def display_prompt(self, player_index: int) -> None:
-        """Display input prompt."""
-        print(f"{Colors.BRIGHT_CYAN}Player {player_index + 1}, enter your move: {Colors.RESET}", end="")

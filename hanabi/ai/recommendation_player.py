@@ -43,10 +43,6 @@ class RecommendationPlayer(BasePlayer):
     Only for standard 5-player games (4 cards per hand).
     """
 
-    @classmethod
-    def supports_game_settings(cls, game_settings: GameSettings) -> bool:
-        return game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION
-
     def __init__(self, player_index: int):
         super().__init__(player_index)
         self._last_hint_value: Optional[int] = None
@@ -55,6 +51,10 @@ class RecommendationPlayer(BasePlayer):
         self._last_decision_summary: Optional[str] = None
         # Decoded recommendation at hint time (state when hint was given); used until next hint.
         self._my_decoded_recommendation: Optional[int] = None
+
+    @classmethod
+    def supports_game_settings(cls, game_settings: GameSettings) -> bool:
+        return game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
         assert game_settings.num_players == NUM_PLAYERS_FOR_RECOMMENDATION, (
@@ -73,6 +73,30 @@ class RecommendationPlayer(BasePlayer):
     def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=0)
+
+    def play(self, player_view: PlayerView) -> Move:
+        assert 4 == player_view.own_hand_size
+        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
+
+        recommendation = self._get_my_recommendation()
+
+        move = (
+            self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
+            or self._try_give_encoded_hint(player_view)
+            or self._try_follow_discard_recommendation(player_view, recommendation)
+            or self._try_discard_c1(player_view)
+        )
+        assert move is not None, (
+            "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"
+        )
+        assert self.is_move_legal(player_view, move), (
+            "RecommendationPlayer should never choose an illegal move"
+        )
+        return move
+
+    def get_decision_summary(self) -> Optional[str]:
+        """Return a short explanation of the last move for console/GUI display."""
+        return self._last_decision_summary
 
     def _observe_recommendation_hint(
         self,
@@ -261,26 +285,6 @@ class RecommendationPlayer(BasePlayer):
         )
         return Discard(3)
 
-    def play(self, player_view: PlayerView) -> Move:
-        assert 4 == player_view.own_hand_size
-        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
-
-        recommendation = self._get_my_recommendation()
-
-        move = (
-            self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
-            or self._try_give_encoded_hint(player_view)
-            or self._try_follow_discard_recommendation(player_view, recommendation)
-            or self._try_discard_c1(player_view)
-        )
-        assert move is not None, (
-            "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"
-        )
-        assert self.is_move_legal(player_view, move), (
-            "RecommendationPlayer should never choose an illegal move"
-        )
-        return move
-
     def _compute_hint(self, player_view: PlayerView) -> Move:
         """
         Build the rank or color hint that encodes (sum of others' recommendations) mod 8.
@@ -322,7 +326,3 @@ class RecommendationPlayer(BasePlayer):
             if indices:
                 return ColorHint(target, indices, color)
         assert False, "non-empty standard hand has a non-MULTI suit; encoding color hint should exist"
-
-    def get_decision_summary(self) -> Optional[str]:
-        """Return a short explanation of the last move for console/GUI display."""
-        return self._last_decision_summary

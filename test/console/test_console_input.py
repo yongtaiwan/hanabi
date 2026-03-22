@@ -104,8 +104,6 @@ class TestConsoleInput(unittest.TestCase):
         # This is tricky - we'd need to know the hand contents
         # For now, just test the structure
         move, error = self.input_parser.parse_move(0, "hint 2 color MULTI")
-        # Either succeeds (if MULTI exists) or fails (if it doesn't)
-        # Both are valid outcomes
 
     def test_parse_unknown_command(self):
         """Test parsing unknown command."""

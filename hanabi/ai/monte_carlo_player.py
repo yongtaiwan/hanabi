@@ -180,32 +180,6 @@ class MCGameState:
 
         return False
 
-    def _is_no_more_points_possible(self) -> bool:
-        """Check if no more points are possible."""
-        for color in [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]:
-            # Determine next card needed
-            if color in self._cards_played:
-                current_highest = self._cards_played[color]
-                if current_highest == Number.FIVE:
-                    continue  # Complete
-                next_needed = Number(current_highest.value + 1)
-            else:
-                next_needed = Number.ONE
-
-            # Get total count from settings
-            suit = self._settings.cards.get(color)
-            assert suit is not None, f"Suit for color {color} should exist in game settings"
-            total_count = suit.cards.get(next_needed, 0)
-
-            # Count discarded
-            discarded_count = self._cards_discarded.get(color, {}).get(next_needed, 0)
-
-            # If not all copies discarded, can still progress
-            if discarded_count < total_count:
-                return False
-
-        return True
-
     def score(self) -> int:
         """Calculate current game score."""
         score = 0
@@ -232,6 +206,72 @@ class MCGameState:
             self._apply_hint(player_index, move)
         else:
             assert False, f"Unknown move type: {type(move)}"
+
+    def to_player_view(self, player_index: int) -> PlayerView:
+        """Convert to PlayerView for a specific player."""
+        from hanabi.core.game import Hand
+
+        teammates: Dict[int, Hand] = {}
+        for i, hand in enumerate(self._hands):
+            if i != player_index:
+                teammates[i] = Hand(hand.copy())
+
+        own_hand_size = len(self._hands[player_index])
+        return PlayerView(teammates, own_hand_size)
+
+    def to_common_view(self) -> CommonView:
+        """Convert to CommonView."""
+        from hanabi.core.game import CommonView
+
+        # Convert cards_discarded to Suit format
+        discarded_suits: Dict[Color, Suit] = {}
+        for color, counts in self._cards_discarded.items():
+            discarded_suits[color] = Suit(counts.copy())
+
+        return CommonView(
+            live_tokens=self._live_tokens,
+            hint_tokens=self._hint_tokens,
+            cards_to_draw=self._cards_to_draw,
+            cards_discarded=discarded_suits,
+            cards_played=self._cards_played.copy(),
+        )
+
+    def generate_valid_moves(self) -> List[Move]:
+        """Generate valid moves for current player."""
+        player_view = self.to_player_view(self._current_player)
+        common_view = self.to_common_view()
+        return generate_all_valid_moves(
+            player_view=player_view,
+            common_view=common_view,
+            game_settings=self._settings,
+            player_index=self._current_player,
+        )
+
+    def _is_no_more_points_possible(self) -> bool:
+        """Check if no more points are possible."""
+        for color in [Color.WHITE, Color.RED, Color.YELLOW, Color.GREEN, Color.BLUE]:
+            # Determine next card needed
+            if color in self._cards_played:
+                current_highest = self._cards_played[color]
+                if current_highest == Number.FIVE:
+                    continue  # Complete
+                next_needed = Number(current_highest.value + 1)
+            else:
+                next_needed = Number.ONE
+
+            # Get total count from settings
+            suit = self._settings.cards.get(color)
+            assert suit is not None, f"Suit for color {color} should exist in game settings"
+            total_count = suit.cards.get(next_needed, 0)
+
+            # Count discarded
+            discarded_count = self._cards_discarded.get(color, {}).get(next_needed, 0)
+
+            # If not all copies discarded, can still progress
+            if discarded_count < total_count:
+                return False
+
+        return True
 
     def _apply_play(self, player_index: int, move: Play) -> None:
         """Apply a play move."""
@@ -317,46 +357,6 @@ class MCGameState:
         if card.number not in self._cards_discarded[card.color]:
             self._cards_discarded[card.color][card.number] = 0
         self._cards_discarded[card.color][card.number] += 1
-
-    def to_player_view(self, player_index: int) -> PlayerView:
-        """Convert to PlayerView for a specific player."""
-        from hanabi.core.game import Hand
-
-        teammates: Dict[int, Hand] = {}
-        for i, hand in enumerate(self._hands):
-            if i != player_index:
-                teammates[i] = Hand(hand.copy())
-
-        own_hand_size = len(self._hands[player_index])
-        return PlayerView(teammates, own_hand_size)
-
-    def to_common_view(self) -> CommonView:
-        """Convert to CommonView."""
-        from hanabi.core.game import CommonView
-
-        # Convert cards_discarded to Suit format
-        discarded_suits: Dict[Color, Suit] = {}
-        for color, counts in self._cards_discarded.items():
-            discarded_suits[color] = Suit(counts.copy())
-
-        return CommonView(
-            live_tokens=self._live_tokens,
-            hint_tokens=self._hint_tokens,
-            cards_to_draw=self._cards_to_draw,
-            cards_discarded=discarded_suits,
-            cards_played=self._cards_played.copy(),
-        )
-
-    def generate_valid_moves(self) -> List[Move]:
-        """Generate valid moves for current player."""
-        player_view = self.to_player_view(self._current_player)
-        common_view = self.to_common_view()
-        return generate_all_valid_moves(
-            player_view=player_view,
-            common_view=common_view,
-            game_settings=self._settings,
-            player_index=self._current_player,
-        )
 
 
 class MonteCarloPlayer(HintTrackingPlayer):
@@ -450,6 +450,15 @@ class MonteCarloPlayer(HintTrackingPlayer):
         best_move = self._evaluate_moves_monte_carlo(player_view, candidate_moves)
 
         return best_move
+
+    def get_decision_summary(self) -> Optional[str]:
+        """
+        Get a summary of the last decision made (top 3 actions and their avg scores).
+
+        Returns:
+            Summary string describing top 3 moves with scores, or None if no decision made yet
+        """
+        return self._last_decision_summary
 
     def _evaluate_moves_monte_carlo(self, player_view: PlayerView, moves: List[Move]) -> Move:
         """
@@ -691,15 +700,6 @@ class MonteCarloPlayer(HintTrackingPlayer):
             return f"hint P{move.teammate + 1} {move.number.value}"
         else:
             return str(move)
-
-    def get_decision_summary(self) -> Optional[str]:
-        """
-        Get a summary of the last decision made (top 3 actions and their avg scores).
-
-        Returns:
-            Summary string describing top 3 moves with scores, or None if no decision made yet
-        """
-        return self._last_decision_summary
 
     def _run_one_world_batch(
         self,

@@ -334,7 +334,6 @@ class TestGUIStress(unittest.TestCase):
         # Discard button should not be available
         display._selected_card = 0
         display._update_action_buttons()
-        # Should not crash
 
     def test_play_button_with_no_selection(self):
         """Test play button when no card is selected."""
@@ -351,7 +350,6 @@ class TestGUIStress(unittest.TestCase):
         # Try to play with no selection
         display._selected_card = None
         display._on_play_clicked()
-        # Should show warning but not crash
 
     def test_discard_button_with_no_selection(self):
         """Test discard button when no card is selected."""
@@ -368,7 +366,6 @@ class TestGUIStress(unittest.TestCase):
         # Try to discard with no selection
         display._selected_card = None
         display._on_discard_clicked()
-        # Should show warning but not crash
 
     def test_hint_mode_with_no_target(self):
         """Test hint mode when no valid target exists."""
@@ -391,7 +388,6 @@ class TestGUIStress(unittest.TestCase):
 
         # Try to click on current player's own card (invalid)
         input_handler._on_hint_target_selected(0, 0)
-        # Should handle gracefully
 
     def test_display_with_different_player_counts(self):
         """Test display with different numbers of players."""

@@ -28,6 +28,9 @@ class Hint(Move):
         self._teammate = teammate
         self._cards = cards.copy()
 
+    def __repr__(self) -> str:
+        return f"Hint(teammate={self._teammate}, cards={self._cards})"
+
     @property
     def teammate(self) -> int:
         """Get the teammate index receiving the hint."""
@@ -37,9 +40,6 @@ class Hint(Move):
     def cards(self) -> List[int]:
         """Get the list of card indices matching the hint."""
         return self._cards.copy()
-
-    def __repr__(self) -> str:
-        return f"Hint(teammate={self._teammate}, cards={self._cards})"
 
 
 class ColorHint(Hint):
@@ -57,13 +57,13 @@ class ColorHint(Hint):
         super().__init__(teammate, cards)
         self._color = color
 
+    def __repr__(self) -> str:
+        return f"ColorHint(teammate={self._teammate}, color={self._color.name}, cards={self._cards})"
+
     @property
     def color(self) -> Color:
         """Get the color being hinted."""
         return self._color
-
-    def __repr__(self) -> str:
-        return f"ColorHint(teammate={self._teammate}, color={self._color.name}, cards={self._cards})"
 
 
 class NumberHint(Hint):
@@ -81,13 +81,13 @@ class NumberHint(Hint):
         super().__init__(teammate, cards)
         self._number = number
 
+    def __repr__(self) -> str:
+        return f"NumberHint(teammate={self._teammate}, number={self._number.value}, cards={self._cards})"
+
     @property
     def number(self) -> Number:
         """Get the number being hinted."""
         return self._number
-
-    def __repr__(self) -> str:
-        return f"NumberHint(teammate={self._teammate}, number={self._number.value}, cards={self._cards})"
 
 
 class CardMove(Move):
@@ -102,13 +102,13 @@ class CardMove(Move):
         """
         self._card = card
 
+    def __repr__(self) -> str:
+        return f"CardMove(card={self._card})"
+
     @property
     def card(self) -> int:
         """Get the card index."""
         return self._card
-
-    def __repr__(self) -> str:
-        return f"CardMove(card={self._card})"
 
 
 class Play(CardMove):

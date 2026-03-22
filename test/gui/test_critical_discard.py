@@ -81,10 +81,6 @@ class TestCriticalDiscard(unittest.TestCase):
         # Note: This test assumes no 4s are already discarded, so it's the last one
         # In a real scenario, we'd need to set up state where all 5s are discarded first
         self.gui_game._is_critical_discard(red_four, self.game.state)
-        # Should be True if it's the last 4 (reduces max from 4 to 3)
-        # But if other 4s exist, it's not critical
-        # This test verifies the logic works, but exact result depends on game state
-        # The key is that the method correctly calculates max score reduction
 
     def test_calculate_max_score_basic(self):
         """Test max score calculation for basic scenarios."""
