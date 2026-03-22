@@ -10,3 +10,10 @@ alwaysApply: true
 - **Formatting and tooling**: Follow what the repo already uses (e.g. `unittest`, package layout under `hanabi/`). Do not add new tooling or config unless the task asks for it.
 - **Documentation**: Do not create or edit markdown docs unless the user requests it.
 - **When citing code** in chat, use Cursor-style fenced blocks with line range and path (opening fence on its own line) so the user can jump to the file.
+
+# Architecture: move validity and fail-fast
+
+- **Core game engine** (`hanabi.core`, etc.) assumes every `Player`—including AI—returns **legal moves only**. Do not design the engine around routinely receiving illegal moves from players.
+- **Illegal moves from AI** are **bugs** (wrong search, wrong move gen, etc.). **Fail fast with `assert`** (optionally with a message)—do not use **`raise`** for those bug conditions, defensive recovery, or silent correction.
+- **Human** illegal input is **rejected and retried at the UI layer** (`hanabi.console`, `hanabi.gui`): validate or normalize before applying a move through the engine. The engine does not own the human input retry loop. (User mistakes are not “code bugs”; handle them with normal UI flow, not assertions.)
+- **Code bugs** (broken invariants, impossible state, illegal move when the mover should only produce legal moves, etc.) must be guarded with **`assert`**, not **`raise`**. Avoid **defensive** patterns that hide errors (silent defaults, broad `except: pass`). Remember **`assert` is omitted** when running Python with **`-O`**.
