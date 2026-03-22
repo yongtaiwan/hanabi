@@ -37,7 +37,7 @@ def is_move_legal_from_view(
         return common_view.hint_tokens < game_settings.max_hint_tokens
 
     if isinstance(move, (ColorHint, NumberHint)):
-        if common_view.hint_tokens <= 0:
+        if 0 == common_view.hint_tokens:
             return False
         if move.teammate not in player_view.teammates:
             return False

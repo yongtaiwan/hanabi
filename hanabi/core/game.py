@@ -544,7 +544,7 @@ class GameState:
             True if the move is valid, False otherwise
         """
         # Check if hint tokens available
-        if self._common_view.hint_tokens <= 0:
+        if 0 == self._common_view.hint_tokens:
             return False
 
         # Check if teammate index is valid
@@ -585,7 +585,7 @@ class GameState:
                 error_msg += f" (hint tokens already at maximum: {self.settings.max_hint_tokens})"
             return error_msg
         if isinstance(move, (ColorHint, NumberHint)):
-            if self._common_view.hint_tokens <= 0:
+            if 0 == self._common_view.hint_tokens:
                 error_msg += " (no hint tokens available)"
             return error_msg
         if isinstance(move, Play):

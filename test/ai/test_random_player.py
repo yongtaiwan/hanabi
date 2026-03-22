@@ -54,7 +54,7 @@ class TestRandomPlayer(unittest.TestCase):
 
         # Give hints until tokens are exhausted
         for _ in range(initial_tokens):
-            if state.common_view.hint_tokens <= 0:
+            if 0 == state.common_view.hint_tokens:
                 break
             # Find a valid hint to give
             current_player = state.current_player
@@ -74,7 +74,7 @@ class TestRandomPlayer(unittest.TestCase):
 
         # Now try to get a move from RandomPlayer
         # It should not return a hint move when tokens are 0
-        if state.common_view.hint_tokens <= 0:
+        if 0 == state.common_view.hint_tokens:
             player = players[state.current_player]
             from hanabi.core.game import PlayerView
 

@@ -83,7 +83,7 @@ class RandomPlayer(BasePlayer):
         # This is the only case where state can change between validation and selection
         if isinstance(selected, (ColorHint, NumberHint)):
             # Re-read hint tokens at selection time (state may have changed since validation).
-            if self.common_view.hint_tokens <= 0:
+            if 0 == self.common_view.hint_tokens:
                 # Tokens are 0 - find another valid move from our list
                 # Prefer non-play moves if available
                 other_moves = [m for m in valid_moves if not isinstance(m, (ColorHint, NumberHint))]

@@ -1107,7 +1107,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
             return True
 
         if isinstance(move, (ColorHint, NumberHint)):
-            if state.hint_tokens <= 0:
+            if 0 == state.hint_tokens:
                 return False
 
             if move.teammate < 0 or move.teammate >= len(state.hands):

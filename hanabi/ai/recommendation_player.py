@@ -169,7 +169,7 @@ class RecommendationPlayer(BasePlayer):
             return 4 + (3 - idx)
         return 7
 
-    def _paper_try_follow_play_recommendation(
+    def _try_follow_play_recommendation(
         self,
         player_view: PlayerView,
         recommendation: Optional[int],
@@ -202,14 +202,14 @@ class RecommendationPlayer(BasePlayer):
         )
         return Play(play_idx)
 
-    def _paper_try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
+    def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
         Paper rule 3: if a hint token can be spent, give the encoding hint.
 
         The mod-8 value fixes rank vs color and which clockwise partner to hint; with
         non-empty hands (game invariant), :meth:`_compute_hint` always produces a move.
         """
-        if self.common_view.hint_tokens <= 0:
+        if 0 == self.common_view.hint_tokens:
             return None
         hint_move = self._compute_hint(player_view)
         self._my_decoded_recommendation = None
@@ -233,7 +233,7 @@ class RecommendationPlayer(BasePlayer):
             return hint_move
         assert False, f"unexpected hint type from _compute_hint: {type(hint_move)}"
 
-    def _paper_try_follow_discard_recommendation(
+    def _try_follow_discard_recommendation(
         self,
         player_view: PlayerView,
         recommendation: Optional[int],
@@ -252,7 +252,7 @@ class RecommendationPlayer(BasePlayer):
         )
         return Discard(discard_idx)
 
-    def _paper_try_discard_c1(self, player_view: PlayerView) -> Move:
+    def _try_discard_c1(self, player_view: PlayerView) -> Move:
         """Paper rule 5: discard C1 (oldest, internal index 3)."""
         assert self.is_move_legal(player_view, Discard(3)), (
             "default discard C1 should be legal when rule 5 applies"
@@ -269,15 +269,15 @@ class RecommendationPlayer(BasePlayer):
         recommendation = self._get_my_recommendation()
 
         move = (
-            self._paper_try_follow_play_recommendation(
+            self._try_follow_play_recommendation(
                 player_view,
                 recommendation,
                 plays_since_hint=self._plays_since_hint,
                 errors=errors,
             )
-            or self._paper_try_give_encoded_hint(player_view)
-            or self._paper_try_follow_discard_recommendation(player_view, recommendation)
-            or self._paper_try_discard_c1(player_view)
+            or self._try_give_encoded_hint(player_view)
+            or self._try_follow_discard_recommendation(player_view, recommendation)
+            or self._try_discard_c1(player_view)
         )
         assert move is not None, (
             "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"
