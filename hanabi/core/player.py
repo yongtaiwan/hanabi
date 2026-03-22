@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import random
-from typing import TYPE_CHECKING, List, Dict, Optional, Union
+from typing import TYPE_CHECKING, List, Dict, Optional, Union, assert_never
 
 if TYPE_CHECKING:
     from .game import PlayerView
@@ -16,7 +16,16 @@ if TYPE_CHECKING:
 
 from .observer import Observer
 from .game import PlayerView, GameSettings
-from .moves import Move, Play, Discard, ColorHint, NumberHint, CardMove, Hint
+from .moves import (
+    Move,
+    Play,
+    Discard,
+    ColorHint,
+    NumberHint,
+    CardMove,
+    Hint,
+    ensure_concrete_move,
+)
 from .enums import Color, Number
 
 
@@ -90,13 +99,48 @@ class BasePlayer(Observer, Player):
         """
         Observe a move made by a player.
 
+        Dispatches to :meth:`observe_play_move`, :meth:`observe_discard_move`,
+        :meth:`observe_color_hint_move`, and :meth:`observe_number_hint_move`.
+        Subclasses override those hooks (default no-op) instead of replacing
+        this method, unless they need a single entry point (e.g. a guard).
+
         Args:
             player_index: Index of the player who made the move
             move: The move that was made
             observer_view: This player's view after the move (from the engine).
         """
-        # Base implementation - can be overridden by subclasses
-        pass
+        m = ensure_concrete_move(move)
+        match m:
+            case Play():
+                self.observe_play_move(player_index, m, observer_view)
+            case Discard():
+                self.observe_discard_move(player_index, m, observer_view)
+            case ColorHint():
+                self.observe_color_hint_move(player_index, m, observer_view)
+            case NumberHint():
+                self.observe_number_hint_move(player_index, m, observer_view)
+            case _:
+                assert_never(m)
+
+    def observe_play_move(
+        self, player_index: int, move: Play, observer_view: PlayerView
+    ) -> None:
+        """Hook: a player played a card. Default does nothing."""
+
+    def observe_discard_move(
+        self, player_index: int, move: Discard, observer_view: PlayerView
+    ) -> None:
+        """Hook: a player discarded a card. Default does nothing."""
+
+    def observe_color_hint_move(
+        self, player_index: int, move: ColorHint, observer_view: PlayerView
+    ) -> None:
+        """Hook: a color hint was given. Default does nothing."""
+
+    def observe_number_hint_move(
+        self, player_index: int, move: NumberHint, observer_view: PlayerView
+    ) -> None:
+        """Hook: a number hint was given. Default does nothing."""
 
     @abstractmethod
     def play(self, player_view: PlayerView) -> Move:
@@ -125,29 +169,33 @@ class HintTrackingPlayer(BasePlayer):
         super().__init__(player_index)
         self._hints: Dict[int, Dict[str, Optional[Union[Color, Number]]]] = {}
 
-    def observe(
-        self,
-        player_index: int,
-        move: Move,
-        observer_view: PlayerView,
+    def observe_play_move(
+        self, player_index: int, move: Play, observer_view: PlayerView
     ) -> None:
-        """
-        Observe a move and update hint tracking if it affects this player.
+        super().observe_play_move(player_index, move, observer_view)
+        if player_index == self._player_index:
+            self._updateHintsFromCardMove(move)
 
-        Args:
-            player_index: Index of the player who made the move
-            move: The move that was made
-            observer_view: This player's view after the move (from the engine).
-        """
-        super().observe(player_index, move, observer_view)
+    def observe_discard_move(
+        self, player_index: int, move: Discard, observer_view: PlayerView
+    ) -> None:
+        super().observe_discard_move(player_index, move, observer_view)
+        if player_index == self._player_index:
+            self._updateHintsFromCardMove(move)
 
-        # If this player received a hint
-        if isinstance(move, Hint) and move.teammate == self._player_index:
+    def observe_color_hint_move(
+        self, player_index: int, move: ColorHint, observer_view: PlayerView
+    ) -> None:
+        super().observe_color_hint_move(player_index, move, observer_view)
+        if move.teammate == self._player_index:
             self._updateHintsFromHint(move)
 
-        # If this player played/discarded a card
-        elif isinstance(move, CardMove) and player_index == self._player_index:
-            self._updateHintsFromCardMove(move)
+    def observe_number_hint_move(
+        self, player_index: int, move: NumberHint, observer_view: PlayerView
+    ) -> None:
+        super().observe_number_hint_move(player_index, move, observer_view)
+        if move.teammate == self._player_index:
+            self._updateHintsFromHint(move)
 
     def _updateHintsFromHint(self, hint: Hint) -> None:
         """Update hints when receiving a hint."""

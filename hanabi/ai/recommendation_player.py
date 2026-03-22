@@ -74,42 +74,47 @@ class RecommendationPlayer(BasePlayer):
         # Decoded recommendation at hint time (state when hint was given); used until next hint.
         self._my_decoded_recommendation: Optional[int] = None
 
-    def observe(
+    def set_game_settings(self, game_settings: GameSettings) -> None:
+        assert game_settings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
+        super().set_game_settings(game_settings)
+
+    def observe_play_move(
+        self, player_index: int, move: Play, observer_view: PlayerView
+    ) -> None:
+        super().observe_play_move(player_index, move, observer_view)
+        self._plays_since_hint += 1
+
+    def observe_color_hint_move(
+        self, player_index: int, move: ColorHint, observer_view: PlayerView
+    ) -> None:
+        super().observe_color_hint_move(player_index, move, observer_view)
+        self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=4)
+
+    def observe_number_hint_move(
+        self, player_index: int, move: NumberHint, observer_view: PlayerView
+    ) -> None:
+        super().observe_number_hint_move(player_index, move, observer_view)
+        self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=0)
+
+    def _observe_recommendation_hint(
         self,
         player_index: int,
-        move: Move,
+        move: ColorHint | NumberHint,
         observer_view: PlayerView,
+        *,
+        hint_value_base: int,
     ) -> None:
-        assert self.gameSettings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
-        super().observe(player_index, move, observer_view)
-
-        if isinstance(move, Play):
-            self._plays_since_hint += 1
-            return
-
-        if isinstance(move, Discard):
-            return
-
-        if not isinstance(move, (ColorHint, NumberHint)):
-            assert False, f"unexpected move type for RecommendationPlayer.observe: {type(move)}"
-
         self._last_hinter = player_index
         self._last_hint_move = move
         n = self.gameSettings.numPlayers
         pos = (move.teammate - player_index - 1) % n
-        if isinstance(move, NumberHint):
-            self._last_hint_value = pos
-        else:
-            assert isinstance(move, ColorHint)
-            self._last_hint_value = 4 + pos
+        self._last_hint_value = hint_value_base + pos
         self._plays_since_hint = 0
-        # Decode using teammate hands from observer_view; shared piles/tokens from self.commonView (BasePlayer).
         if self._player_index != player_index:
             self._my_decoded_recommendation = self._decode_recommendation_with_view(
                 observer_view, self._last_hint_value, self._last_hinter
             )
-            return
-        if player_index == self._player_index:
+        else:
             self._my_decoded_recommendation = None
 
     def _decode_recommendation_with_view(
@@ -233,7 +238,6 @@ class RecommendationPlayer(BasePlayer):
         common = self.commonView
         settings = self.gameSettings
         hand_size = player_view.ownHandSize
-        assert settings.numPlayers == 5, "RecommendationPlayer requires 5-player games"
         assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
         errors = settings.maxLiveTokens - common.liveTokens
 

@@ -62,38 +62,29 @@ class CommonSensePlayer(HintTrackingPlayer):
         # Each hint is stored as (hint_type, value) where hint_type is 'color' or 'number'
         self._teammate_hints: Dict[int, List[tuple]] = {}
 
-    def observe(
-        self,
-        player_index: int,
-        move: Move,
-        observer_view: PlayerView,
+    def observe_color_hint_move(
+        self, player_index: int, move: ColorHint, observer_view: PlayerView
     ) -> None:
-        """
-        Observe moves to track seen cards, received hints, and hints given to teammates.
-
-        Args:
-            player_index: Index of the player who made the move
-            move: The move that was made
-            observer_view: This player's view after the move (from the engine).
-        """
-        super().observe(player_index, move, observer_view)
-
-        # Track hints we received (for negative hint inference)
-        if isinstance(move, (ColorHint, NumberHint)) and move.teammate == self._player_index:
+        super().observe_color_hint_move(player_index, move, observer_view)
+        if move.teammate == self._player_index:
             self._received_hints.append(move)
+        teammate_idx = move.teammate
+        if teammate_idx != self._player_index:
+            if teammate_idx not in self._teammate_hints:
+                self._teammate_hints[teammate_idx] = []
+            self._teammate_hints[teammate_idx].append(('color', move.color))
 
-        # Track hints given to teammates (by anyone, including ourselves)
-        if isinstance(move, (ColorHint, NumberHint)):
-            teammate_idx = move.teammate
-            if teammate_idx != self._player_index:  # Don't track hints to ourselves here
-                if teammate_idx not in self._teammate_hints:
-                    self._teammate_hints[teammate_idx] = []
-
-                # Store hint information
-                if isinstance(move, ColorHint):
-                    self._teammate_hints[teammate_idx].append(('color', move.color))
-                elif isinstance(move, NumberHint):
-                    self._teammate_hints[teammate_idx].append(('number', move.number))
+    def observe_number_hint_move(
+        self, player_index: int, move: NumberHint, observer_view: PlayerView
+    ) -> None:
+        super().observe_number_hint_move(player_index, move, observer_view)
+        if move.teammate == self._player_index:
+            self._received_hints.append(move)
+        teammate_idx = move.teammate
+        if teammate_idx != self._player_index:
+            if teammate_idx not in self._teammate_hints:
+                self._teammate_hints[teammate_idx] = []
+            self._teammate_hints[teammate_idx].append(('number', move.number))
 
     def _get_all_possible_cards(self) -> List[Card]:
         """Get all possible cards in the game from settings."""

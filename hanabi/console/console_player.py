@@ -82,21 +82,3 @@ class ConsolePlayer(HumanPlayer):
 
             return move
 
-    def observe(
-        self,
-        player_index: int,
-        move: Move,
-        observer_view: PlayerView,
-    ) -> None:
-        """
-        Observe a move (for player's internal state tracking only).
-
-        Display updates are handled by the global callback in Game, not here.
-
-        Args:
-            player_index: Index of the player who made the move
-            move: The move that was made
-            observer_view: This player's view after the move (from the engine).
-        """
-        super().observe(player_index, move, observer_view)
-
