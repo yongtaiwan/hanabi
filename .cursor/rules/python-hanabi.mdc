@@ -18,6 +18,10 @@ alwaysApply: false
 - **Public API naming**: Use **snake_case** for properties, methods, and module-level names on the game layer (`Game`, `GameState`, `PlayerView`, observers, etc.). Class names stay PascalCase.
 - **Tests**: Subclass `unittest.TestCase`, use `setUp` for fixtures, and one-line docstrings on test methods describing behavior under test.
 
+# Comparisons
+
+- **Constant on the left** (`==` / `!=`): When comparing to a **literal** (number, string, `True`/`False`) or a **short named constant** (module constant, `Enum` member), put that value **first**—e.g. `4 == hand_size`, `"play" == command`, `NUM_PLAYERS == settings.num_players`, `CardKind.PLAYABLE == kind`. Readers see the expected value immediately; the right-hand side is usually longer. **Do not** apply to idioms that the community standard keeps as-is (e.g. `if __name__ == "__main__":`). Prefer **`x is None`** / **`x is not None`** (identity), not `None == x`.
+
 # Control flow and dispatch
 
 - **Short branches first**: When order is semantically equivalent, handle the **smallest** branch first (fewer lines or simpler predicate) so the main case stays easy to scan.

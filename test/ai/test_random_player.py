@@ -108,7 +108,7 @@ class TestRandomPlayer(unittest.TestCase):
         player = players[0]
         from hanabi.core.game import PlayerView
 
-        teammates = {i: state.player_hands[i] for i in range(3) if i != 0}
+        teammates = {i: state.player_hands[i] for i in range(3) if 0 != i}
         player_view = PlayerView(teammates, len(state.player_hands[0].cards))
 
         # Create a discard move

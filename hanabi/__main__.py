@@ -7,7 +7,7 @@ import sys
 
 def main():
     """Main entry point - supports both CLI and GUI modes."""
-    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
+    if len(sys.argv) > 1 and "--gui" == sys.argv[1]:
         # Launch GUI
         try:
             from .gui.gui_game import play_gui_game

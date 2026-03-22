@@ -413,9 +413,9 @@ class GameField:
         state = game.state
         if state.common_view.live_tokens <= 0:
             end_reason = "lives_lost"
-        elif final_score == 25:
+        elif 25 == final_score:
             end_reason = "perfect_score"
-        elif state.turns_left == 0:
+        elif 0 == state.turns_left:
             end_reason = "deck_exhausted"
         else:
             end_reason = "unknown"
@@ -536,7 +536,7 @@ class GameField:
                 all_scores[ai_name].append(game_result.score)
                 all_moves[ai_name].append(game_result.moves_count)
                 all_durations[ai_name].append(game_result.duration_seconds)
-                if game_result.score == 25:
+                if 25 == game_result.score:
                     wins[ai_name] += 1
 
         # Calculate aggregated statistics

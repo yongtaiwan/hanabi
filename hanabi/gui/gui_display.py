@@ -218,8 +218,8 @@ class GUIDisplay:
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
             if self._game.state.turns_left is not None:
-                # Deck is exhausted - only ignore if turns_left == 0
-                if self._game.state.turns_left == 0 and self._game.is_finished:
+                # Deck is exhausted - only ignore if 0 == turns_left
+                if 0 == self._game.state.turns_left and self._game.is_finished:
                     return
             elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
@@ -233,7 +233,7 @@ class GUIDisplay:
             clicked_card = None
             if hasattr(self, "_card_positions") and self._card_positions:
                 for (player_idx, card_idx), position in self._card_positions.items():
-                    if len(position) != 4:
+                    if 4 != len(position):
                         continue
                     x1, y1, x2, y2 = position
                     if x1 <= event.x <= x2 and y1 <= event.y <= y2:
@@ -468,16 +468,16 @@ class GUIDisplay:
                         break
                 else:
                     # Not a color+number combo, insert as-is
-                    if event_type == "error" or word.startswith("Error"):
+                    if "error" == event_type or word.startswith("Error"):
                         self._history_text.insert(tk.END, word, "error")
-                    elif event_type == "game_end":
+                    elif "game_end" == event_type:
                         # Colorize game end message words
                         if word.lower() in ["game", "over", "final", "score"]:
                             self._history_text.insert(tk.END, word, "game_end")
                         elif "/" in word:
                             # Score like "25/25" - split and colorize
                             parts = word.split("/")
-                            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                            if 2 == len(parts) and parts[0].isdigit() and parts[1].isdigit():
                                 self._history_text.insert(tk.END, parts[0], "number")
                                 self._history_text.insert(tk.END, "/", "game_end")
                                 self._history_text.insert(tk.END, parts[1], "number")
@@ -491,9 +491,9 @@ class GUIDisplay:
                         self._history_text.insert(tk.END, word)
             else:
                 # Single character or other
-                if event_type == "error":
+                if "error" == event_type:
                     self._history_text.insert(tk.END, word, "error")
-                elif event_type == "game_end":
+                elif "game_end" == event_type:
                     self._history_text.insert(tk.END, word, "game_end")
                 else:
                     self._history_text.insert(tk.END, word)
@@ -714,11 +714,11 @@ class GUIDisplay:
                 cards_per_player = self._game.settings.max_cards_in_hand
                 initial_remaining = total_deck_size - (num_players * cards_per_player)
 
-                if initial_remaining == 0:
+                if 0 == initial_remaining:
                     num_rows = 1
                     bottom_row_cards = 0
                     top_row_cards = 0
-                elif initial_remaining == 1:
+                elif 1 == initial_remaining:
                     num_rows = 1
                     bottom_row_cards = 1
                     top_row_cards = 0
@@ -802,7 +802,7 @@ class GUIDisplay:
                     card_y = start_y - (row * row_height)
 
                     # Track top row rightmost card position (for label placement)
-                    if row == 1 and col_from_right == 0:  # Top row, rightmost card
+                    if 1 == row and 0 == col_from_right:  # Top row, rightmost card
                         top_row_rightmost_x = card_x + card_width
 
                     # Draw card (drawing left cards first, right cards last so right cards are on top)
@@ -847,7 +847,7 @@ class GUIDisplay:
                 else:
                     # No cards in top row, but still show count at expected position
                     # Calculate where top row rightmost would be
-                    if num_rows == 1:
+                    if 1 == num_rows:
                         # Only bottom row, use its rightmost position
                         if bottom_row_cards > 0:
                             bottom_rightmost_x = start_x
@@ -1284,7 +1284,7 @@ class GUIDisplay:
             game_is_over = False
             if self._game:
                 # Check if game is over by checking turns left or status label
-                if self._game.state.turns_left == 0:
+                if 0 == self._game.state.turns_left:
                     game_is_over = True
                 elif hasattr(self, "_status_label"):
                     status_text = self._status_label.cget("text")
@@ -1707,11 +1707,11 @@ class GUIDisplay:
             return
 
         # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
-        # If deck is exhausted, check turns_left - game should only end when turns_left == 0
+        # If deck is exhausted, check turns_left - game should only end when 0 == turns_left
         # (meaning all players have taken their final turn)
         if self._game.state.turns_left is not None:
-            # Deck is exhausted - game ends only when turns_left == 0
-            if self._game.state.turns_left == 0:
+            # Deck is exhausted - game ends only when 0 == turns_left
+            if 0 == self._game.state.turns_left:
                 # All players have taken their final turn - game is finished
                 if self._game.is_finished:
                     self._close_action_menu()
@@ -1736,7 +1736,7 @@ class GUIDisplay:
         if teammate_idx == current_player and action in ("color_hint", "number_hint"):
             return
 
-        if action == "play":
+        if "play" == action:
             if not self._move_callback:
                 # No callback set - this shouldn't happen, but handle gracefully
                 return
@@ -1745,7 +1745,7 @@ class GUIDisplay:
 
                 move = Play(card_idx)
                 self._move_callback(move)
-        elif action == "discard":
+        elif "discard" == action:
             if not self._move_callback:
                 return
             if teammate_idx == current_player:
@@ -1753,7 +1753,7 @@ class GUIDisplay:
 
                 move = Discard(card_idx)
                 self._move_callback(move)
-        elif action == "color_hint":
+        elif "color_hint" == action:
             # Hint can only be given to a teammate (not yourself)
             if not self._move_callback:
                 return
@@ -1776,7 +1776,7 @@ class GUIDisplay:
                                 # Verify the move was created correctly before calling callback
                                 if move.teammate == teammate_idx and move.teammate != current_player:
                                     self._move_callback(move)
-        elif action == "number_hint":
+        elif "number_hint" == action:
             # Hint can only be given to a teammate (not yourself)
             if not self._move_callback:
                 return
@@ -1830,7 +1830,7 @@ class GUIDisplay:
         if not self._game:
             return
 
-        deck_empty = self._game.state.common_view.cards_to_draw == 0
+        deck_empty = 0 == self._game.state.common_view.cards_to_draw
 
         if deck_empty:
             # Show warning banner
@@ -1992,7 +1992,7 @@ class GUIDisplay:
         initial_deck = self._game.state.start_position.draw_deck.cards
         total_deck_size = len(initial_deck)
 
-        if total_deck_size == 0 or draw_deck_index >= total_deck_size:
+        if 0 == total_deck_size or draw_deck_index >= total_deck_size:
             return None
 
         deck_y = center_y + 180
@@ -2000,10 +2000,10 @@ class GUIDisplay:
         cards_per_player = self._game.settings.max_cards_in_hand
         initial_remaining = total_deck_size - (num_players * cards_per_player)
 
-        if initial_remaining == 0:
+        if 0 == initial_remaining:
             return None
 
-        if initial_remaining == 1:
+        if 1 == initial_remaining:
             num_rows = 1
             bottom_row_cards = 1
             top_row_cards = 0
@@ -2289,13 +2289,13 @@ class GUIDisplay:
         source_y = (y1 + y2) // 2
 
         # Get destination position
-        if destination == "firework":
+        if "firework" == destination:
             if color is None:
                 if callback:
                     callback()
                 return
             dest_pos = self._get_firework_position(color)
-        elif destination == "discard":
+        elif "discard" == destination:
             dest_pos = self._get_discard_position()
         else:
             if callback:
@@ -2350,7 +2350,7 @@ class GUIDisplay:
             self._frozen_state = self._game.state
 
         # Start processing queue if not already processing
-        if len(self._active_animations) == 0:
+        if 0 == len(self._active_animations):
             self._process_animation_queue()
 
     def animate_card_draw(
@@ -2458,7 +2458,7 @@ class GUIDisplay:
         widget_ids = []
 
         # For gold (play of 5), make it shiny with a gradient-like effect
-        if edge_color == "#FFD700":  # Gold
+        if "#FFD700" == edge_color:  # Gold
             # Create a slightly larger outer rectangle for glow effect
             glow_rect = self._canvas.create_rectangle(
                 request["source_x"] - card_width // 2 - 2,
@@ -2473,7 +2473,7 @@ class GUIDisplay:
             widget_ids.append(glow_rect)
 
         # For draw animations (destination='hand'), show "?" instead of actual card
-        is_draw_animation = request.get("destination") == "hand"
+        is_draw_animation = "hand" == request.get("destination")
 
         # Use gray background for draw animations (unknown card)
         if is_draw_animation:

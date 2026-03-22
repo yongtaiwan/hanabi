@@ -83,7 +83,7 @@ class ConsoleDisplay:
 
     def clear_screen(self) -> None:
         """Clear the console screen."""
-        os.system("cls" if os.name == "nt" else "clear")
+        os.system("cls" if "nt" == os.name else "clear")
 
     def _card_to_short_notation(self, card_str: str) -> str:
         """
@@ -317,7 +317,7 @@ class ConsoleDisplay:
 
         # Display draw deck count (make it more visible)
         deck_count = common_view.cards_to_draw
-        if deck_count == 0:
+        if 0 == deck_count:
             # Deck is exhausted - show warning
             # Check if this is the final turn phase (deck exhausted but game not finished)
             if not game.is_finished:
@@ -388,10 +388,10 @@ class ConsoleDisplay:
         elif life_tokens == max_lives - 1:
             # One life lost: medium fuse with fire approaching
             life_emoji_str = "🧨━━🔥"
-        elif life_tokens == 1:
+        elif 1 == life_tokens:
             # Two lives lost: short fuse with fire very close
             life_emoji_str = "🧨━🔥"
-        else:  # life_tokens == 0
+        else:  # 0 == life_tokens
             # All lives lost: exploded
             life_emoji_str = "💥"
 
@@ -599,7 +599,7 @@ class ConsoleDisplay:
 
         # Give a hint
         if common_view.hint_tokens > 0:
-            if num_players == 2:
+            if 2 == num_players:
                 print(f"  {Colors.BRIGHT_CYAN}h<value>{Colors.RESET} - Give a hint to other player")
                 print(
                     f"    Examples: {Colors.BRIGHT_CYAN}h3{Colors.RESET} (number 3), "

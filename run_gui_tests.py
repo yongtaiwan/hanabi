@@ -57,7 +57,7 @@ def run_all_gui_tests():
             print(f"  - {test}")
             print(f"    {traceback.split(chr(10))[-2]}")
 
-    return len(result.failures) == 0 and len(result.errors) == 0
+    return 0 == len(result.failures) and 0 == len(result.errors)
 
 
 if __name__ == "__main__":

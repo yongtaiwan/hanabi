@@ -357,7 +357,10 @@ class GUIGame:
             old_deck_size = old_state.common_view.cards_to_draw if old_state else None
             new_deck_size = new_state.common_view.cards_to_draw if new_state else None
             deck_just_emptied = (
-                old_deck_size is not None and old_deck_size > 0 and new_deck_size is not None and new_deck_size == 0
+                old_deck_size is not None
+                and old_deck_size > 0
+                and new_deck_size is not None
+                and 0 == new_deck_size
             )
 
             # Add delay for AI players to slow down simulation
@@ -454,7 +457,7 @@ class GUIGame:
                             destination = "firework"
                             firework_color = card.color
                             is_invalid_play = False
-                            is_play_of_five = card.number.value == 5
+                            is_play_of_five = 5 == card.number.value
                         else:
                             # Invalid play - goes to discard
                             destination = "discard"
@@ -760,7 +763,7 @@ class GUIGame:
         for widget in self._display.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
                         status_frame = child
                         break
                 if status_frame:
@@ -945,7 +948,7 @@ class GUIGame:
                             exclude_card_from_hands is not None
                             and exclude_card_from_hands.color == color
                             and exclude_card_from_hands.number == num
-                            and excluded_count == 0
+                            and 0 == excluded_count
                         ):
                             # This is the card being discarded, skip it (only once)
                             excluded_count += 1
@@ -1011,7 +1014,7 @@ class GUIGame:
                 lost_life = new_lives < old_lives
                 old_score = old_state.score()
                 new_score = new_state.score()
-                perfect_score = new_score == 25
+                perfect_score = 25 == new_score
 
                 # Check if firework was completed by comparing cards played
                 firework_completed = False
@@ -1088,8 +1091,8 @@ class GUIGame:
 
         # Check if game is finished, but allow moves when turns_left > 0 (current player still has their final turn)
         if self._game.state.turns_left is not None:
-            # Deck is exhausted - game ends only when turns_left == 0
-            if self._game.state.turns_left == 0:
+            # Deck is exhausted - game ends only when 0 == turns_left
+            if 0 == self._game.state.turns_left:
                 # All players have taken their final turn - game is finished
                 if self._game.is_finished:
                     if not hasattr(self, "_game_ended") or not self._game_ended:
@@ -1235,7 +1238,7 @@ class GUIGame:
         for widget in self._display.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
                         status_frame = child
                         break
                 if status_frame:
@@ -1346,7 +1349,7 @@ class GUIGame:
         for widget in self._display.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
                         status_frame = child
                         break
                 if status_frame:
@@ -1383,7 +1386,7 @@ class GUIGame:
         for widget in self._display.root.winfo_children():
             if isinstance(widget, tk.Frame):
                 for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and child.cget("bg") == "#34495E":
+                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
                         status_frame = child
                         break
                 if status_frame:
@@ -1468,13 +1471,13 @@ class GUIGame:
         # Check if buttons exist and are valid widgets before configuring
         if hasattr(self, "_replay_first_btn") and self._replay_first_btn is not None:
             try:
-                self._replay_first_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
+                self._replay_first_btn.config(state=tk.DISABLED if 0 == current_index else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 # Widget was destroyed, clear reference
                 self._replay_first_btn = None
         if hasattr(self, "_replay_prev_btn") and self._replay_prev_btn is not None:
             try:
-                self._replay_prev_btn.config(state=tk.DISABLED if current_index == 0 else tk.NORMAL)
+                self._replay_prev_btn.config(state=tk.DISABLED if 0 == current_index else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 self._replay_prev_btn = None
 
@@ -1655,7 +1658,7 @@ def play_gui_game():
 
     # Suppress macOS IMK warning (harmless but annoying)
     # This warning comes from macOS Input Method Kit and doesn't affect functionality
-    if sys.platform == "darwin":  # macOS
+    if "darwin" == sys.platform:  # macOS
         # Set environment variable to reduce IMK logging
         os.environ.setdefault("PYTHONUNBUFFERED", "1")
         # Note: The IMKCFRunLoopWakeUpReliable warning is a known macOS/tkinter issue

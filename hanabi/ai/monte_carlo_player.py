@@ -164,13 +164,13 @@ class MCGameState:
             return True
 
         # 2. All fireworks completed (perfect score)
-        if len(self._cards_played) == 5:
+        if 5 == len(self._cards_played):
             all_fives = all(num == Number.FIVE for num in self._cards_played.values())
             if all_fives:
                 return True
 
         # 3. Deck exhausted and all players took final turn
-        if self._turns_left == 0:
+        if 0 == self._turns_left:
             return True
 
         # 4. Auto-end when no more points possible (if enabled)
@@ -291,7 +291,7 @@ class MCGameState:
         self._hint_tokens -= 1
 
         # Check if deck exhausted (hints don't draw cards)
-        if self._cards_to_draw == 0 and self._turns_left is None:
+        if 0 == self._cards_to_draw and self._turns_left is None:
             self._turns_left = self._settings.num_players
 
     def _draw_card(self, player_index: int) -> None:
@@ -303,7 +303,7 @@ class MCGameState:
             self._hands[player_index].insert(0, card)
 
             # Check if deck exhausted
-            if self._cards_to_draw == 0 and self._turns_left is None:
+            if 0 == self._cards_to_draw and self._turns_left is None:
                 self._turns_left = self._settings.num_players
         else:
             # Deck exhausted
@@ -936,7 +936,7 @@ class MonteCarloPlayer(HintTrackingPlayer):
         # 8. Create MCGameState
         # Estimate turns_left: None if deck not exhausted, else approximate
         turns_left = None
-        if len(deck_cards) == 0:
+        if 0 == len(deck_cards):
             turns_left = self.game_settings.num_players
 
         return MCGameState(

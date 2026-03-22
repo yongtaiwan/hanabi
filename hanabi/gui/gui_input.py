@@ -48,8 +48,8 @@ class GUIInput:
         # But allow clicks when turns_left > 0 (current player still has their final turn)
         if self._game:
             if self._game.state.turns_left is not None:
-                # Deck is exhausted - only ignore if turns_left == 0
-                if self._game.state.turns_left == 0 and self._game.is_finished:
+                # Deck is exhausted - only ignore if 0 == turns_left
+                if 0 == self._game.state.turns_left and self._game.is_finished:
                     return
             elif self._game.is_finished:
                 # Game finished for other reasons (lives lost, perfect score, etc.)
@@ -82,7 +82,7 @@ class GUIInput:
         if hasattr(self._display, "_card_positions") and self._display._card_positions:
             try:
                 for (player_idx, card_idx), position in self._display._card_positions.items():
-                    if len(position) != 4:
+                    if 4 != len(position):
                         continue
                     x1, y1, x2, y2 = position
                     if x1 <= event.x <= x2 and y1 <= event.y <= y2:
@@ -115,7 +115,7 @@ class GUIInput:
         # Check if click is on a card by checking stored positions
         try:
             for (player_idx, card_idx), position in self._display._card_positions.items():
-                if len(position) != 4:
+                if 4 != len(position):
                     continue
                 x1, y1, x2, y2 = position
                 if x1 <= event.x <= x2 and y1 <= event.y <= y2:

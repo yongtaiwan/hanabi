@@ -42,7 +42,7 @@ class TestIntegration(unittest.TestCase):
             # Try to make a move
             if state.common_view.hint_tokens > 0:
                 # Try a hint
-                teammate = 1 if current_player == 0 else 0
+                teammate = 1 if 0 == current_player else 0
                 teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     color = teammate_hand.cards[0].color

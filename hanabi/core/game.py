@@ -323,7 +323,7 @@ class CommonView:
             return CardKind.USELESS
         if self._card_playable_now(card):
             return CardKind.PLAYABLE
-        if self._rank_copies_remaining_for_fireworks(card.color, card.number, settings) == 1:
+        if 1 == self._rank_copies_remaining_for_fireworks(card.color, card.number, settings):
             return CardKind.CRITICAL
         return CardKind.DISPENSABLE
 
@@ -496,7 +496,7 @@ class GameState:
             return False
 
         # Check if game is over
-        if self._turns_left == 0:
+        if 0 == self._turns_left:
             return False
 
         if isinstance(move, CardMove):
@@ -821,7 +821,7 @@ class GameState:
             # Check if deck is now exhausted after drawing
             self._check_and_set_turns_left_if_deck_exhausted()
             # Assert invariant: if no cards to draw, turns_left must be set
-            if self._common_view._cards_to_draw == 0:
+            if 0 == self._common_view._cards_to_draw:
                 assert self._turns_left is not None, (
                     f"No cards to draw (cards_to_draw=0) but turns_left is None"
                 )
@@ -872,7 +872,7 @@ class GameState:
 
         # 2. All fireworks are completed (perfect score)
         cards_played = self._common_view.cards_played
-        if len(cards_played) == 5:  # All 5 colors
+        if 5 == len(cards_played):  # All 5 colors
             all_fives = all(num == Number.FIVE for num in cards_played.values())
             if all_fives:
                 logger.debug("[is_finished] Game finished: All fireworks completed (perfect score)")
@@ -886,8 +886,10 @@ class GameState:
                 f"Deck is exhausted (draw_deck_index={self._draw_deck_index} >= {original_deck_size}, "
                 f"cards_to_draw={self._common_view._cards_to_draw}) but turns_left is None"
             )
-        if self._turns_left == 0:
-            logger.debug(f"[is_finished] Game finished: turns_left == 0 (deck exhausted, all players took final turn)")
+        if 0 == self._turns_left:
+            logger.debug(
+                f"[is_finished] Game finished: 0 == turns_left (deck exhausted, all players took final turn)"
+            )
             return True
 
         # 4. Auto-end when no more points possible (if setting enabled)

@@ -30,7 +30,7 @@ class TestFinalRound(unittest.TestCase):
         # Keep making moves until deck is exhausted
         # _player_exhausting_deck is set when a move tries to draw from an empty deck
         while self.engine._player_exhausting_deck is None:
-            if len(self.engine._draw_deck) == 0:
+            if 0 == len(self.engine._draw_deck):
                 # Deck is empty, but we need to make one more move to trigger exhaustion
                 # Make a move that will try to draw
                 current = self.engine.current_player

@@ -147,7 +147,7 @@ class TestGameComprehensive(unittest.TestCase):
             while self.game.state.common_view.hint_tokens > 0:
                 current_player = self.game.current_player
                 # Make sure we're hinting a valid teammate
-                target = 1 if current_player != 1 else 2
+                target = 1 if 1 != current_player else 2
                 target_hand = self.game.state.player_hands[target]
                 if target_hand.cards:
                     target_color = target_hand.cards[0].color
@@ -162,7 +162,7 @@ class TestGameComprehensive(unittest.TestCase):
                     break
 
             # Now try to hint - should be invalid
-            if self.game.state.common_view.hint_tokens == 0:
+            if 0 == self.game.state.common_view.hint_tokens:
                 move = ColorHint(1, matching, color)
                 self.assertFalse(self.game.state._validate(self.game.current_player, move))
 
@@ -234,8 +234,8 @@ class TestGameComprehensive(unittest.TestCase):
 
             # Moves should be invalid (turns_left should be 0 or game finished)
             # Actually, when lives are 0, is_finished() returns True, but turns_left might not be 0
-            # The validation checks turns_left == 0, so let's check that condition
-            if self.game.state.turns_left == 0:
+            # The validation checks 0 == turns_left, so let's check that condition
+            if 0 == self.game.state.turns_left:
                 if self.game.state.player_hands[0].cards:
                     move = Play(0)
                     self.assertFalse(self.game.state._validate(0, move))
@@ -511,7 +511,7 @@ class TestGameComprehensive(unittest.TestCase):
         # The main test is that cards_to_draw is 0, meaning no more cards can be drawn
         # turns_left is set when a draw attempt happens on an exhausted deck
         # If the deck is exhausted, verify the state
-        if self.game.state.common_view.cards_to_draw == 0:
+        if 0 == self.game.state.common_view.cards_to_draw:
             # turns_left should be set if deck was exhausted during a draw
             # It may not be set if we're checking before any draw happens
             # The key assertion is that cards_to_draw is 0
@@ -761,7 +761,7 @@ class TestGameComprehensive(unittest.TestCase):
                         break
 
             # After all turns, game should be finished
-            if self.game.state.turns_left == 0:
+            if 0 == self.game.state.turns_left:
                 self.assertTrue(self.game.is_finished)
 
     # ========== Score Calculation Tests ==========

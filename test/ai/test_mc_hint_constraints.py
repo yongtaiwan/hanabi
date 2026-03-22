@@ -242,9 +242,9 @@ class TestMonteCarloEvaluation(unittest.TestCase):
         play_move = None
         discard_move = None
         for move in candidate_moves:
-            if isinstance(move, Play) and move.card == 0:
+            if isinstance(move, Play) and 0 == move.card:
                 play_move = move
-            elif isinstance(move, Discard) and move.card == 0:
+            elif isinstance(move, Discard) and 0 == move.card:
                 discard_move = move
 
         if play_move is None or discard_move is None:

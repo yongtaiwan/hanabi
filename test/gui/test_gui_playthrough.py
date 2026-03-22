@@ -129,7 +129,7 @@ class TestGUIPlaythrough(unittest.TestCase):
 
             # If can't play, try to give a hint
             if state.common_view.hint_tokens > 0:
-                teammate = 1 if current_player == 0 else 0
+                teammate = 1 if 0 == current_player else 0
                 teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     # Activate hint mode

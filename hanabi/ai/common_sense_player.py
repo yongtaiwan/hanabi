@@ -293,7 +293,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             # Check if this 5 would finish the suit (4 is already played)
             if card.color not in self.common_view.cards_played:
                 return False
-            if self.common_view.cards_played[card.color].value != 4:
+            if 4 != self.common_view.cards_played[card.color].value:
                 return False
 
         return True
@@ -392,7 +392,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             # High risk if it's a 5 that's needed
             if card.number == Number.FIVE:
                 if card.color in self.common_view.cards_played:
-                    if self.common_view.cards_played[card.color].value == 4:
+                    if 4 == self.common_view.cards_played[card.color].value:
                         risk += 10.0  # This 5 is needed to finish the suit
                 else:
                     # Suit not started, but 5s are always valuable
@@ -401,7 +401,7 @@ class CommonSensePlayer(HintTrackingPlayer):
             # Medium risk if it's a 4 and we need it
             elif card.number == Number.FOUR:
                 if card.color in self.common_view.cards_played:
-                    if self.common_view.cards_played[card.color].value == 3:
+                    if 3 == self.common_view.cards_played[card.color].value:
                         risk += 3.0
 
         # Normalize by number of possible cards
@@ -451,7 +451,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         if isinstance(hint, ColorHint):
             # Check if teammate already has a color hint for this color
             for hint_type, value in previous_hints:
-                if hint_type == "color" and value == hint.color:
+                if "color" == hint_type and value == hint.color:
                     # They already have this color hint - check if it's for the same cards
                     # We can't know exact positions, but if they have the hint, they likely
                     # already know what to do with it
@@ -459,7 +459,7 @@ class CommonSensePlayer(HintTrackingPlayer):
         elif isinstance(hint, NumberHint):
             # Check if teammate already has a number hint for this number
             for hint_type, value in previous_hints:
-                if hint_type == "number" and value == hint.number:
+                if "number" == hint_type and value == hint.number:
                     # They already have this number hint
                     return True
 

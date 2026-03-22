@@ -145,7 +145,7 @@ class GameHistory:
         cmd = move_str[0].lower()
         rest = move_str[1:]
 
-        if cmd == "p":  # play
+        if "p" == cmd:  # play
             try:
                 card_index_ui = int(rest)  # 1-based
                 card_index = card_index_ui - 1  # Convert to 0-based
@@ -153,7 +153,7 @@ class GameHistory:
             except ValueError:
                 return None
 
-        elif cmd == "d":  # discard
+        elif "d" == cmd:  # discard
             try:
                 card_index_ui = int(rest)  # 1-based
                 card_index = card_index_ui - 1  # Convert to 0-based
@@ -161,7 +161,7 @@ class GameHistory:
             except ValueError:
                 return None
 
-        elif cmd == "h":  # hint
+        elif "h" == cmd:  # hint
             if not rest or len(rest) < 2:
                 return None
 

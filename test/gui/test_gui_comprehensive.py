@@ -444,7 +444,7 @@ class TestGUISimulation(unittest.TestCase):
 
             # Try to give a hint if possible
             if state.common_view.hint_tokens > 0:
-                teammate = 1 if current_player == 0 else 0
+                teammate = 1 if 0 == current_player else 0
                 teammate_hand = state.player_hands[teammate]
                 if teammate_hand.cards:
                     color = teammate_hand.cards[0].color
@@ -508,7 +508,7 @@ class TestGUISimulation(unittest.TestCase):
         if display._card_positions:
             # Get first card position
             (player_idx, card_idx), (x1, y1, x2, y2) = next(iter(display._card_positions.items()))
-            if player_idx == 0:  # Current player
+            if 0 == player_idx:  # Current player
                 # Simulate click in center of card
                 click_x = (x1 + x2) // 2
                 click_y = (y1 + y2) // 2
@@ -551,7 +551,7 @@ class TestGUISimulation(unittest.TestCase):
         if teammate_hand.cards and display._card_positions:
             # Find teammate's card
             for (player_idx, card_idx), (x1, y1, x2, y2) in display._card_positions.items():
-                if player_idx == 1:  # Teammate
+                if 1 == player_idx:  # Teammate
                     # Simulate click
                     event = Mock()
                     event.x = (x1 + x2) // 2

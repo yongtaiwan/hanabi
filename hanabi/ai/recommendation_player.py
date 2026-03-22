@@ -17,9 +17,6 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-# Recommendation encoding 0-7 only covers 4 card slots (C1-C4). Used with standard
-# 5-player rules (4 cards per hand).
-HAND_SIZE_FOR_RECOMMENDATION = 4
 NUM_PLAYERS_FOR_RECOMMENDATION = 5
 
 from hanabi.core.player import BasePlayer
@@ -206,14 +203,14 @@ class RecommendationPlayer(BasePlayer):
         if not any(isinstance(m, Play) and m.card == play_idx for m in valid_moves):
             return None
 
-        if plays_since_hint == 0:
+        if 0 == plays_since_hint:
             slot = _slot_name(play_idx, hand_size)
             self._last_decision_summary = (
                 f"Play {slot}: decoded recommendation={my_rec} (play), "
                 "no card played since last hint → follow recommendation"
             )
             return Play(play_idx)
-        if plays_since_hint == 1 and errors < 2:
+        if 1 == plays_since_hint and errors < 2:
             slot = _slot_name(play_idx, hand_size)
             self._last_decision_summary = (
                 f"Play {slot}: decoded recommendation={my_rec} (play), "
@@ -278,13 +275,12 @@ class RecommendationPlayer(BasePlayer):
                 return m
         return None
 
-    def _emergency_move_when_no_valid_moves(self, hand_size: int) -> Move:
+    def _emergency_move_when_no_valid_moves(self) -> Move:
         self._last_decision_summary = "No valid moves; play or discard index 0"
-        return Play(0) if hand_size > 0 else Discard(0)
+        return Play(0)
 
     def play(self, player_view: PlayerView) -> Move:
-        hand_size = player_view.own_hand_size
-        assert hand_size == HAND_SIZE_FOR_RECOMMENDATION
+        assert 4 == player_view.own_hand_size
         errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
 
         my_rec = self._get_my_recommendation(player_view)
@@ -294,19 +290,19 @@ class RecommendationPlayer(BasePlayer):
         valid_moves = [m for m in valid_moves if self.is_move_legal(player_view, m)]
 
         if not valid_moves:
-            return self._emergency_move_when_no_valid_moves(hand_size)
+            return self._emergency_move_when_no_valid_moves()
 
         move = (
             self._paper_try_follow_play_recommendation(
                 my_rec,
-                hand_size,
+                4,
                 valid_moves,
                 plays_since_hint=self._plays_since_hint,
                 errors=errors,
             )
             or self._paper_try_give_encoded_hint(player_view)
-            or self._paper_try_follow_discard_recommendation(my_rec, hand_size, valid_moves)
-            or self._paper_try_discard_c1(valid_moves, hand_size)
+            or self._paper_try_follow_discard_recommendation(my_rec, 4, valid_moves)
+            or self._paper_try_discard_c1(valid_moves, 4)
         )
         assert move is not None, (
             "paper rules 1–5 should always yield a move when non-empty hands and standard tokens apply"

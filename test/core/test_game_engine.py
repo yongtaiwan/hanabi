@@ -207,9 +207,9 @@ class TestGame(unittest.TestCase):
                     break
 
             new_state = self.game.state
-            if new_state.common_view.hint_tokens == 0:
+            if 0 == new_state.common_view.hint_tokens:
                 cp = self.game.current_player
-                tgt = 1 if cp != 1 else 2
+                tgt = 1 if 1 != cp else 2
                 th = new_state.player_hands[tgt]
                 col = th.cards[0].color
                 matching = [i for i, c in enumerate(th.cards) if c.color == col]
@@ -251,7 +251,7 @@ class TestGame(unittest.TestCase):
 
         # Check that deck exhaustion is tracked
         final_state = self.game.state
-        if final_state.common_view.cards_to_draw == 0:
+        if 0 == final_state.common_view.cards_to_draw:
             # Game tracks turns_left when deck is exhausted
             self.assertIsNotNone(final_state.turns_left)
 

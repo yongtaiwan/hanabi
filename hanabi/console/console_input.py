@@ -50,11 +50,11 @@ class ConsoleInput:
         command = parts[0]
 
         # Full words first — avoids treating "play 1" as simplified "p" + "lay 1"
-        if command == "play":
+        if "play" == command:
             return self._parse_play(parts)
-        if command == "discard":
+        if "discard" == command:
             return self._parse_discard(parts)
-        if command == "hint":
+        if "hint" == command:
             return self._parse_hint(player_index, parts)
 
         # Single-letter simplified: p1, d2, h3, hr, ...
@@ -75,7 +75,7 @@ class ConsoleInput:
         cmd = input_str[0]
         rest = input_str[1:]
 
-        if cmd == "p":  # play
+        if "p" == cmd:  # play
             try:
                 card_index_ui = int(rest) if rest else None
                 if card_index_ui is None:
@@ -92,7 +92,7 @@ class ConsoleInput:
             except ValueError:
                 return None, f"Invalid card index: {rest}"
 
-        elif cmd == "d":  # discard
+        elif "d" == cmd:  # discard
             try:
                 card_index_ui = int(rest) if rest else None
                 if card_index_ui is None:
@@ -109,7 +109,7 @@ class ConsoleInput:
             except ValueError:
                 return None, f"Invalid card index: {rest}"
 
-        elif cmd == "h":  # hint
+        elif "h" == cmd:  # hint
             return self._parse_simplified_hint(player_index, rest)
 
         return None, f"Unknown command: {cmd}"
@@ -119,8 +119,8 @@ class ConsoleInput:
         num_players = len(self._game.state.player_hands)
 
         # In 2-player game, automatically hint the other player
-        if num_players == 2:
-            teammate_idx = 1 if self._player_index == 0 else 0
+        if 2 == num_players:
+            teammate_idx = 1 if 0 == self._player_index else 0
         else:
             # For 3+ players, need to specify player
             # Try to parse player number first
@@ -259,7 +259,7 @@ class ConsoleInput:
             hint_type = parts[2].lower()
             teammate_hand = self._game.state.player_hands[teammate_idx]
 
-            if hint_type == "color":
+            if "color" == hint_type:
                 # Parse color
                 color_str = parts[3].upper()
                 try:
@@ -278,7 +278,7 @@ class ConsoleInput:
 
                 return ColorHint(teammate_idx, matching_indices, color), None
 
-            elif hint_type == "number":
+            elif "number" == hint_type:
                 # Parse number
                 try:
                     number_value = int(parts[3])
