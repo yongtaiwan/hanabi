@@ -324,19 +324,16 @@ class TestGame(unittest.TestCase):
 
         hints_after = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
 
-        # New card at index 0 should have no hints
-        if 0 in hints_after:
-            hint_0 = hints_after[0]
-            self.assertIsNone(hint_0.get("color"), "New card at index 0 should have no color hint")
-            self.assertIsNone(hint_0.get("number"), "New card at index 0 should have no number hint")
-
-        # Card at new index 4 should have number=1 hint (from old index 3), NOT yellow
-        self.assertIn(4, hints_after, "Card from old index 3 should now be at index 4")
-        hint_4 = hints_after[4]
-        self.assertEqual(hint_4.get("number"), Number.ONE, "Card at new index 4 should have number=1 hint")
-        self.assertIsNone(
-            hint_4.get("color"), "Card at new index 4 should NOT have color hint (yellow hint was on played card)"
-        )
+        # Left-to-right draw: playing index 4 removes the rightmost card; indices 0–3 unchanged.
+        self.assertIn(3, hints_after, "number=1 hint should still be on index 3")
+        hint_3 = hints_after[3]
+        self.assertEqual(hint_3.get("number"), Number.ONE)
+        self.assertIsNone(hint_3.get("color"))
+        # New card appended at index 4 should have no hints
+        if 4 in hints_after:
+            hint_new = hints_after[4]
+            self.assertIsNone(hint_new.get("color"))
+            self.assertIsNone(hint_new.get("number"))
 
     def test_hint_shifting_with_multiple_hints(self):
         """Test hint shifting when multiple cards have the same hint."""
@@ -366,15 +363,12 @@ class TestGame(unittest.TestCase):
         player = self.game.team.players[0]
         hints_after = player.get_hints() if isinstance(player, HintTrackingPlayer) else {}
 
-        # Index 3 should have yellow hint (from old index 2)
+        # Indices 2 and 3 unchanged after playing rightmost (index 4).
+        self.assertIn(2, hints_after)
+        self.assertEqual(hints_after[2].get("color"), Color.YELLOW)
         self.assertIn(3, hints_after)
-        self.assertEqual(hints_after[3].get("color"), Color.YELLOW, "Index 3 should have yellow hint from old index 2")
-
-        # Index 4 should have number=1 hint (from old index 3), NOT yellow
-        self.assertIn(4, hints_after)
-        hint_4 = hints_after[4]
-        self.assertEqual(hint_4.get("number"), Number.ONE, "Index 4 should have number=1 hint from old index 3")
-        self.assertIsNone(hint_4.get("color"), "Index 4 should NOT have yellow hint (that was on the played card)")
+        self.assertEqual(hints_after[3].get("number"), Number.ONE)
+        self.assertIsNone(hints_after[3].get("color"))
 
 
 if __name__ == "__main__":

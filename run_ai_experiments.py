@@ -1,8 +1,9 @@
 """
 Run AI comparison experiments for different player counts.
 
-This script compares RandomPlayer, CommonSensePlayer, MonteCarloPlayer, and (for
-5-player games only) RecommendationPlayer on the same decks for 2/3/4/5-player games.
+This script compares selected AIs on the same shuffled decks for 2–5-player games.
+Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
+``recommendation`` runs only for 5-player settings.
 
 Folder layout:
 
@@ -29,7 +30,7 @@ Folder layout:
 
 import os
 from datetime import datetime
-from typing import Dict
+from typing import Callable, Dict, FrozenSet, Tuple
 
 from hanabi.core.game import create_standard_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
@@ -70,19 +71,50 @@ def create_recommendation_player(player_index: int) -> RecommendationPlayer:
     return RecommendationPlayer(player_index)
 
 
+# CLI keys for --ais (order here defines column / summary order).
+_AI_ORDER = ("random", "commonsense", "montecarlo", "recommendation")
+_AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
+    "random": ("RandomPlayer", create_random_player),
+    "commonsense": ("CommonSensePlayer", create_common_sense_player),
+    "montecarlo": ("MonteCarloPlayer", create_monte_carlo_player),
+    "recommendation": ("RecommendationPlayer", create_recommendation_player),
+}
+
+
+def _ai_factories_for_settings(settings, enabled: FrozenSet[str]) -> Dict[str, Callable[[int], object]]:
+    """Build the ``ai_factories`` map for :meth:`GameField.run_experiment`."""
+    factories: Dict[str, Callable[[int], object]] = {}
+    for key in _AI_ORDER:
+        if key not in enabled:
+            continue
+        if key == "recommendation" and not RecommendationPlayer.supports_game_settings(settings):
+            continue
+        label, factory = _AI_REGISTRY[key]
+        factories[label] = factory
+    return factories
+
+
 def run_experiments(
     player_counts=(2, 3, 4, 5),
     num_runs: int = 100,
     base_seed: int = 42,
+    *,
+    enabled_ais: FrozenSet[str] | None = None,
 ) -> None:
     """
-    Run experiments for different player counts comparing both AIs.
+    Run experiments for different player counts comparing selected AIs.
 
     Args:
         player_counts: Iterable of player counts to test.
         num_runs: Number of runs per experiment.
         base_seed: Base random seed for reproducibility.
+        enabled_ais: Subset of ``random``, ``commonsense``, ``montecarlo``, ``recommendation``.
+            ``None`` means all four. Recommendation is skipped automatically for non-5p games.
     """
+    if enabled_ais is None:
+        enabled_ais = frozenset(_AI_REGISTRY.keys())
+    if not enabled_ais:
+        raise ValueError("enabled_ais must not be empty")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Base directory for this batch of experiments
@@ -103,14 +135,12 @@ def run_experiments(
         # Create GameField with a reproducible starting position
         game_field = GameField.create_from_settings(settings, seed=base_seed)
 
-        # Define AI factories (RecommendationPlayer only participates in 5-player games)
-        ai_factories = {
-            "RandomPlayer": create_random_player,
-            "CommonSensePlayer": create_common_sense_player,
-            "MonteCarloPlayer": create_monte_carlo_player,
-        }
-        if RecommendationPlayer.supports_game_settings(settings):
-            ai_factories["RecommendationPlayer"] = create_recommendation_player
+        ai_factories = _ai_factories_for_settings(settings, enabled_ais)
+        if not ai_factories:
+            raise ValueError(
+                f"No AIs to run for {num_players} players with --ais {sorted(enabled_ais)!r}. "
+                "(Recommendation only runs for 5 players.)"
+            )
 
         # Use an experiment id that encodes timestamp and player count so we
         # can group all player counts under the same timestamp:
@@ -162,6 +192,7 @@ def run_experiments(
                     "player_counts": list(player_counts),
                     "num_runs": num_runs,
                     "base_seed": base_seed,
+                    "ais": sorted(enabled_ais),
                 },
                 f,
                 default_flow_style=False,
@@ -177,8 +208,8 @@ def run_experiments(
     lines.append(f"- Runs per configuration: {num_runs}")
     lines.append(f"- Base seed: {base_seed}")
     lines.append(
-        "- AIs compared: RandomPlayer, CommonSensePlayer, MonteCarloPlayer; "
-        "RecommendationPlayer only for 5-player games"
+        f"- AIs selected (--ais): {', '.join(sorted(enabled_ais))} "
+        "(recommendation only participates in 5-player games)"
     )
     lines.append("")
 
@@ -249,6 +280,18 @@ def main() -> None:
     )
     parser.add_argument("--runs", type=int, default=10, help="Number of runs per configuration (default: 10).")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed (default: 42).")
+    parser.add_argument(
+        "--ais",
+        nargs="+",
+        choices=list(_AI_REGISTRY.keys()),
+        metavar="NAME",
+        default=list(_AI_REGISTRY.keys()),
+        help=(
+            "Which AIs to run (default: all). "
+            "Names: random, commonsense, montecarlo, recommendation. "
+            "Example: --ais random commonsense recommendation  (skip slow Monte Carlo)"
+        ),
+    )
     args = parser.parse_args()
     player_counts = tuple(args.players)
     if not all(2 <= p <= 5 for p in player_counts):
@@ -257,6 +300,7 @@ def main() -> None:
         player_counts=player_counts,
         num_runs=args.runs,
         base_seed=args.seed,
+        enabled_ais=frozenset(args.ais),
     )
 
 

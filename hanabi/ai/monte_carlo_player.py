@@ -340,7 +340,7 @@ class MCGameState:
             card = self._deck[self._deck_index]
             self._deck_index += 1
             self._cards_to_draw = len(self._deck) - self._deck_index
-            self._hands[player_index].insert(0, card)
+            self._hands[player_index].append(card)
 
             # Check if deck exhausted
             if 0 == self._cards_to_draw and self._turns_left is None:

@@ -88,7 +88,12 @@ class StartPosition:
 
 
 class Hand:
-    """Represents a player's hand of cards."""
+    """A player's hand.
+
+    Indices match left-to-right display: ``0`` is C1 (oldest among held cards); new draws
+    append on the right. A short endgame hand only uses indices ``0 .. len-1`` (no C4 slot
+    when ``len == 3``, etc.).
+    """
 
     def __init__(self, cards: List[Card]):
         self._cards = cards.copy()
@@ -945,9 +950,9 @@ class GameState:
         )
 
         if self._draw_deck_index < original_deck_size:
-            # Draw next card from original deck
+            # Draw next card from original deck (append on the right; index 0 = C1/left/oldest)
             new_card = self._start_position.draw_deck.cards[self._draw_deck_index]
-            hand_cards.insert(0, new_card)
+            hand_cards.append(new_card)
             self._draw_deck_index += 1
             self._common_view._cards_to_draw = original_deck_size - self._draw_deck_index
             assert self._common_view._cards_to_draw >= 0, (

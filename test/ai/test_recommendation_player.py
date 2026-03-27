@@ -51,11 +51,11 @@ class TestStandardHintColors(unittest.TestCase):
 
 
 class TestFourCardSlotName(unittest.TestCase):
-    """Paper C1..C4 labels vs internal indices."""
+    """Paper C1..C4: index 0 = C1 (left) through index 3 = C4 (right)."""
 
     def test_slot_names(self) -> None:
-        self.assertEqual("C4", RecommendationPlayer._four_card_slot_name(0))
-        self.assertEqual("C1", RecommendationPlayer._four_card_slot_name(3))
+        self.assertEqual("C1", RecommendationPlayer._four_card_slot_name(0))
+        self.assertEqual("C4", RecommendationPlayer._four_card_slot_name(3))
 
 
 class TestGetRecommendationForHand(unittest.TestCase):
@@ -69,7 +69,7 @@ class TestGetRecommendationForHand(unittest.TestCase):
         self.player.set_common_view(self.common)
 
     def test_rank5_prefers_c1_slot_first(self) -> None:
-        """Two playable fives: C1 (idx 3) is checked before C4 (idx 0) in ``_REC_SLOT_ORDER``."""
+        """Two playable fives: C1 (index 0) is checked before C4 (index 3)."""
         hand_cards = [
             Card(Color.RED, Number.FIVE),
             Card(Color.RED, Number.ONE),
@@ -85,7 +85,7 @@ class TestGetRecommendationForHand(unittest.TestCase):
         c1_idx = _REC_SLOT_ORDER[0]
         with patch.object(self.common, "card_kind", new=kind):
             rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
-        self.assertEqual(3 - c1_idx, rec)
+        self.assertEqual(c1_idx, rec)
 
     def test_discard_c1_when_no_prior_rule_applies(self) -> None:
         """If kinds never match rules 1–4, rule 5 returns discard C1 (code 4 in 4–7 discard range)."""
@@ -94,6 +94,17 @@ class TestGetRecommendationForHand(unittest.TestCase):
             return CardKind.CRITICAL
 
         hand_cards = [Card(Color.RED, Number.ONE)] * 4
+        with patch.object(self.common, "card_kind", new=kind):
+            rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
+        self.assertEqual(4, rec)
+
+    def test_three_cards_rule5_discards_c1(self) -> None:
+        """Three cards: C1 still index 0; rule 5 is discard C1 (code 4)."""
+
+        def kind(card: Card, st: GameSettings) -> CardKind:
+            return CardKind.CRITICAL
+
+        hand_cards = [Card(Color.RED, Number.ONE)] * 3
         with patch.object(self.common, "card_kind", new=kind):
             rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
         self.assertEqual(4, rec)
@@ -125,8 +136,10 @@ class TestSumPeerRecommendations(unittest.TestCase):
             "_get_recommendation_for_hand",
             return_value=1,
         ):
-            total = self.player._sum_peer_recommendations(self.view)
+            total, mod8, breakdown = self.player._sum_peer_recommendations(self.view)
         self.assertEqual(4, total)
+        self.assertEqual(4, mod8)
+        self.assertEqual("P2:1, P3:1, P4:1, P5:1", breakdown)
 
     def test_sum_excludes_hinter_when_decoding(self) -> None:
         with patch.object(
@@ -134,8 +147,10 @@ class TestSumPeerRecommendations(unittest.TestCase):
             "_get_recommendation_for_hand",
             return_value=2,
         ):
-            total = self.player._sum_peer_recommendations(self.view, exclude_index=1)
+            total, mod8, breakdown = self.player._sum_peer_recommendations(self.view, exclude_index=1)
         self.assertEqual(6, total)
+        self.assertEqual(6, mod8)
+        self.assertEqual("P3:2, P4:2, P5:2", breakdown)
 
 
 class TestDecodeRecommendation(unittest.TestCase):
@@ -193,7 +208,7 @@ class TestComputeHint(unittest.TestCase):
         with patch.object(
             RecommendationPlayer,
             "_sum_peer_recommendations",
-            return_value=4,
+            return_value=(4, 4, "P2:1, P3:1, P4:1, P5:1"),
         ):
             move = self.player._compute_hint(view)
 
@@ -209,7 +224,7 @@ class TestComputeHint(unittest.TestCase):
         with patch.object(
             RecommendationPlayer,
             "_sum_peer_recommendations",
-            return_value=0,
+            return_value=(0, 0, "P2:0"),
         ):
             move = self.player._compute_hint(view)
         self.assertIsInstance(move, NumberHint)

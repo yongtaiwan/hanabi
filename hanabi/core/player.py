@@ -185,12 +185,12 @@ class HintTrackingPlayer(BasePlayer):
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
-            self._update_hints_from_hint(move)
+            self._update_hints_from_hint(move, observer_view)
 
     def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         if move.teammate == self._player_index:
-            self._update_hints_from_hint(move)
+            self._update_hints_from_hint(move, observer_view)
 
     def get_hints(self) -> Dict[int, Dict[str, Optional[Union[Color, Number]]]]:
         """
@@ -201,10 +201,13 @@ class HintTrackingPlayer(BasePlayer):
         """
         return {idx: {"color": h.get("color"), "number": h.get("number")} for idx, h in self._hints.items()}
 
-    def _update_hints_from_hint(self, hint: Hint) -> None:
-        """Update hints when receiving a hint."""
-        # Get current hand size from game settings
-        hand_size = self.game_settings.max_cards_in_hand
+    def _update_hints_from_hint(self, hint: Hint, observer_view: PlayerView) -> None:
+        """Update hints when receiving a hint about our hand.
+
+        ``observer_view.own_hand_size`` reflects how many slots are currently visible to us
+        (may be below ``max_cards_in_hand`` late in the game).
+        """
+        hand_size = observer_view.own_hand_size
 
         for card_idx in hint.cards:
             assert 0 <= card_idx < hand_size, (
@@ -221,32 +224,29 @@ class HintTrackingPlayer(BasePlayer):
                 self._hints[card_idx]["number"] = hint.number
 
     def _update_hints_from_card_move(self, move: CardMove) -> None:
-        """Update hints when playing/discarding a card."""
+        """Update hints when playing/discarding a card.
+
+        Hand order is left-to-right: index 0 is C1 (oldest). When a card is removed at
+        index ``i`` (``list.pop``), every card strictly to its right shifts down by one.
+        If a replacement card is drawn, it is **appended** on the right (new highest index).
+
+        Net effect on hint bookkeeping after the pop (before any draw append):
+        - Hints for indices ``< i``: unchanged (same physical card remains in that slot).
+        - Hints for indices ``> i``: index decreases by 1 (card slid left).
+        The removed slot's hint was deleted above. A new draw does not shift existing
+        indices (it only adds a new rightmost slot with no hint yet).
+        """
         card_index = move.card
 
-        # Remove hints for the card being played/discarded
         if card_index in self._hints:
             del self._hints[card_index]
 
-        # Shift remaining hints to new indices
-        # When a card is played/discarded:
-        # 1. The card at card_index is removed (cards at positions > card_index shift left by 1)
-        # 2. A new card is drawn and inserted at position 0 (all cards shift right by 1)
-        # Net effect:
-        # - Cards at indices < card_index: shift right by 1 (from insertion at 0)
-        # - Cards at indices > card_index: shift left by 1 (from removal), then right by 1
-        #   (from insertion) = no net change
-        # Special case: when card_index = 0, card removed and new card fills position 0,
-        # so no net change for other cards
         new_hints = {}
         for old_idx, hint_data in self._hints.items():
             if old_idx < card_index:
-                # Card shifted right by 1 due to new card insertion at position 0
-                new_hints[old_idx + 1] = hint_data
-            elif old_idx > card_index:
-                # Card shifted left by 1 from removal, then right by 1 from insertion = no net change
-                # This includes the special case when card_index = 0 (all remaining cards have old_idx > 0)
                 new_hints[old_idx] = hint_data
+            elif old_idx > card_index:
+                new_hints[old_idx - 1] = hint_data
         self._hints = new_hints
 
 

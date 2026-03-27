@@ -387,13 +387,10 @@ class TestGameComprehensive(unittest.TestCase):
         initial_deck_size = self.game.state.common_view.cards_to_draw
         hand = self.game.state.player_hands[0]
         initial_hand_size = len(hand.cards)
+        self.assertGreater(initial_deck_size, 0, "deck must have cards to draw after a play")
 
-        # Find and play a 1
-        for i, card in enumerate(hand.cards):
-            if card.number == Number.ONE:
-                move = Play(i)
-                self.game.process_move(0, move)
-                break
+        # Play any card from index 0 (valid play or misplay both draw when the deck is non-empty).
+        self.game.process_move(0, Play(0))
 
         # Check hand size maintained and deck decreased
         new_hand = self.game.state.player_hands[0]

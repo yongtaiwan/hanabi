@@ -6,7 +6,6 @@ Tests that hints are correctly used to constrain possible cards.
 
 import unittest
 from hanabi.core.game import create_standard_game_settings, PlayerView
-from hanabi.core.game_field import GameField
 from hanabi.core.moves import ColorHint, NumberHint, Play, Discard
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
