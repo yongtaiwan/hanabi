@@ -1048,7 +1048,8 @@ class Game:
 
         Args:
             start_position: The starting position (settings and initial deck)
-            team: The team of players (players are also observers)
+            team: The team of players (:class:`~hanabi.core.player.BasePlayer` observers and/or
+                :class:`~hanabi.core.player.Cheater` full-state agents).
             on_move: Optional callback(player_index, move, old_state, new_state) called after
                      each move is processed. Use for display updates, logging, etc.
         """
@@ -1110,22 +1111,27 @@ class Game:
         """
         Play the game - drives the game loop.
 
-        This method calls players' play() method to get moves and
-        notifies observers about moves made.
+        Calls :meth:`~hanabi.core.player.Player.play` with a :class:`PlayerView` for
+        :class:`~hanabi.core.player.BasePlayer` seats, or :meth:`~hanabi.core.player.Cheater.play`
+        with :class:`GameState` for cheaters. Notifies :class:`~hanabi.core.player.BasePlayer`
+        observers after each move.
         """
         assert self._turns, "Game not initialized. No turns yet."
+        from .player import Cheater
+
         while not self.is_finished:
-            player = self._team.players[self.state.current_player]
+            current = self.state.current_player
+            player = self._team.players[current]
 
-            # Get player view
-            player_view = self._get_player_view(self.state.current_player)
-
-            # Get move from player (must be legal; illegal moves are bugs in the player / UI)
-            move = player.play(player_view)
+            if isinstance(player, Cheater):
+                move = player.play(self.state)
+            else:
+                player_view = self._get_player_view(current)
+                move = player.play(player_view)
 
             # Process the move; _process_move asserts move legality
             # Note: _process_move calls _notify_players internally before the callback
-            self._process_move(self.state.current_player, move)
+            self._process_move(current, move)
 
             # Advance turn
             self._advance_turn()
@@ -1140,7 +1146,8 @@ class Game:
         Create and initialize a new game.
 
         Args:
-            team: The team of players (players are also observers)
+            team: The team of players (:class:`~hanabi.core.player.BasePlayer` and/or
+                :class:`~hanabi.core.player.Cheater`).
             settings: Game settings
             on_move: Optional callback(player_index, move, old_state, new_state) called after
                      each move is processed. Use for display updates, logging, etc.
@@ -1214,9 +1221,11 @@ class Game:
         assert len(self._team.players) == self.settings.num_players, (
             f"Number of players ({len(self._team.players)}) does not match settings ({self.settings.num_players})"
         )
-        # Set game settings for all players (they are BasePlayer instances and observe all moves)
+        from .player import BasePlayer
+
         for player in self._team.players:
-            player.set_game_settings(self.settings)
+            if isinstance(player, BasePlayer):
+                player.set_game_settings(self.settings)
 
     def _set_common_view_for_players(self) -> None:
         """
@@ -1232,17 +1241,23 @@ class Game:
         # Set common view - players need the current state's common_view
         # Note: Each GameState has its own CommonView, so we must update players' references
         # after each state transition to ensure they see current values
+        from .player import BasePlayer
+
         for player in self._team.players:
-            player.set_common_view(self.state.common_view)
+            if isinstance(player, BasePlayer):
+                player.set_common_view(self.state.common_view)
 
     def _notify_players(self, player_index: int, move: Move) -> None:
-        """Notify all players about a move (all players observe all moves)."""
+        """Notify all :class:`~hanabi.core.player.BasePlayer` seats about a move."""
+        from .player import BasePlayer
+
         for observer_index, player in enumerate(self._team.players):
-            player.observe(
-                player_index,
-                move,
-                observer_view=self._get_player_view(observer_index),
-            )
+            if isinstance(player, BasePlayer):
+                player.observe(
+                    player_index,
+                    move,
+                    observer_view=self._get_player_view(observer_index),
+                )
 
     def _get_player_view(self, player_index: int) -> PlayerView:
         """

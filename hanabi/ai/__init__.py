@@ -6,6 +6,7 @@ from .random_player import RandomPlayer
 from .common_sense_player import CommonSensePlayer
 from .monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 from .recommendation_player import RecommendationPlayer
+from .common_sense_cheater import CommonSenseCheater
 
 __all__ = [
     "RandomPlayer",
@@ -13,4 +14,5 @@ __all__ = [
     "MonteCarloPlayer",
     "MonteCarloConfig",
     "RecommendationPlayer",
+    "CommonSenseCheater",
 ]

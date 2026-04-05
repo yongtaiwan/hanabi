@@ -18,7 +18,7 @@ from .game import (
     Deck,
 )
 from .game_field import GameField
-from .player import Player, BasePlayer, HintTrackingPlayer, HumanPlayer, StrategyAlphaPlayer, PlayerTeam
+from .player import Player, Cheater, BasePlayer, HintTrackingPlayer, HumanPlayer, StrategyAlphaPlayer, PlayerTeam
 
 # RandomPlayer is in hanabi.ai, not core.player
 from .observer import Observer
@@ -60,6 +60,7 @@ __all__ = [
     "NumberHint",
     # Players
     "Player",
+    "Cheater",
     "BasePlayer",
     "HintTrackingPlayer",
     "HumanPlayer",

@@ -4,6 +4,8 @@ Run AI comparison experiments for different player counts.
 This script compares selected AIs on the same shuffled decks for 2–5-player games.
 Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
 ``recommendation`` runs only for 5-player settings.
+``commonsense_cheater`` (``CommonSenseCheater``) is for benchmarking only and is not offered
+in the GUI or console apps.
 
 Folder layout:
 
@@ -21,6 +23,7 @@ Folder layout:
             ai/
               RandomPlayer/
               CommonSensePlayer/
+              CommonSenseCheater/
               RecommendationPlayer/
               MonteCarloPlayer/
           3p/
@@ -34,7 +37,14 @@ from typing import Callable, Dict, FrozenSet, Tuple
 
 from hanabi.core.game import create_standard_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
-from hanabi.ai import RandomPlayer, CommonSensePlayer, MonteCarloPlayer, MonteCarloConfig, RecommendationPlayer
+from hanabi.ai import (
+    RandomPlayer,
+    CommonSensePlayer,
+    CommonSenseCheater,
+    MonteCarloPlayer,
+    MonteCarloConfig,
+    RecommendationPlayer,
+)
 
 try:
     import yaml
@@ -50,6 +60,11 @@ def create_random_player(player_index: int) -> RandomPlayer:
 def create_common_sense_player(player_index: int) -> CommonSensePlayer:
     """Factory for CommonSensePlayer."""
     return CommonSensePlayer(player_index)
+
+
+def create_common_sense_cheater(player_index: int) -> CommonSenseCheater:
+    """Factory for CommonSenseCheater (full-state policy; experiments only)."""
+    return CommonSenseCheater(player_index)
 
 
 def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
@@ -72,10 +87,13 @@ def create_recommendation_player(player_index: int) -> RecommendationPlayer:
 
 
 # CLI keys for --ais (order here defines column / summary order).
-_AI_ORDER = ("random", "commonsense", "montecarlo", "recommendation")
+_AI_ORDER = ("random", "commonsense", "commonsense_cheater", "montecarlo", "recommendation")
+# Cheater is opt-in on the CLI so default batches match the four interactive AIs (GUI/console).
+_CLI_DEFAULT_AIS = tuple(k for k in _AI_ORDER if k != "commonsense_cheater")
 _AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
     "random": ("RandomPlayer", create_random_player),
     "commonsense": ("CommonSensePlayer", create_common_sense_player),
+    "commonsense_cheater": ("CommonSenseCheater", create_common_sense_cheater),
     "montecarlo": ("MonteCarloPlayer", create_monte_carlo_player),
     "recommendation": ("RecommendationPlayer", create_recommendation_player),
 }
@@ -108,8 +126,8 @@ def run_experiments(
         player_counts: Iterable of player counts to test.
         num_runs: Number of runs per experiment.
         base_seed: Base random seed for reproducibility.
-        enabled_ais: Subset of ``random``, ``commonsense``, ``montecarlo``, ``recommendation``.
-            ``None`` means all four. Recommendation is skipped automatically for non-5p games.
+        enabled_ais: Subset of registry keys (see ``--ais``). ``None`` means all registered AIs.
+            Recommendation is skipped automatically for non-5p games.
     """
     if enabled_ais is None:
         enabled_ais = frozenset(_AI_REGISTRY.keys())
@@ -268,7 +286,9 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Run AI comparison experiments (Random, CommonSense, Recommendation, MonteCarlo)."
+        description=(
+            "Run AI comparison experiments (Random, CommonSense, CommonSenseCheater, MonteCarlo, Recommendation)."
+        )
     )
     parser.add_argument(
         "--players",
@@ -285,11 +305,12 @@ def main() -> None:
         nargs="+",
         choices=list(_AI_REGISTRY.keys()),
         metavar="NAME",
-        default=list(_AI_REGISTRY.keys()),
+        default=list(_CLI_DEFAULT_AIS),
         help=(
-            "Which AIs to run (default: all). "
-            "Names: random, commonsense, montecarlo, recommendation. "
-            "Example: --ais random commonsense recommendation  (skip slow Monte Carlo)"
+            "Which AIs to run (default: random, commonsense, montecarlo, recommendation). "
+            "Names: random, commonsense, commonsense_cheater, montecarlo, recommendation. "
+            "Add commonsense_cheater explicitly for full-state benchmarks (not in GUI/console). "
+            "Example: --ais random commonsense commonsense_cheater"
         ),
     )
     args = parser.parse_args()

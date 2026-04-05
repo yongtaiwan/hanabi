@@ -12,7 +12,7 @@ import time
 import random
 import statistics
 from datetime import datetime
-from typing import Dict, List, Callable, Optional, Any
+from typing import Dict, List, Callable, Optional, Any, Union
 from dataclasses import dataclass, field, asdict
 
 try:
@@ -24,7 +24,7 @@ except ImportError:
     import json
 
 from .game import Game, StartPosition, GameSettings, create_deck_from_settings, Hand, CommonView, GameState
-from .player import PlayerTeam, BasePlayer
+from .player import PlayerTeam, BasePlayer, Cheater
 from .game_history import GameHistory
 
 
@@ -137,7 +137,7 @@ class GameField:
 
     def run_experiment(
         self,
-        ai_factories: Dict[str, Callable[[int], BasePlayer]],
+        ai_factories: Dict[str, Callable[[int], Union[BasePlayer, Cheater]]],
         num_runs: int = 100,
         save_records: bool = True,
         random_seed: Optional[int] = None,
@@ -148,7 +148,7 @@ class GameField:
 
         Args:
             ai_factories: Dictionary mapping AI name to factory function that creates a player
-                         Factory signature: (player_index: int) -> BasePlayer
+                         Factory signature: (player_index: int) -> BasePlayer | Cheater
             num_runs: Number of experiment runs (each with a new deck shuffle)
             save_records: Whether to save individual game records
             random_seed: Optional seed for the first run (subsequent runs use sequential seeds)

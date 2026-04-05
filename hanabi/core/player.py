@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .game import GameSettings, CommonView
 
 from .observer import Observer
-from .game import PlayerView, GameSettings
+from .game import GameState, PlayerView, GameSettings
 from .move_validation import is_move_legal_from_view
 from .moves import (
     Move,
@@ -45,6 +45,35 @@ class Player(ABC):
             The move to make
         """
         pass
+
+
+class Cheater(ABC):
+    """
+    Full-information seat: chooses a move from :class:`~hanabi.core.game.GameState`.
+
+    Does not observe moves (sees authoritative state each turn). Not a :class:`Player`.
+    """
+
+    def __init__(self, player_index: int) -> None:
+        self._player_index = player_index
+
+    @property
+    def player_index(self) -> int:
+        return self._player_index
+
+    @abstractmethod
+    def play(self, state: GameState) -> Move:
+        """
+        Choose a legal move given full table state (all hands, common view, deck index).
+
+        Must not assume knowledge of undrawn card order beyond what ``state`` exposes.
+        """
+        pass
+
+    @classmethod
+    def supports_game_settings(cls, game_settings: GameSettings) -> bool:
+        """Return whether this cheater type is valid for the given game configuration."""
+        return True
 
 
 class BasePlayer(Observer, Player):
@@ -310,15 +339,19 @@ class StrategyAlphaPlayer(BasePlayer):
             return Play(0)  # Simplified - would need actual strategy
 
 
-class PlayerTeam:
-    """Represents a team of players (all players are BasePlayer instances and observe all moves)."""
+TeamMember = Union[BasePlayer, Cheater]
 
-    def __init__(self, players: List[BasePlayer]):
+
+class PlayerTeam:
+    """Team of :class:`BasePlayer` and/or :class:`Cheater` seats."""
+
+    def __init__(self, players: List[TeamMember]):
         """
         Initialize a player team.
 
         Args:
-            players: List of BasePlayer instances in the team (all observe all moves)
+            players: Each seat is a :class:`BasePlayer` (partial view + observer) or
+                :class:`Cheater` (full state, no observation).
         """
         self._players = players.copy()
 
@@ -326,7 +359,7 @@ class PlayerTeam:
         return f"PlayerTeam(players={len(self._players)})"
 
     @property
-    def players(self) -> List[BasePlayer]:
+    def players(self) -> List[TeamMember]:
         """Get the list of players in the team."""
         return self._players.copy()
 

@@ -75,6 +75,8 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
+        # Full-state benchmark bots (e.g. CommonSenseCheater) are registered only in run_ai_experiments.py.
+
         # For interactive play, use fast config for MonteCarlo
         def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
             config = MonteCarloConfig(

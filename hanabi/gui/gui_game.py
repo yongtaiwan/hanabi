@@ -233,6 +233,8 @@ class GUIGame:
         from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
+        # Full-state benchmark bots (e.g. CommonSenseCheater) are registered only in run_ai_experiments.py.
+
         # For interactive GUI play, use faster config for responsive gameplay
         # Use shorter thinking time (few seconds up to 5 seconds) for better UX
         # Use very low min_simulations to ensure time limits are respected
