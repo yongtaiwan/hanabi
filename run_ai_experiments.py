@@ -17,6 +17,7 @@ Folder layout:
           2p/
             settings.yaml
             statistics.yaml
+          outcome_categories.yaml   # vs CommonSenseCheater (only if cheater ran with other AIs)
             games/
               all-games/
               <run_id>/
@@ -33,10 +34,11 @@ Folder layout:
 
 import os
 from datetime import datetime
-from typing import Callable, Dict, FrozenSet, Tuple
+from typing import Any, Callable, Dict, FrozenSet, Tuple
 
 from hanabi.core.game import create_standard_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
+from hanabi.tools.experiment_outcome import build_experiment_outcome_categories_payload
 from hanabi.ai import (
     RandomPlayer,
     CommonSensePlayer,
@@ -141,6 +143,7 @@ def run_experiments(
 
     # Store per-player-count ExperimentResults to generate a markdown summary later
     all_results: Dict[int, ExperimentResults] = {}
+    all_outcome_payloads: Dict[int, Any] = {}
 
     for num_players in player_counts:
         print("=" * 70)
@@ -175,6 +178,24 @@ def run_experiments(
             experiment_id=experiment_id,
         )
         all_results[num_players] = results
+
+        outcome_payload = build_experiment_outcome_categories_payload(results)
+        if outcome_payload is not None:
+            all_outcome_payloads[num_players] = outcome_payload
+            if yaml is not None:
+                oc_path = os.path.join(GameField.EXPERIMENTS_BASE_DIR, results.experiment_id, "outcome_categories.yaml")
+                with open(oc_path, "w") as f:
+                    yaml.dump(
+                        outcome_payload,
+                        f,
+                        default_flow_style=False,
+                        sort_keys=False,
+                        allow_unicode=True,
+                        width=120,
+                    )
+                print(f"Outcome categories saved to: {oc_path}")
+            else:  # pragma: no cover
+                print("Outcome categories computed (install PyYAML to write outcome_categories.yaml)")
 
         # Save statistics for this experiment
         stats_file = game_field.save_statistics(results)
@@ -266,6 +287,9 @@ def run_experiments(
             lines.append(f"{rank}. **{ai_name}**: {stats.average_score:.2f}")
         lines.append("")
 
+        payload = all_outcome_payloads.get(num_players)
+        baseline_name = str(payload["baseline"]) if payload is not None else None
+
         for ai_name, stats in results.summary.items():
             lines.append(f"### {ai_name}")
             lines.append(f"- Games played: {stats.games_played}")
@@ -273,7 +297,60 @@ def run_experiments(
             lines.append(f"- Moves: avg {stats.average_moves:.1f}")
             lines.append(f"- Thinking time: avg {stats.average_duration:.3f}s per game")
             lines.append(f"- Perfect-score win rate: {stats.win_rate * 100:.1f}%")
+            if (
+                payload is not None
+                and baseline_name is not None
+                and ai_name != baseline_name
+                and ai_name in payload["subjects"]
+            ):
+                tip = payload["subjects"][ai_name].get("top_non_perfect_reason")
+                if tip:
+                    lines.append(f"- Most common non-perfect (vs {baseline_name}): {tip}")
+                else:
+                    lines.append(f"- Most common non-perfect (vs {baseline_name}): — (all max score)")
             lines.append("")
+        if payload is not None:
+            baseline = str(payload["baseline"])
+            lines.append(f"### Outcome categories vs {baseline}")
+            lines.append("")
+            lines.append(
+                "Each row is an exclusive outcome vs the baseline (see `hanabi/tools/experiment_outcome.py`). "
+                "Numeric taxonomy keys are omitted here; they appear as `code` in `outcome_categories.yaml` if needed."
+            )
+            lines.append("")
+            subjects = payload["subjects"]
+            for subject_name in sorted(subjects.keys()):
+                body = subjects[subject_name]
+                lines.append(f"#### {subject_name}")
+                lines.append("")
+                lines.append("| Count | Outcome |")
+                lines.append("|------:|---------|")
+                for row in body["outcomes"]:
+                    desc = str(row["description"])
+                    cnt = int(row["count"])
+                    lines.append(f"| {cnt} | {desc} |")
+                lines.append("")
+                tip = body.get("top_non_perfect_reason")
+                if tip:
+                    lines.append(f"**Most common non-perfect:** {tip}")
+                else:
+                    lines.append("**Most common non-perfect:** — (all max score)")
+                lines.append("")
+                any_non_perfect = any(row.get("game_numbers") for row in body["outcomes"])
+                if any_non_perfect:
+                    lines.append(
+                        "Non-perfect games by outcome (same game number for each AI on that shuffle, "
+                        "e.g. `run_007_ai_<Name>.yaml`):"
+                    )
+                    lines.append("")
+                    for row in body["outcomes"]:
+                        nums = row.get("game_numbers")
+                        if not nums:
+                            continue
+                        desc = str(row["description"])
+                        games_fmt = ", ".join(str(int(n)) for n in nums)
+                        lines.append(f"- {desc} — **games:** {games_fmt}")
+                    lines.append("")
 
         lines.append("")
 

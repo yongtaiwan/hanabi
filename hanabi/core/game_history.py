@@ -13,7 +13,7 @@ except ImportError:
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from .game import Game, Deck, StartPosition
+from .game import Game, Deck, GameSettings, StartPosition
 from .moves import Move, Play, Discard, ColorHint, NumberHint
 from .enums import Color, Number
 from .card import Card
@@ -167,6 +167,30 @@ class GameHistory:
                 return json.load(f)
 
     @staticmethod
+    def settings_from_history_dict(history_data: dict) -> GameSettings:
+        """
+        Build :class:`~hanabi.core.game.GameSettings` from a saved history dict.
+
+        Fills in standard card distribution and colors, then applies any keys present
+        under ``settings`` (tokens, hand size, auto-end flag).
+        """
+        from .game import GameSettings, create_standard_game_settings
+
+        settings_dict = history_data.get("settings", {})
+        num_players = settings_dict.get("num_players", 3)
+        base = create_standard_game_settings(num_players)
+        return GameSettings(
+            num_players=num_players,
+            max_live_tokens=settings_dict.get("max_live_tokens", base.max_live_tokens),
+            max_hint_tokens=settings_dict.get("max_hint_tokens", base.max_hint_tokens),
+            max_cards_in_hand=settings_dict.get("max_cards_in_hand", base.max_cards_in_hand),
+            cards=base.cards,
+            auto_end_when_no_points_possible=settings_dict.get(
+                "auto_end_when_no_points_possible", base.auto_end_when_no_points_possible
+            ),
+        )
+
+    @staticmethod
     def create_game_from_history(history_data: dict, team, on_move=None) -> Game:
         """
         Create a Game instance from history data for replay.
@@ -179,18 +203,15 @@ class GameHistory:
         Returns:
             A Game instance reconstructed from history
         """
-        from .game import create_standard_game_settings
-        from .game import create_deck_from_settings, Hand, CommonView, GameState
+        from .game import Hand, CommonView, GameState
 
         # Get deck from root level
         deck_short = history_data.get("deck", [])
         if not deck_short:
             raise ValueError("History data missing deck")
 
-        # Get settings
-        settings_dict = history_data.get("settings", {})
-        num_players = settings_dict.get("num_players", 3)
-        settings = create_standard_game_settings(num_players)
+        settings = GameHistory.settings_from_history_dict(history_data)
+        num_players = settings.num_players
         # Reconstruct deck from saved cards
         deck_cards = [GameHistory._short_to_card(short) for short in deck_short]
         deck = Deck(deck_cards)
