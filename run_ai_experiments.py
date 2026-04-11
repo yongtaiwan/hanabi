@@ -4,8 +4,8 @@ Run AI comparison experiments for different player counts.
 This script compares selected AIs on the same shuffled decks for 2–5-player games.
 Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
 ``recommendation`` runs only for 5-player settings.
-``commonsense_cheater`` (``CommonSenseCheater``) is for benchmarking only and is not offered
-in the GUI or console apps.
+``commonsense_cheater`` (``CommonSenseCheater``) and ``paper_cheater`` (``PaperCheater``) are
+for benchmarking only and are not offered in the GUI or console apps.
 
 Folder layout:
 
@@ -25,6 +25,7 @@ Folder layout:
               RandomPlayer/
               CommonSensePlayer/
               CommonSenseCheater/
+              PaperCheater/
               RecommendationPlayer/
               MonteCarloPlayer/
           3p/
@@ -43,6 +44,7 @@ from hanabi.ai import (
     RandomPlayer,
     CommonSensePlayer,
     CommonSenseCheater,
+    PaperCheater,
     MonteCarloPlayer,
     MonteCarloConfig,
     RecommendationPlayer,
@@ -69,6 +71,11 @@ def create_common_sense_cheater(player_index: int) -> CommonSenseCheater:
     return CommonSenseCheater(player_index)
 
 
+def create_paper_cheater(player_index: int) -> PaperCheater:
+    """Factory for PaperCheater (full-state index-priority policy; experiments only)."""
+    return PaperCheater(player_index)
+
+
 def create_monte_carlo_player(player_index: int) -> MonteCarloPlayer:
     """Factory for MonteCarloPlayer with reasonable config for comparison."""
     # Use a balanced config: not too slow, but still effective
@@ -89,13 +96,14 @@ def create_recommendation_player(player_index: int) -> RecommendationPlayer:
 
 
 # CLI keys for --ais (order here defines column / summary order).
-_AI_ORDER = ("random", "commonsense", "commonsense_cheater", "montecarlo", "recommendation")
-# Cheater is opt-in on the CLI so default batches match the four interactive AIs (GUI/console).
-_CLI_DEFAULT_AIS = tuple(k for k in _AI_ORDER if k != "commonsense_cheater")
+_AI_ORDER = ("random", "commonsense", "commonsense_cheater", "paper_cheater", "montecarlo", "recommendation")
+# Full-state benchmark bots are opt-in so default batches match the four interactive AIs (GUI/console).
+_CLI_DEFAULT_AIS = tuple(k for k in _AI_ORDER if k not in ("commonsense_cheater", "paper_cheater"))
 _AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
     "random": ("RandomPlayer", create_random_player),
     "commonsense": ("CommonSensePlayer", create_common_sense_player),
     "commonsense_cheater": ("CommonSenseCheater", create_common_sense_cheater),
+    "paper_cheater": ("PaperCheater", create_paper_cheater),
     "montecarlo": ("MonteCarloPlayer", create_monte_carlo_player),
     "recommendation": ("RecommendationPlayer", create_recommendation_player),
 }
@@ -364,7 +372,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run AI comparison experiments (Random, CommonSense, CommonSenseCheater, MonteCarlo, Recommendation)."
+            "Run AI comparison experiments (Random, CommonSense, CommonSenseCheater, PaperCheater, "
+            "MonteCarlo, Recommendation)."
         )
     )
     parser.add_argument(
@@ -385,9 +394,9 @@ def main() -> None:
         default=list(_CLI_DEFAULT_AIS),
         help=(
             "Which AIs to run (default: random, commonsense, montecarlo, recommendation). "
-            "Names: random, commonsense, commonsense_cheater, montecarlo, recommendation. "
-            "Add commonsense_cheater explicitly for full-state benchmarks (not in GUI/console). "
-            "Example: --ais random commonsense commonsense_cheater"
+            "Names: random, commonsense, commonsense_cheater, paper_cheater, montecarlo, recommendation. "
+            "Add commonsense_cheater and/or paper_cheater for full-state benchmarks (not in GUI/console). "
+            "Example: --ais random commonsense commonsense_cheater paper_cheater"
         ),
     )
     args = parser.parse_args()

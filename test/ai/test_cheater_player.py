@@ -1,8 +1,9 @@
-"""CommonSenseCheater: full-state play() and Game dispatch."""
+"""Full-state cheaters: CommonSenseCheater and PaperCheater play() and GameField experiments."""
 
 import unittest
 
 from hanabi.ai.common_sense_cheater import CommonSenseCheater
+from hanabi.ai.paper_cheater import PaperCheater
 from hanabi.ai.random_player import RandomPlayer
 from hanabi.core.enums import CardKind
 from hanabi.core.game import Game, create_standard_game_settings
@@ -66,6 +67,47 @@ class CommonSenseCheaterTests(unittest.TestCase):
                     self.assertNotIsInstance(move, (ColorHint, NumberHint), msg=f"run_id={run_id} turn={st.turn_number}")
                 game.process_move(idx, move)
                 game._advance_turn()
+
+
+class PaperCheaterComparisonTests(unittest.TestCase):
+    def test_paper_cheater_outscores_random_on_same_seeds_small_sample(self) -> None:
+        settings = create_standard_game_settings(3)
+        paper_field = GameField.create_from_settings(settings, seed=42)
+        random_field = GameField.create_from_settings(settings, seed=42)
+
+        paper_results = paper_field.run_experiment(
+            ai_factories={"PaperCheater": PaperCheater},
+            num_runs=15,
+            save_records=False,
+            random_seed=0,
+            experiment_id="test_paper_cheater_vs_self",
+        )
+        random_results = random_field.run_experiment(
+            ai_factories={"RandomPlayer": RandomPlayer},
+            num_runs=15,
+            save_records=False,
+            random_seed=0,
+            experiment_id="test_random_baseline_paper",
+        )
+        p = paper_results.summary["PaperCheater"].average_score
+        r = random_results.summary["RandomPlayer"].average_score
+        self.assertGreater(p, r)
+
+    def test_paper_and_commonsense_cheaters_same_experiment_same_decks(self) -> None:
+        """Both full-state bots run on identical shuffles in one :meth:`GameField.run_experiment` batch."""
+        settings = create_standard_game_settings(3)
+        field = GameField.create_from_settings(settings, seed=42)
+        results = field.run_experiment(
+            ai_factories={"CommonSenseCheater": CommonSenseCheater, "PaperCheater": PaperCheater},
+            num_runs=15,
+            save_records=False,
+            random_seed=0,
+            experiment_id="test_cs_and_paper_cheaters_together",
+        )
+        self.assertEqual(15, results.summary["CommonSenseCheater"].games_played)
+        self.assertEqual(15, results.summary["PaperCheater"].games_played)
+        self.assertGreater(results.summary["CommonSenseCheater"].average_score, 0.0)
+        self.assertGreater(results.summary["PaperCheater"].average_score, 0.0)
 
 
 if __name__ == "__main__":
