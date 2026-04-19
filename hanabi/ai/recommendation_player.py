@@ -23,6 +23,7 @@ standard suits as :func:`hanabi.core.game.create_standard_game_settings`.
 
 from __future__ import annotations
 
+from enum import IntEnum
 from typing import List, Optional
 
 NUM_PLAYERS_FOR_RECOMMENDATION = 5
@@ -38,8 +39,16 @@ from hanabi.core.card import Card
 # Hint encoding: 0–3 = rank hint to player at position 1–4 (clockwise from hinter),
 # 4–7 = suit hint to position 1–4.
 
-# Tie-break / scan order: C1 (index 0) first through C4 (index 3).
-_REC_SLOT_ORDER = (0, 1, 2, 3)
+class Slot(IntEnum):
+    """Paper C1–C4 (Cox et al.): left-to-right; C1 is oldest (index 0).
+
+    Members are ``int`` subclasses—use ``Slot.C1`` etc. as hand indices (no ``.value``).
+    """
+
+    C1 = 0
+    C2 = 1
+    C3 = 2
+    C4 = 3
 
 
 def _slot_card(hand_cards: List[Card], idx: int) -> Optional[Card]:
@@ -89,7 +98,9 @@ class RecommendationPlayer(BasePlayer):
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
-        self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=4)
+        self._observe_recommendation_hint(
+            player_index, move, observer_view, hint_value_base=len(Slot)
+        )
 
     def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
@@ -193,7 +204,7 @@ class RecommendationPlayer(BasePlayer):
         settings: GameSettings,
     ) -> int:
         assert len(hand_cards) >= 3
-        # Like ``a or b or ...`` but each rule may legitimately return 0 (play C1).
+        # Like ``a or b or ...`` but each rule may legitimately return 0 (play C1 / ``Slot.C1``).
         for rule in (
             self._rec_play_rank5,
             self._rec_play_lowest_rank,
@@ -211,12 +222,12 @@ class RecommendationPlayer(BasePlayer):
         hand_cards: List[Card], common_view: CommonView, settings: GameSettings
     ) -> Optional[int]:
         """Paper priority 1: play a playable rank-5; tie-break C1 → C4 (lowest index first)."""
-        for idx in _REC_SLOT_ORDER:
-            card = _slot_card(hand_cards, idx)
+        for slot in Slot:
+            card = _slot_card(hand_cards, slot)
             if card is None:
                 continue
             if Number.FIVE == card.number and CardKind.PLAYABLE == common_view.card_kind(card, settings):
-                return idx
+                return slot
         return None
 
     @staticmethod
@@ -225,12 +236,12 @@ class RecommendationPlayer(BasePlayer):
     ) -> Optional[int]:
         """Paper priority 2: play lowest-rank playable; tie-break C1 → C4."""
         playable = []
-        for idx in _REC_SLOT_ORDER:
-            card = _slot_card(hand_cards, idx)
+        for slot in Slot:
+            card = _slot_card(hand_cards, slot)
             if card is None:
                 continue
             if CardKind.PLAYABLE == common_view.card_kind(card, settings):
-                playable.append((idx, card.number.value))
+                playable.append((slot, card.number.value))
         if not playable:
             return None
         playable.sort(key=lambda x: (x[1], x[0]))
@@ -241,12 +252,12 @@ class RecommendationPlayer(BasePlayer):
         hand_cards: List[Card], common_view: CommonView, settings: GameSettings
     ) -> Optional[int]:
         """Paper priority 3: discard a useless card; tie-break C1 → C4."""
-        for idx in _REC_SLOT_ORDER:
-            card = _slot_card(hand_cards, idx)
+        for slot in Slot:
+            card = _slot_card(hand_cards, slot)
             if card is None:
                 continue
             if CardKind.USELESS == common_view.card_kind(card, settings):
-                return 4 + idx
+                return len(Slot) + slot
         return None
 
     @staticmethod
@@ -255,31 +266,26 @@ class RecommendationPlayer(BasePlayer):
     ) -> Optional[int]:
         """Paper priority 4: discard highest-rank dispensable; tie-break C1 → C4."""
         dispensable = []
-        for idx in _REC_SLOT_ORDER:
-            card = _slot_card(hand_cards, idx)
+        for slot in Slot:
+            card = _slot_card(hand_cards, slot)
             if card is None:
                 continue
             if CardKind.DISPENSABLE == common_view.card_kind(card, settings):
-                dispensable.append((idx, card.number.value))
+                dispensable.append((slot, card.number.value))
         if not dispensable:
             return None
         dispensable.sort(key=lambda x: (-x[1], x[0]))
-        return 4 + dispensable[0][0]
+        return len(Slot) + dispensable[0][0]
 
     @staticmethod
     def _rec_discard_c1(
         hand_cards: List[Card], _common_view: CommonView, _settings: GameSettings
     ) -> int:
         """Paper priority 5: recommend discarding C1 (leftmost occupied slot when hand < 4)."""
-        for idx in _REC_SLOT_ORDER:
-            if _slot_card(hand_cards, idx) is not None:
-                return 4 + idx
+        for slot in Slot:
+            if _slot_card(hand_cards, slot) is not None:
+                return len(Slot) + slot
         assert False, "non-empty hand has at least one card"
-
-    @staticmethod
-    def _four_card_slot_name(internal_idx: int) -> str:
-        """Paper-style slot label: ``internal_idx`` 0..3 → C1..C4."""
-        return f"C{internal_idx + 1}"
 
     def _try_follow_play_recommendation(
         self,
@@ -295,7 +301,7 @@ class RecommendationPlayer(BasePlayer):
         if recommendation is None:
             return None
         assert 0 <= recommendation <= 7, "decoded self-recommendation is in 0..7 (mod 8)"
-        if recommendation > 3:
+        if recommendation >= len(Slot):
             return None
         if 0 != plays_since_hint and 2 == errors:
             return None
@@ -310,7 +316,7 @@ class RecommendationPlayer(BasePlayer):
             else "<2 errors → follow recommendation"
         )
         self._last_decision_summary = (
-            f"Play {self._four_card_slot_name(play_idx)}: decoded recommendation={recommendation} (play), {detail}"
+            f"Play {Slot(play_idx).name}: decoded recommendation={recommendation} (play), {detail}"
         )
         return Play(play_idx)
 
@@ -328,7 +334,7 @@ class RecommendationPlayer(BasePlayer):
         self._my_decoded_recommendation = None
         hint_type = (
             f"rank/number (hint-type band 0–3, value {sum_mod8})"
-            if sum_mod8 < 4
+            if sum_mod8 < len(Slot)
             else f"suit/color (hint-type band 4–7, value {sum_mod8})"
         )
         suffix = (
@@ -362,28 +368,27 @@ class RecommendationPlayer(BasePlayer):
         if recommendation is None:
             return None
         assert 0 <= recommendation <= 7, "decoded self-recommendation is in 0..7 (mod 8)"
-        if recommendation < 4:
+        if recommendation < len(Slot):
             return None
-        discard_idx = recommendation - 4
+        discard_idx = recommendation - len(Slot)
         if discard_idx >= player_view.own_hand_size:
             return None
         if not self.is_move_legal(player_view, Discard(discard_idx)):
             return None
         self._last_decision_summary = (
-            f"Discard {self._four_card_slot_name(discard_idx)}: decoded recommendation={recommendation} "
+            f"Discard {Slot(discard_idx).name}: decoded recommendation={recommendation} "
             "(discard) → follow recommendation"
         )
         return Discard(discard_idx)
 
     def _discard_c1(self, player_view: PlayerView) -> Optional[Move]:
         """Paper rule 5: discard C1 (oldest card, index 0)."""
-        assert self.is_move_legal(player_view, Discard(0))
+        assert self.is_move_legal(player_view, Discard(Slot.C1))
         self._last_decision_summary = (
-            f"Discard {self._four_card_slot_name(0)} (oldest): no hint tokens or rule 5 (default discard C1)"
+            f"Discard {Slot.C1.name} (oldest): no hint tokens or rule 5 (default discard C1)"
         )
-        return Discard(0)
+        return Discard(Slot.C1)
 
-    
     def _compute_hint(self, player_view: PlayerView) -> HintMove:
         """
         Build the rank or color hint that encodes ``(sum of others' recommendations) mod 8``.
@@ -397,7 +402,9 @@ class RecommendationPlayer(BasePlayer):
 
     def _hint_for_encoded_value(self, player_view: PlayerView, value: int) -> HintMove:
         """Map encoded value 0..7 to a legal rank or color hint on a teammate's hand."""
-        pos_0, is_number = (value, True) if value < 4 else (value - 4, False)
+        pos_0, is_number = (
+            (value, True) if value < len(Slot) else (value - len(Slot), False)
+        )
         target = (self._player_index + 1 + pos_0) % NUM_PLAYERS_FOR_RECOMMENDATION
         assert target in player_view.teammates, (
             "5p view should list every other player; encoding target must be a teammate"

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from hanabi.ai import recommendation_player as rp_mod
-from hanabi.ai.recommendation_player import RecommendationPlayer, _REC_SLOT_ORDER, _STANDARD_HINT_COLORS
+from hanabi.ai.recommendation_player import Slot, RecommendationPlayer, _STANDARD_HINT_COLORS
 from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView, create_standard_game_settings
@@ -50,12 +50,12 @@ class TestStandardHintColors(unittest.TestCase):
         self.assertEqual(deck_colors, frozenset(_STANDARD_HINT_COLORS))
 
 
-class TestFourCardSlotName(unittest.TestCase):
+class TestSlotPaperLabels(unittest.TestCase):
     """Paper C1..C4: index 0 = C1 (left) through index 3 = C4 (right)."""
 
-    def test_slot_names(self) -> None:
-        self.assertEqual("C1", RecommendationPlayer._four_card_slot_name(0))
-        self.assertEqual("C4", RecommendationPlayer._four_card_slot_name(3))
+    def test_slot_enum_names(self) -> None:
+        self.assertEqual("C1", Slot(0).name)
+        self.assertEqual("C4", Slot(3).name)
 
 
 class TestGetRecommendationForHand(unittest.TestCase):
@@ -82,10 +82,9 @@ class TestGetRecommendationForHand(unittest.TestCase):
                 return CardKind.PLAYABLE
             return CardKind.DISPENSABLE
 
-        c1_idx = _REC_SLOT_ORDER[0]
         with patch.object(self.common, "card_kind", new=kind):
             rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
-        self.assertEqual(c1_idx, rec)
+        self.assertEqual(Slot.C1, rec)
 
     def test_discard_c1_when_no_prior_rule_applies(self) -> None:
         """If kinds never match rules 1–4, rule 5 returns discard C1 (code 4 in 4–7 discard range)."""
@@ -96,7 +95,7 @@ class TestGetRecommendationForHand(unittest.TestCase):
         hand_cards = [Card(Color.RED, Number.ONE)] * 4
         with patch.object(self.common, "card_kind", new=kind):
             rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
-        self.assertEqual(4, rec)
+        self.assertEqual(len(Slot) + Slot.C1, rec)
 
     def test_three_cards_rule5_discards_c1(self) -> None:
         """Three cards: C1 still index 0; rule 5 is discard C1 (code 4)."""
@@ -107,7 +106,7 @@ class TestGetRecommendationForHand(unittest.TestCase):
         hand_cards = [Card(Color.RED, Number.ONE)] * 3
         with patch.object(self.common, "card_kind", new=kind):
             rec = self.player._get_recommendation_for_hand(hand_cards, self.common, self.settings)
-        self.assertEqual(4, rec)
+        self.assertEqual(len(Slot) + Slot.C1, rec)
 
 
 class TestSumPeerRecommendations(unittest.TestCase):
