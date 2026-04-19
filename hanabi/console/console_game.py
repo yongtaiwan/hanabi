@@ -141,6 +141,10 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Set up move callback for display updates
     def on_move_callback(player_index: int, move, old_state, new_state):
         """Callback to update display when a move is made."""
+        from hanabi.core.moves import HasWhy
+
+        ai_explanation = move.why() if isinstance(move, HasWhy) else None
+
         from .console_display import Colors
 
         # Record the move for previous round display
@@ -195,14 +199,14 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         colored_msg = display._colorize_message(formatted_msg)
         print(colored_msg)
 
-        # Print decision summary
+        # Print decision summary (from wrapped move or legacy player hook)
         player = game.team.players[player_index]
-        if hasattr(player, "get_decision_summary"):
+        summary = ai_explanation
+        if summary is None and hasattr(player, "get_decision_summary"):
             summary = player.get_decision_summary()
-            if summary:
-                # Get player class name for display
-                player_class_name = player.__class__.__name__
-                print(f"{player_class_name}: {summary}")
+        if summary:
+            player_class_name = player.__class__.__name__
+            print(f"{player_class_name}: {summary}")
 
         # Only update display if it's not the current player's turn (to avoid double display)
         # The display will be shown in play() when it's the player's turn

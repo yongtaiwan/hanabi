@@ -3,9 +3,18 @@ Move classes for Hanabi game actions.
 """
 
 from abc import ABC
-from typing import List, TypeAlias
+from typing import List, Protocol, TypeAlias, runtime_checkable
 
 from .enums import Color, Number
+
+
+@runtime_checkable
+class HasWhy(Protocol):
+    """Structural type for moves that carry an AI/console narrative (duck typing)."""
+
+    def why(self) -> str:
+        """Return a short human-readable reason for this move."""
+        ...
 
 
 class Move(ABC):
@@ -145,13 +154,55 @@ class Discard(CardMove):
 
 # Every legal engine move is one of these leaf types. Use with exhaustive dispatch +
 # ``typing.assert_never`` (or a final ``case _: assert False``) so new move kinds are caught.
+# Subclasses such as :class:`ExplainedPlay` are still :class:`Play` / etc. for ``isinstance``.
 ConcreteMove: TypeAlias = Play | Discard | ColorHint | NumberHint
 
 HintMove: TypeAlias = ColorHint | NumberHint
 
 
+class ExplainedMixin:
+    """Adds :meth:`why` for AI/console narrative; mixed into leaf move subclasses."""
+
+    _why: str
+
+    def why(self) -> str:
+        return self._why
+
+
+class ExplainedPlay(ExplainedMixin, Play):
+    """:class:`Play` with a :meth:`why` string (implements :class:`HasWhy`)."""
+
+    def __init__(self, card: int, *, why: str) -> None:
+        super().__init__(card)
+        self._why = why
+
+
+class ExplainedDiscard(ExplainedMixin, Discard):
+    """:class:`Discard` with a :meth:`why` string (implements :class:`HasWhy`)."""
+
+    def __init__(self, card: int, *, why: str) -> None:
+        super().__init__(card)
+        self._why = why
+
+
+class ExplainedColorHint(ExplainedMixin, ColorHint):
+    """:class:`ColorHint` with a :meth:`why` string (implements :class:`HasWhy`)."""
+
+    def __init__(self, teammate: int, cards: List[int], color: Color, *, why: str) -> None:
+        super().__init__(teammate, cards, color)
+        self._why = why
+
+
+class ExplainedNumberHint(ExplainedMixin, NumberHint):
+    """:class:`NumberHint` with a :meth:`why` string (implements :class:`HasWhy`)."""
+
+    def __init__(self, teammate: int, cards: List[int], number: Number, *, why: str) -> None:
+        super().__init__(teammate, cards, number)
+        self._why = why
+
+
 def ensure_concrete_move(move: Move) -> ConcreteMove:
-    """Return ``move`` narrowed to the closed set of concrete move classes."""
+    """Return ``move`` narrowed to the closed set of concrete move classes (including explained subclasses)."""
     if isinstance(move, (Play, Discard, ColorHint, NumberHint)):
         return move
     assert False, f"unexpected Move subclass (add to ConcreteMove / dispatch): {type(move).__name__}"

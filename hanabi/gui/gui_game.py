@@ -348,6 +348,10 @@ class GUIGame:
         # Set up move callback for display updates
         def on_move_callback(player_index: int, move: Move, old_state, new_state):
             """Callback to update display when a move is made."""
+            from hanabi.core.moves import HasWhy
+
+            ai_explanation = move.why() if isinstance(move, HasWhy) else None
+
             # Update hint tracking in display (independent of player implementations)
             # Pass old_state and new_state to detect if a card was drawn
             self._display.update_hints_from_move(player_index, move, old_state, new_state)
@@ -600,14 +604,14 @@ class GUIGame:
             colored_msg = temp_display._colorize_message(formatted_msg)
             print(colored_msg)
 
-            # Print decision summary
+            # Print decision summary (from wrapped move or legacy player hook)
             player = self._game.team.players[player_index]
-            if hasattr(player, "get_decision_summary"):
+            summary = ai_explanation
+            if summary is None and hasattr(player, "get_decision_summary"):
                 summary = player.get_decision_summary()
-                if summary:
-                    # Get player class name for display
-                    player_class_name = player.__class__.__name__
-                    print(f"{player_class_name}: {summary}")
+            if summary:
+                player_class_name = player.__class__.__name__
+                print(f"{player_class_name}: {summary}")
 
         self._game = Game.create(team, settings, on_move=on_move_callback)
 

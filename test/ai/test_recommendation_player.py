@@ -30,11 +30,19 @@ def _empty_common() -> CommonView:
 class TestRecommendationPlayerSettings(unittest.TestCase):
     """Game settings support checks."""
 
-    def test_supports_only_five_players(self) -> None:
+    def test_supports_only_five_players_three_fuse(self) -> None:
         s5 = create_standard_game_settings(5)
         s3 = create_standard_game_settings(3)
+        s5_four_fuse = GameSettings(
+            num_players=s5.num_players,
+            max_live_tokens=4,
+            max_hint_tokens=s5.max_hint_tokens,
+            max_cards_in_hand=s5.max_cards_in_hand,
+            cards=s5.cards,
+        )
         self.assertTrue(RecommendationPlayer.supports_game_settings(s5))
         self.assertFalse(RecommendationPlayer.supports_game_settings(s3))
+        self.assertFalse(RecommendationPlayer.supports_game_settings(s5_four_fuse))
 
 
 class TestStandardHintColors(unittest.TestCase):

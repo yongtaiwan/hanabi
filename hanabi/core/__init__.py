@@ -5,7 +5,23 @@ Contains all game logic without UI dependencies.
 
 from .enums import Color, Number, CardKind
 from .card import Card, Suit
-from .moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
+from .moves import (
+    Move,
+    ConcreteMove,
+    Hint,
+    CardMove,
+    Play,
+    Discard,
+    ColorHint,
+    NumberHint,
+    HasWhy,
+    ExplainedMixin,
+    ExplainedPlay,
+    ExplainedDiscard,
+    ExplainedColorHint,
+    ExplainedNumberHint,
+    ensure_concrete_move,
+)
 from .game import (
     Hand,
     GameSettings,
@@ -52,12 +68,20 @@ __all__ = [
     "GameField",
     # Moves
     "Move",
+    "ConcreteMove",
     "Hint",
     "CardMove",
     "Play",
     "Discard",
     "ColorHint",
     "NumberHint",
+    "HasWhy",
+    "ExplainedMixin",
+    "ExplainedPlay",
+    "ExplainedDiscard",
+    "ExplainedColorHint",
+    "ExplainedNumberHint",
+    "ensure_concrete_move",
     # Players
     "Player",
     "Cheater",

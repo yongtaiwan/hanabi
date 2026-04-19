@@ -27,10 +27,23 @@ from enum import IntEnum
 from typing import List, Optional
 
 NUM_PLAYERS_FOR_RECOMMENDATION = 5
+# Cox et al. count “errors” against standard three fuse tokens; ``1 == live_tokens`` is “two errors”.
+MAX_LIVE_TOKENS_FOR_RECOMMENDATION = 3
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import HintMove, Move, Play, Discard, ColorHint, NumberHint
+from hanabi.core.moves import (
+    HintMove,
+    Move,
+    Play,
+    Discard,
+    ColorHint,
+    NumberHint,
+    ExplainedPlay,
+    ExplainedDiscard,
+    ExplainedColorHint,
+    ExplainedNumberHint,
+)
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
 
@@ -70,7 +83,7 @@ class RecommendationPlayer(BasePlayer):
     """
     Recommendation strategy from Cox et al. (paper Strategy 1).
 
-    Only for standard 5-player games (four cards at deal time; hands may have fewer cards later).
+    Only for standard 5-player games with three fuse tokens (four cards at deal time; hands may shrink).
     """
 
     def __init__(self, player_index: int):
@@ -78,17 +91,21 @@ class RecommendationPlayer(BasePlayer):
         self._last_hint_value: Optional[int] = None
         self._last_hinter: Optional[int] = None
         self._plays_since_hint: int = 0
-        self._last_decision_summary: Optional[str] = None
         # Decoded recommendation at hint time (state when hint was given); used until next hint.
         self._my_decoded_recommendation: Optional[int] = None
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
-        return NUM_PLAYERS_FOR_RECOMMENDATION == game_settings.num_players
+        return NUM_PLAYERS_FOR_RECOMMENDATION == game_settings.num_players and (
+            MAX_LIVE_TOKENS_FOR_RECOMMENDATION == game_settings.max_live_tokens
+        )
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
         assert NUM_PLAYERS_FOR_RECOMMENDATION == game_settings.num_players, (
             "RecommendationPlayer requires 5-player games"
+        )
+        assert MAX_LIVE_TOKENS_FOR_RECOMMENDATION == game_settings.max_live_tokens, (
+            "RecommendationPlayer requires standard three fuse tokens (Cox et al.)"
         )
         super().set_game_settings(game_settings)
 
@@ -107,27 +124,18 @@ class RecommendationPlayer(BasePlayer):
         self._observe_recommendation_hint(player_index, move, observer_view, hint_value_base=0)
 
     def play(self, player_view: PlayerView) -> Move:
-        assert player_view.own_hand_size >= 3
-        errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
-
         recommendation = self._get_my_recommendation()
-
         move = (
-            self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
+            self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint)
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_discard_recommendation(player_view, recommendation)
-            or self._discard_c1(player_view)
-
+            or self._discard_c1()
         )
         assert move is not None, "expected a legal play or discard with a non-empty hand"
         assert self.is_move_legal(player_view, move), (
             "RecommendationPlayer should never choose an illegal move"
         )
         return move
-
-    def get_decision_summary(self) -> Optional[str]:
-        """Return a short explanation of the last move for console/GUI display."""
-        return self._last_decision_summary
 
     def _observe_recommendation_hint(
         self,
@@ -292,33 +300,31 @@ class RecommendationPlayer(BasePlayer):
         player_view: PlayerView,
         recommendation: Optional[int],
         plays_since_hint: int,
-        errors: int,
     ) -> Optional[Move]:
         """
         Paper rules 1–2: if recommendation is play (0–3), follow it when
-        (1) no play since last hint, or (2) one play since hint and errors < 2.
+        (1) no play since last hint, or (2) one play since hint and fewer than two errors.
         """
         if recommendation is None:
             return None
         assert 0 <= recommendation <= 7, "decoded self-recommendation is in 0..7 (mod 8)"
         if recommendation >= len(Slot):
             return None
-        if 0 != plays_since_hint and 2 == errors:
-            return None
-        play_idx = recommendation
-        if play_idx >= player_view.own_hand_size:
-            return None
-        if not self.is_move_legal(player_view, Play(play_idx)):
+        assert recommendation < player_view.own_hand_size, (
+            "decoded play recommendation must index a card in the current hand"
+        )
+        assert self.is_move_legal(player_view, Play(recommendation)), (
+            "decoded play recommendation must be a legal Play move"
+        )
+        # After one intervening play, skip only when two errors so far (here: one fuse left).
+        if 0 != plays_since_hint and 1 == self.common_view.live_tokens:
             return None
         detail = (
             "no card played since last hint → follow recommendation"
             if 0 == plays_since_hint
             else "<2 errors → follow recommendation"
         )
-        self._last_decision_summary = (
-            f"Play {Slot(play_idx).name}: decoded recommendation={recommendation} (play), {detail}"
-        )
-        return Play(play_idx)
+        return ExplainedPlay(recommendation, why=f"Play {Slot(recommendation).name}: decoded recommendation={recommendation} (play), {detail}")
 
     def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
@@ -342,21 +348,13 @@ class RecommendationPlayer(BasePlayer):
             f"Sum mod 8 = {sum_mod8}. Encoding: {hint_type}; each teammate decodes their own."
         )
         if isinstance(hint_move, ColorHint):
-            assert self.is_move_legal(player_view, hint_move), (
-                "encoding color hint should be legal when a hint token can be spent"
+            return ExplainedColorHint(
+                hint_move.teammate, hint_move.cards, hint_move.color, why=f"Hint: give color {hint_move.color.name.lower()} to P{hint_move.teammate + 1}. {suffix}"
             )
-            self._last_decision_summary = (
-                f"Hint: give color {hint_move.color.name.lower()} to P{hint_move.teammate + 1}. {suffix}"
-            )
-            return hint_move
         if isinstance(hint_move, NumberHint):
-            assert self.is_move_legal(player_view, hint_move), (
-                "encoding number hint should be legal when a hint token can be spent"
+            return ExplainedNumberHint(
+                hint_move.teammate, hint_move.cards, hint_move.number, why=f"Hint: give number {hint_move.number.value} to P{hint_move.teammate + 1}. {suffix}"
             )
-            self._last_decision_summary = (
-                f"Hint: give number {hint_move.number.value} to P{hint_move.teammate + 1}. {suffix}"
-            )
-            return hint_move
         assert False, f"unexpected hint type from _hint_for_encoded_value: {type(hint_move)}"
 
     def _try_follow_discard_recommendation(
@@ -375,19 +373,11 @@ class RecommendationPlayer(BasePlayer):
             return None
         if not self.is_move_legal(player_view, Discard(discard_idx)):
             return None
-        self._last_decision_summary = (
-            f"Discard {Slot(discard_idx).name}: decoded recommendation={recommendation} "
-            "(discard) → follow recommendation"
-        )
-        return Discard(discard_idx)
+        return ExplainedDiscard(discard_idx, why=f"Discard {Slot(discard_idx).name}: decoded recommendation={recommendation} (discard) → follow recommendation")
 
-    def _discard_c1(self, player_view: PlayerView) -> Optional[Move]:
+    def _discard_c1(self) -> Optional[Move]:
         """Paper rule 5: discard C1 (oldest card, index 0)."""
-        assert self.is_move_legal(player_view, Discard(Slot.C1))
-        self._last_decision_summary = (
-            f"Discard {Slot.C1.name} (oldest): no hint tokens or rule 5 (default discard C1)"
-        )
-        return Discard(Slot.C1)
+        return ExplainedDiscard(Slot.C1, why=f"Discard {Slot.C1.name} (oldest): no hint tokens or rule 5 (default discard C1)")
 
     def _compute_hint(self, player_view: PlayerView) -> HintMove:
         """
