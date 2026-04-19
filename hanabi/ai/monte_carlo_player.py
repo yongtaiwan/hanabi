@@ -18,7 +18,7 @@ from collections import Counter
 
 from hanabi.core.player import HintTrackingPlayer
 from hanabi.core.game import PlayerView, CommonView, GameSettings
-from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
+from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint, move_with_why
 from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card, Suit
 from hanabi.core.move_generation import generate_all_valid_moves
@@ -381,7 +381,6 @@ class MonteCarloPlayer(HintTrackingPlayer):
         self._config = config or MonteCarloConfig()
         self._rng = random.Random(self._config.rng_seed)
         self._verbose = self._config.verbose
-        self._last_decision_summary: Optional[str] = None
 
     def play(self, player_view: PlayerView) -> Move:
         """
@@ -450,15 +449,6 @@ class MonteCarloPlayer(HintTrackingPlayer):
         best_move = self._evaluate_moves_monte_carlo(player_view, candidate_moves)
 
         return best_move
-
-    def get_decision_summary(self) -> Optional[str]:
-        """
-        Get a summary of the last decision made (top 3 actions and their avg scores).
-
-        Returns:
-            Summary string describing top 3 moves with scores, or None if no decision made yet
-        """
-        return self._last_decision_summary
 
     def _evaluate_moves_monte_carlo(self, player_view: PlayerView, moves: List[Move]) -> Move:
         """
@@ -674,9 +664,8 @@ class MonteCarloPlayer(HintTrackingPlayer):
         for move, avg_score, sim_count, total_score in top_3:
             move_str = self._format_move_concise(move)
             summary_parts.append(f"{move_str} (avg: {avg_score:.2f})")
-        self._last_decision_summary = ", ".join(summary_parts)
 
-        return selected_move
+        return move_with_why(selected_move, ", ".join(summary_parts))
 
     def _format_move_concise(self, move: Move) -> str:
         """

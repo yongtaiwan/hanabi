@@ -13,6 +13,7 @@ from hanabi.core.moves import (
     HasWhy,
     Play,
     ensure_concrete_move,
+    move_with_why,
 )
 
 
@@ -41,6 +42,12 @@ class TestHasWhy(unittest.TestCase):
     def test_concrete_move_alias_covers_leaf_types(self) -> None:
         # Type-checking alias: runtime isinstance still uses leaf classes (incl. subclasses).
         self.assertIsInstance(ExplainedDiscard(0, why="d"), ConcreteMove)
+
+    def test_move_with_why_wraps_plain_play(self) -> None:
+        m = move_with_why(Play(1), "reason")
+        self.assertIsInstance(m, HasWhy)
+        self.assertEqual("reason", m.why())
+        self.assertIs(m, move_with_why(m, "ignored"))
 
 
 if __name__ == "__main__":

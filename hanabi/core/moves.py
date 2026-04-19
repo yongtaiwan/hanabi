@@ -201,6 +201,25 @@ class ExplainedNumberHint(ExplainedMixin, NumberHint):
         self._why = why
 
 
+def move_with_why(move: Move, why: str) -> Move:
+    """
+    Return ``move`` with a :meth:`~HasWhy.why` string attached.
+
+    If ``move`` already implements :class:`HasWhy`, returns ``move`` unchanged.
+    """
+    if isinstance(move, HasWhy):
+        return move
+    if isinstance(move, Play):
+        return ExplainedPlay(move.card, why=why)
+    if isinstance(move, Discard):
+        return ExplainedDiscard(move.card, why=why)
+    if isinstance(move, ColorHint):
+        return ExplainedColorHint(move.teammate, move.cards, move.color, why=why)
+    if isinstance(move, NumberHint):
+        return ExplainedNumberHint(move.teammate, move.cards, move.number, why=why)
+    assert False, f"unexpected move for move_with_why: {type(move).__name__}"
+
+
 def ensure_concrete_move(move: Move) -> ConcreteMove:
     """Return ``move`` narrowed to the closed set of concrete move classes (including explained subclasses)."""
     if isinstance(move, (Play, Discard, ColorHint, NumberHint)):

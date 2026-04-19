@@ -21,6 +21,7 @@ from .moves import (
     ExplainedColorHint,
     ExplainedNumberHint,
     ensure_concrete_move,
+    move_with_why,
 )
 from .game import (
     Hand,
@@ -82,6 +83,7 @@ __all__ = [
     "ExplainedColorHint",
     "ExplainedNumberHint",
     "ensure_concrete_move",
+    "move_with_why",
     # Players
     "Player",
     "Cheater",

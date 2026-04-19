@@ -199,11 +199,9 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         colored_msg = display._colorize_message(formatted_msg)
         print(colored_msg)
 
-        # Print decision summary (from wrapped move or legacy player hook)
+        # Print AI rationale when the move implements HasWhy
         player = game.team.players[player_index]
         summary = ai_explanation
-        if summary is None and hasattr(player, "get_decision_summary"):
-            summary = player.get_decision_summary()
         if summary:
             player_class_name = player.__class__.__name__
             print(f"{player_class_name}: {summary}")
