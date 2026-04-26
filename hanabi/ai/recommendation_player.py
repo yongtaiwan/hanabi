@@ -10,15 +10,32 @@ a value 0–7 so that every *other* player can decode their personal recommendat
 paper codes (mod 8).
 
 The engine uses left-to-right indices matching the paper and GUI: **C1 = index 0**
-(left / oldest) through **C4 = index 3** (right / newest). Endgame hands may omit
-trailing logical slots (e.g. three cards → indices 0, 1, 2 only); empty slots are
-skipped in tie-break scans.
+(left / oldest) through **C4 = index 3** (right / newest). New draws **append** to the
+hand list (``GameState._draw_card_to_hand``), so the card you just
+drew is always the **rightmost** slot (highest index), never index 0. Rule 5 “discard C1”
+therefore uses ``Discard(0)`` and does **not** discard the newly drawn card on the next
+turn. Endgame hands may omit trailing logical slots (e.g. three cards → indices 0, 1, 2
+only); empty slots are skipped in tie-break scans.
 
 This encoding supports four card positions (0–3 play, add 4 for discard). The player
 targets standard 5-player table rule-sets (four cards at deal time; hands may shrink).
 
 Multicolor (``Color.MULTI``) cards are not supported; hint encoding uses the same five
 standard suits as :func:`hanabi.core.game.create_standard_game_settings`.
+
+**Paper vs engine vocabulary (recommendation priorities 1–5):** Cox et al. use *playable*,
+*dead*, and *indispensable*. This code uses :meth:`~hanabi.core.game.CommonView.card_kind`:
+*dead* aligns with ``CardKind.USELESS`` for cards already passed on the fireworks, but
+``USELESS`` also includes unreachable ranks (stricter pile logic than “dead” alone).
+*Indispensable* aligns with ``CardKind.CRITICAL``. Priority 4 uses only ``DISPENSABLE``
+cards (not critical); after priorities 1–3, that matches “highest rank among
+non-indispensable” for typical hands with no playable or useless card left.
+
+**Follow-play (paper action rules 1--2):** If the decoded recommendation is a play (0--3)
+and the move is legal, follow only when no **Play** has occurred since the last encoding
+hint, or when exactly one **Play** has occurred and the team has made fewer than two
+errors (misplay strikes). ``plays_since_hint`` counts **Play** moves globally since the
+hint; discards do not increment it.
 """
 
 from __future__ import annotations
@@ -90,8 +107,11 @@ class RecommendationPlayer(BasePlayer):
         super().__init__(player_index)
         self._last_hint_value: Optional[int] = None
         self._last_hinter: Optional[int] = None
+        # Global: count of :class:`~hanabi.core.moves.Play` moves since last encoding hint.
         self._plays_since_hint: int = 0
-        # Decoded recommendation at hint time (state when hint was given); used until next hint.
+        # Paper "most recent recommendation": decoded self-code (0--7) when this seat *receives* an
+        # encoding hint. The hinter does not recommend to themselves, so we do not overwrite this on
+        # observe when ``self`` gave the hint---it stays the previous value, if any.
         self._my_decoded_recommendation: Optional[int] = None
 
     @classmethod
@@ -126,6 +146,9 @@ class RecommendationPlayer(BasePlayer):
     def play(self, player_view: PlayerView) -> Move:
         recommendation = self._get_my_recommendation()
         move = (
+            self._try_follow_play_recommendation(
+                player_view, recommendation, self._plays_since_hint, errors
+            )
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint)
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_discard_recommendation(player_view, recommendation)
@@ -149,11 +172,11 @@ class RecommendationPlayer(BasePlayer):
         pos = (move.teammate - player_index - 1) % NUM_PLAYERS_FOR_RECOMMENDATION
         self._last_hint_value = hint_value_base + pos
         self._plays_since_hint = 0
-        self._my_decoded_recommendation = (
-            None
-            if self._player_index == player_index
-            else self._decode_recommendation_with_view(observer_view, self._last_hint_value, player_index)
-        )
+        # Receivers update "most recent recommendation"; the hinter does not overwrite theirs.
+        if self._player_index != player_index:
+            self._my_decoded_recommendation = self._decode_recommendation_with_view(
+                observer_view, self._last_hint_value, player_index
+            )
 
     def _sum_peer_recommendations(
         self, player_view: PlayerView, *, exclude_index: Optional[int] = None
@@ -194,7 +217,14 @@ class RecommendationPlayer(BasePlayer):
         return (hint_value - others_sum) % 8
 
     def _get_my_recommendation(self) -> Optional[int]:
-        """Decoded recommendation at hint time for receivers; ``None`` if no hint yet or we gave the hint."""
+        """
+        Paper "most recent recommendation": decoded self-code from the last time this seat updated it.
+
+        After an encoding hint, every receiver refreshes their decode; the hinter does not (they are
+        not recommending to themselves), so the cached value stays whatever it was---typically still
+        the previous most recent recommendation. ``None`` only when no hint has been seen yet, or
+        the last hint was ours and we never had a prior decode.
+        """
         if self._last_hint_value is None:
             assert self._last_hinter is None
             return None
@@ -259,6 +289,9 @@ class RecommendationPlayer(BasePlayer):
     def _rec_discard_useless(
         hand_cards: List[Card], common_view: CommonView, settings: GameSettings
     ) -> Optional[int]:
+        """Paper priority 3: discard a *dead* card (lowest index); tie-break C1 → C4. Uses ``USELESS``."""
+        for idx in _REC_SLOT_ORDER:
+            card = _slot_card(hand_cards, idx)
         """Paper priority 3: discard a useless card; tie-break C1 → C4."""
         for slot in Slot:
             card = _slot_card(hand_cards, slot)
@@ -302,6 +335,12 @@ class RecommendationPlayer(BasePlayer):
         plays_since_hint: int,
     ) -> Optional[Move]:
         """
+        Paper action rules 1--2: if the decoded recommendation is a play (0--3), follow only when:
+
+        1. No **Play** since the last encoding hint (``plays_since_hint == 0``), or
+        2. Exactly one **Play** since the hint (``plays_since_hint == 1``) and ``errors < 2``.
+
+        If two or more **Play** moves have occurred since the hint, do not follow.
         Paper rules 1–2: if recommendation is play (0–3), follow it when
         (1) no play since last hint, or (2) one play since hint and fewer than two errors.
         """
@@ -318,6 +357,12 @@ class RecommendationPlayer(BasePlayer):
         )
         # After one intervening play, skip only when two errors so far (here: one fuse left).
         if 0 != plays_since_hint and 1 == self.common_view.live_tokens:
+        if recommendation > 3:
+            return None
+        play_idx = recommendation
+        if play_idx >= player_view.own_hand_size:
+            return None
+        if not self.is_move_legal(player_view, Play(play_idx)):
             return None
         detail = (
             "no card played since last hint → follow recommendation"
@@ -325,6 +370,17 @@ class RecommendationPlayer(BasePlayer):
             else "<2 errors → follow recommendation"
         )
         return ExplainedPlay(recommendation, why=f"Play {Slot(recommendation).name}: decoded recommendation={recommendation} (play), {detail}")
+        if 0 == plays_since_hint:
+            detail = "no card played since last hint → follow recommendation"
+        elif 1 == plays_since_hint and 2 > errors:
+            detail = "one play since hint, <2 errors → follow recommendation"
+        else:
+            return None
+        self._last_decision_summary = (
+            f"Play {self._four_card_slot_name(play_idx)}: decoded recommendation={recommendation} (play) "
+            f"→ {detail}"
+        )
+        return Play(play_idx)
 
     def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
@@ -337,7 +393,6 @@ class RecommendationPlayer(BasePlayer):
             return None
         _, sum_mod8, peer_breakdown = self._sum_peer_recommendations(player_view)
         hint_move = self._hint_for_encoded_value(player_view, sum_mod8)
-        self._my_decoded_recommendation = None
         hint_type = (
             f"rank/number (hint-type band 0–3, value {sum_mod8})"
             if sum_mod8 < len(Slot)
@@ -378,6 +433,20 @@ class RecommendationPlayer(BasePlayer):
     def _discard_c1(self) -> Optional[Move]:
         """Paper rule 5: discard C1 (oldest card, index 0)."""
         return ExplainedDiscard(Slot.C1, why=f"Discard {Slot.C1.name} (oldest): no hint tokens or rule 5 (default discard C1)")
+
+    def _discard_c1(self, player_view: PlayerView) -> Optional[Move]:
+        """
+        Paper rule 5: discard C1 — the **leftmost / oldest** card, engine index ``0``.
+
+        Must not use the highest index: new draws append on the right, so ``0`` is never
+        the card just drawn after a refill.
+        """
+        assert self.is_move_legal(player_view, Discard(0))
+        self._last_decision_summary = (
+            f"Discard {self._four_card_slot_name(0)} (oldest): no hint tokens or rule 5 (default discard C1)"
+        )
+        return Discard(0)
+
 
     def _compute_hint(self, player_view: PlayerView) -> HintMove:
         """
