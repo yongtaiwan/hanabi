@@ -146,9 +146,6 @@ class RecommendationPlayer(BasePlayer):
     def play(self, player_view: PlayerView) -> Move:
         recommendation = self._get_my_recommendation()
         move = (
-            self._try_follow_play_recommendation(
-                player_view, recommendation, self._plays_since_hint, errors
-            )
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint)
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_discard_recommendation(player_view, recommendation)
@@ -289,9 +286,6 @@ class RecommendationPlayer(BasePlayer):
     def _rec_discard_useless(
         hand_cards: List[Card], common_view: CommonView, settings: GameSettings
     ) -> Optional[int]:
-        """Paper priority 3: discard a *dead* card (lowest index); tie-break C1 → C4. Uses ``USELESS``."""
-        for idx in _REC_SLOT_ORDER:
-            card = _slot_card(hand_cards, idx)
         """Paper priority 3: discard a useless card; tie-break C1 → C4."""
         for slot in Slot:
             card = _slot_card(hand_cards, slot)
@@ -357,6 +351,7 @@ class RecommendationPlayer(BasePlayer):
         )
         # After one intervening play, skip only when two errors so far (here: one fuse left).
         if 0 != plays_since_hint and 1 == self.common_view.live_tokens:
+            return None
         if recommendation > 3:
             return None
         play_idx = recommendation
@@ -433,20 +428,6 @@ class RecommendationPlayer(BasePlayer):
     def _discard_c1(self) -> Optional[Move]:
         """Paper rule 5: discard C1 (oldest card, index 0)."""
         return ExplainedDiscard(Slot.C1, why=f"Discard {Slot.C1.name} (oldest): no hint tokens or rule 5 (default discard C1)")
-
-    def _discard_c1(self, player_view: PlayerView) -> Optional[Move]:
-        """
-        Paper rule 5: discard C1 — the **leftmost / oldest** card, engine index ``0``.
-
-        Must not use the highest index: new draws append on the right, so ``0`` is never
-        the card just drawn after a refill.
-        """
-        assert self.is_move_legal(player_view, Discard(0))
-        self._last_decision_summary = (
-            f"Discard {self._four_card_slot_name(0)} (oldest): no hint tokens or rule 5 (default discard C1)"
-        )
-        return Discard(0)
-
 
     def _compute_hint(self, player_view: PlayerView) -> HintMove:
         """
