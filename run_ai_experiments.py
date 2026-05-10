@@ -17,7 +17,7 @@ Folder layout:
           2p/
             settings.yaml
             statistics.yaml
-          outcome_categories.yaml   # vs CommonSenseCheater (only if cheater ran with other AIs)
+          outcome_categories.yaml   # vs CommonSenseCheater (5p: cheater auto-run unless --no-outcome-baseline)
             games/
               all-games/
               <run_id>/
@@ -109,6 +109,27 @@ _AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
 }
 
 
+def _effective_ais_for_player_count(
+    num_players: int,
+    enabled: FrozenSet[str],
+    *,
+    include_outcome_baseline: bool,
+) -> FrozenSet[str]:
+    """
+    Effective ``--ais`` set for :func:`_ai_factories_for_settings`.
+
+    On 5-player games, outcome categories in ``summary.md`` pair each subject AI against
+    ``CommonSenseCheater`` replays. When the cheater is omitted from ``--ais``, that entire
+    section is skipped unless we add the baseline here (unless ``include_outcome_baseline``
+    is false).
+    """
+    if 5 != num_players or not include_outcome_baseline:
+        return enabled
+    if "commonsense_cheater" in enabled:
+        return enabled
+    return frozenset(enabled | {"commonsense_cheater"})
+
+
 def _ai_factories_for_settings(settings, enabled: FrozenSet[str]) -> Dict[str, Callable[[int], object]]:
     """Build the ``ai_factories`` map for :meth:`GameField.run_experiment`."""
     factories: Dict[str, Callable[[int], object]] = {}
@@ -128,6 +149,7 @@ def run_experiments(
     base_seed: int = 42,
     *,
     enabled_ais: FrozenSet[str] | None = None,
+    include_outcome_baseline: bool = True,
 ) -> None:
     """
     Run experiments for different player counts comparing selected AIs.
@@ -138,6 +160,10 @@ def run_experiments(
         base_seed: Base random seed for reproducibility.
         enabled_ais: Subset of registry keys (see ``--ais``). ``None`` means all registered AIs.
             Recommendation is skipped automatically for non-5p games.
+        include_outcome_baseline: When True (default), 5-player runs also execute
+            ``commonsense_cheater`` if it was not listed in ``enabled_ais``, so
+            ``outcome_categories.yaml`` and the vs-baseline sections of ``summary.md`` are
+            populated. Set False with ``--no-outcome-baseline`` to skip that extra work.
     """
     if enabled_ais is None:
         enabled_ais = frozenset(_AI_REGISTRY.keys())
@@ -152,6 +178,7 @@ def run_experiments(
     # Store per-player-count ExperimentResults to generate a markdown summary later
     all_results: Dict[int, ExperimentResults] = {}
     all_outcome_payloads: Dict[int, Any] = {}
+    auto_baseline_by_players: Dict[int, bool] = {}
 
     for num_players in player_counts:
         print("=" * 70)
@@ -164,7 +191,17 @@ def run_experiments(
         # Create GameField with a reproducible starting position
         game_field = GameField.create_from_settings(settings, seed=base_seed)
 
-        ai_factories = _ai_factories_for_settings(settings, enabled_ais)
+        effective_ais = _effective_ais_for_player_count(
+            num_players, enabled_ais, include_outcome_baseline=include_outcome_baseline
+        )
+        added_for_baseline = sorted(effective_ais - enabled_ais)
+        auto_baseline_by_players[num_players] = bool(added_for_baseline)
+        if added_for_baseline:
+            print(
+                "Note: also running CommonSenseCheater for outcome-vs-baseline summary "
+                f"(add with --ais or disable via --no-outcome-baseline): {added_for_baseline}"
+            )
+        ai_factories = _ai_factories_for_settings(settings, effective_ais)
         if not ai_factories:
             raise ValueError(
                 f"No AIs to run for {num_players} players with --ais {sorted(enabled_ais)!r}. "
@@ -240,6 +277,7 @@ def run_experiments(
                     "num_runs": num_runs,
                     "base_seed": base_seed,
                     "ais": sorted(enabled_ais),
+                    "include_outcome_baseline": include_outcome_baseline,
                 },
                 f,
                 default_flow_style=False,
@@ -258,6 +296,11 @@ def run_experiments(
         f"- AIs selected (--ais): {', '.join(sorted(enabled_ais))} "
         "(recommendation only participates in 5-player games)"
     )
+    if any(auto_baseline_by_players.values()):
+        lines.append(
+            "- Also ran **CommonSenseCheater** automatically for 5p outcome-vs-baseline summary "
+            "(omit with `--no-outcome-baseline`, or list `commonsense_cheater` in `--ais` explicitly)."
+        )
     lines.append("")
 
     # Add comparison table across all player counts
@@ -387,6 +430,15 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=10, help="Number of runs per configuration (default: 10).")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed (default: 42).")
     parser.add_argument(
+        "--no-outcome-baseline",
+        action="store_true",
+        help=(
+            "For 5-player runs, do not auto-include CommonSenseCheater. "
+            "Outcome categories and vs-baseline lines in summary.md are omitted unless you "
+            "pass commonsense_cheater in --ais."
+        ),
+    )
+    parser.add_argument(
         "--ais",
         nargs="+",
         choices=list(_AI_REGISTRY.keys()),
@@ -408,6 +460,7 @@ def main() -> None:
         num_runs=args.runs,
         base_seed=args.seed,
         enabled_ais=frozenset(args.ais),
+        include_outcome_baseline=not args.no_outcome_baseline,
     )
 
 

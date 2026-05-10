@@ -365,17 +365,6 @@ class RecommendationPlayer(BasePlayer):
             else "<2 errors → follow recommendation"
         )
         return ExplainedPlay(recommendation, why=f"Play {Slot(recommendation).name}: decoded recommendation={recommendation} (play), {detail}")
-        if 0 == plays_since_hint:
-            detail = "no card played since last hint → follow recommendation"
-        elif 1 == plays_since_hint and 2 > errors:
-            detail = "one play since hint, <2 errors → follow recommendation"
-        else:
-            return None
-        self._last_decision_summary = (
-            f"Play {self._four_card_slot_name(play_idx)}: decoded recommendation={recommendation} (play) "
-            f"→ {detail}"
-        )
-        return Play(play_idx)
 
     def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
