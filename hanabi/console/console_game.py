@@ -72,7 +72,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
     # Get AI player type if in 1-player mode (options depend on player count)
     ai_player_type = None
     if one_player_mode:
-        from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer
+        from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer, ThreePlayerRecommendationPlayer
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
         # Full-state benchmark bots (e.g. CommonSenseCheater) are registered only in run_ai_experiments.py.
@@ -91,6 +91,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             ("Random", RandomPlayer, RandomPlayer),
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
+            ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -267,6 +268,11 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             f"{Colors.BRIGHT_GREEN}Playing in 1-player mode with {num_players - 1} "
             f"{ai_type_name} AI player(s){Colors.RESET}"
         )
+        if 3 == num_players and ai_type_name == "ThreePlayerRecommendationPlayer":
+            print(
+                f"{Colors.BRIGHT_BLUE}3p mini-recommendation: mod-7 decode · physical channels 0–6 "
+                f"(left/right rank & color × next/prev teammate).{Colors.RESET}"
+            )
     print("=" * 70)
 
     # Play the game (game loop is handled by Game.play())
