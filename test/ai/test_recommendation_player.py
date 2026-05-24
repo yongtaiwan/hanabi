@@ -153,6 +153,93 @@ class TestFollowPlayRecommendation(unittest.TestCase):
         )
 
 
+class TestDiscardC1Move(unittest.TestCase):
+    """Rule 5 default discard must target engine index 0 (oldest), not the draw slot (highest index)."""
+
+    def test_discard_c1_returns_discard_zero(self) -> None:
+        """``_discard_c1`` must emit ``Discard(0)`` — C1, not C4 (``Discard(3)``)."""
+        settings = _five_player_settings()
+        player = RecommendationPlayer(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=10,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        view = PlayerView(
+            teammates={
+                1: Hand([Card(Color.RED, Number.ONE)] * 4),
+                2: Hand([Card(Color.BLUE, Number.TWO)] * 4),
+                3: Hand([Card(Color.GREEN, Number.THREE)] * 4),
+                4: Hand([Card(Color.WHITE, Number.FOUR)] * 4),
+            },
+            own_hand_size=4,
+        )
+        move = player._discard_c1(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(0, move.card)
+
+
+class TestFollowPlayRecommendation(unittest.TestCase):
+    """Cox et al. action rules 1--2 for following a play recommendation."""
+
+    def setUp(self) -> None:
+        self.settings = _five_player_settings()
+        self.player = RecommendationPlayer(0)
+        self.player.set_game_settings(self.settings)
+        self.player.set_common_view(
+            CommonView(
+                live_tokens=3,
+                hint_tokens=7,
+                cards_to_draw=10,
+                cards_discarded={},
+                cards_played={},
+            )
+        )
+        self.view = PlayerView(
+            teammates={
+                1: Hand([Card(Color.RED, Number.ONE)] * 4),
+                2: Hand([Card(Color.BLUE, Number.TWO)] * 4),
+                3: Hand([Card(Color.GREEN, Number.THREE)] * 4),
+                4: Hand([Card(Color.WHITE, Number.FOUR)] * 4),
+            },
+            own_hand_size=4,
+        )
+
+    def test_follow_play_when_no_play_since_hint(self) -> None:
+        m = self.player._try_follow_play_recommendation(self.view, 0, plays_since_hint=0, errors=0)
+        self.assertIsInstance(m, Play)
+        self.assertEqual(0, m.card)
+
+    def test_follow_play_other_slot_when_no_play_since_hint(self) -> None:
+        m = self.player._try_follow_play_recommendation(self.view, 1, plays_since_hint=0, errors=0)
+        self.assertIsInstance(m, Play)
+        self.assertEqual(1, m.card)
+
+    def test_follow_when_exactly_one_play_since_hint_and_under_two_errors(self) -> None:
+        m = self.player._try_follow_play_recommendation(self.view, 0, plays_since_hint=1, errors=1)
+        self.assertIsInstance(m, Play)
+        self.assertEqual(0, m.card)
+
+    def test_no_follow_when_two_or_more_plays_since_hint(self) -> None:
+        self.assertIsNone(
+            self.player._try_follow_play_recommendation(self.view, 0, plays_since_hint=2, errors=0)
+        )
+
+    def test_no_follow_when_one_play_since_hint_and_two_errors(self) -> None:
+        self.assertIsNone(
+            self.player._try_follow_play_recommendation(self.view, 0, plays_since_hint=1, errors=2)
+        )
+
+    def test_no_follow_when_recommendation_is_discard_code(self) -> None:
+        self.assertIsNone(
+            self.player._try_follow_play_recommendation(self.view, 4, plays_since_hint=0, errors=0)
+        )
+
+
 class TestGetRecommendationForHand(unittest.TestCase):
     """Paper priorities 1–5 via :meth:`RecommendationPlayer._get_recommendation_for_hand`."""
 
