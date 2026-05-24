@@ -4,7 +4,8 @@ Run AI comparison experiments for different player counts.
 This script compares selected AIs on the same shuffled decks for 2–5-player games.
 Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
 ``recommendation`` runs only for 5-player settings; ``three_player_recommendation`` runs only
-for 3-player settings (mod-7 mini variant).
+for 3-player settings (mod-7 mini variant); ``four_player_recommendation`` runs only for
+4-player settings (mod-9 mini variant).
 ``commonsense_cheater`` (``CommonSenseCheater``) and ``paper_cheater`` (``PaperCheater``) are
 for benchmarking only and are not offered in the GUI or console apps.
 
@@ -50,6 +51,7 @@ from hanabi.ai import (
     MonteCarloConfig,
     RecommendationPlayer,
     ThreePlayerRecommendationPlayer,
+    FourPlayerRecommendationPlayer,
 )
 
 try:
@@ -102,6 +104,11 @@ def create_three_player_recommendation_player(player_index: int) -> ThreePlayerR
     return ThreePlayerRecommendationPlayer(player_index)
 
 
+def create_four_player_recommendation_player(player_index: int) -> FourPlayerRecommendationPlayer:
+    """Factory for FourPlayerRecommendationPlayer (mod-9 mini variant; 4-player games only)."""
+    return FourPlayerRecommendationPlayer(player_index)
+
+
 # CLI keys for --ais (order here defines column / summary order).
 _AI_ORDER = (
     "random",
@@ -111,6 +118,7 @@ _AI_ORDER = (
     "montecarlo",
     "recommendation",
     "three_player_recommendation",
+    "four_player_recommendation",
 )
 # Full-state benchmark bots are opt-in so default batches match the four interactive AIs (GUI/console).
 _CLI_DEFAULT_AIS = tuple(k for k in _AI_ORDER if k not in ("commonsense_cheater", "paper_cheater"))
@@ -124,6 +132,10 @@ _AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
     "three_player_recommendation": (
         "ThreePlayerRecommendationPlayer",
         create_three_player_recommendation_player,
+    ),
+    "four_player_recommendation": (
+        "FourPlayerRecommendationPlayer",
+        create_four_player_recommendation_player,
     ),
 }
 
@@ -158,6 +170,8 @@ def _ai_factories_for_settings(settings, enabled: FrozenSet[str]) -> Dict[str, C
         if key == "recommendation" and not RecommendationPlayer.supports_game_settings(settings):
             continue
         if key == "three_player_recommendation" and not ThreePlayerRecommendationPlayer.supports_game_settings(settings):
+            continue
+        if key == "four_player_recommendation" and not FourPlayerRecommendationPlayer.supports_game_settings(settings):
             continue
         label, factory = _AI_REGISTRY[key]
         factories[label] = factory
@@ -226,7 +240,8 @@ def run_experiments(
         if not ai_factories:
             raise ValueError(
                 f"No AIs to run for {num_players} players with --ais {sorted(enabled_ais)!r}. "
-                "(``recommendation`` only runs at 5p; ``three_player_recommendation`` only at 3p.)"
+                "(``recommendation`` only at 5p; ``three_player_recommendation`` only at 3p; "
+                "``four_player_recommendation`` only at 4p.)"
             )
 
         # Use an experiment id that encodes timestamp and player count so we
@@ -315,7 +330,8 @@ def run_experiments(
     lines.append(f"- Base seed: {base_seed}")
     lines.append(
         f"- AIs selected (--ais): {', '.join(sorted(enabled_ais))} "
-        "(``recommendation`` only at 5p; ``three_player_recommendation`` only at 3p)"
+        "(``recommendation`` only at 5p; ``three_player_recommendation`` only at 3p; "
+        "``four_player_recommendation`` only at 4p)"
     )
     if any(auto_baseline_by_players.values()):
         lines.append(
@@ -437,7 +453,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Run AI comparison experiments (Random, CommonSense, CommonSenseCheater, PaperCheater, "
-            "MonteCarlo, Recommendation, ThreePlayerRecommendation)."
+            "MonteCarlo, Recommendation, ThreePlayerRecommendation, FourPlayerRecommendation)."
         )
     )
     parser.add_argument(
@@ -467,10 +483,11 @@ def main() -> None:
         default=list(_CLI_DEFAULT_AIS),
         help=(
             "Which AIs to run (default: random, commonsense, montecarlo, recommendation, "
-            "three_player_recommendation). "
+            "three_player_recommendation, four_player_recommendation). "
             "Names: random, commonsense, commonsense_cheater, paper_cheater, montecarlo, "
-            "recommendation, three_player_recommendation. "
-            "``recommendation`` is auto-skipped for non-5p; ``three_player_recommendation`` for non-3p. "
+            "recommendation, three_player_recommendation, four_player_recommendation. "
+            "``recommendation`` is auto-skipped for non-5p; ``three_player_recommendation`` for non-3p; "
+            "``four_player_recommendation`` for non-4p. "
             "Add commonsense_cheater and/or paper_cheater for full-state benchmarks (not in GUI/console). "
             "Example: --ais random commonsense commonsense_cheater paper_cheater"
         ),

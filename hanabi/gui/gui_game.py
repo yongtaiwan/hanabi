@@ -230,7 +230,13 @@ class GUIGame:
         button_frame = tk.Frame(self._ai_type_frame, bg="#2C3E50")
         button_frame.pack(fill=tk.X)
 
-        from hanabi.ai import RandomPlayer, CommonSensePlayer, RecommendationPlayer, ThreePlayerRecommendationPlayer
+        from hanabi.ai import (
+            RandomPlayer,
+            CommonSensePlayer,
+            RecommendationPlayer,
+            ThreePlayerRecommendationPlayer,
+            FourPlayerRecommendationPlayer,
+        )
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
         # Full-state benchmark bots (e.g. CommonSenseCheater) are registered only in run_ai_experiments.py.
@@ -254,6 +260,7 @@ class GUIGame:
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
             ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
+            ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -645,6 +652,13 @@ class GUIGame:
 
                 print(
                     f"{_MiniRecColors.BRIGHT_BLUE}3p mini-recommendation: mod-7 decode · channels 0–6 — "
+                    f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
+                )
+            if 4 == num_players and getattr(ai_player_type, "__name__", "") == "FourPlayerRecommendationPlayer":
+                from hanabi.console.console_display import Colors as _MiniRecColors
+
+                print(
+                    f"{_MiniRecColors.BRIGHT_BLUE}4p mini-recommendation: mod-9 decode · channels 0–8 — "
                     f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
                 )
 
