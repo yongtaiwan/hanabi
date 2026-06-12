@@ -13,18 +13,28 @@ Implementation lives in `hanabi/ai/four_player_recommendation.py`.
 
 ---
 
-## Simulation batch (500 games, post encoding fix)
+## Simulation batch (500 games)
 
-All seats used `FourPlayerRecommendationPlayer`; experiment `20260510_200124/4p`, `seed=42` per run (`deck_seed = 42 + run_id`).
+All seats used `FourPlayerRecommendationPlayer`; `seed=42` per batch (`deck_seed = 42 + run_id`).
 
 | Metric | Value |
 |--------|--------|
 | Completed | 500 / 500 |
 | Failures | 0 |
 | Score min / max | 17 / 25 |
-| Mean score | ~22.8 |
-| Perfect (25) | 110 games (22%) |
-| End reason | 390 deck exhausted, 0 lives lost (in this batch) |
+| Mean score | 22.93 |
+| Std dev | 1.87 |
+| Perfect (25) | 124 games (24.8%) |
+
+Recent improvements (same seed scheme):
+
+| Change | Mean | Perfects | Worst |
+|---|---:|---:|---:|
+| Pre-tweaks (May baseline) | 22.77 | 110 | 17 |
+| + "rightmost non-left" right-number spec | 22.93 | 124 | 17 |
+| + removed shifted-hint mode (replace with play-slot-0 fallback) | 22.93 | 124 | 17 |
+
+(The last two ship together: with the new right-number spec, the exact channel is unbuildable only on all-one-rank hands — 0 occurrences per 500 games in measured runs — so the shifted-hint branch is no longer needed and was removed in favour of a safer single-seat fallback.)
 
 Command:
 
@@ -59,9 +69,9 @@ Hints are real **number** or **color** moves (`NumberHint` / `ColorHint`). **Lef
 | 6–8 | Right number | next / next+1 / next+2 |
 
 - **Left number / color:** rank or color of the card at **index 0**; touch all matching cards.
-- **Right number:** minimum rank among slots **1..n-1**, then touch all cards of that rank on the full hand. Unavailable when that spec equals the left-number spec.
+- **Right number:** rank of the **rightmost** card whose rank ≠ slot-0's rank; touch all cards of that rank on the full hand. Unbuildable **only** when every card in the hand shares the same rank (very rare in a 5-card hand).
 
-The hinter sums visible peers’ recommendation codes (mod 9) and emits channel **`sum_mod` only** (no `delta` shift). If that channel cannot be built on the target hand, the hinter **skips hinting** and falls through to discard so receivers never decode a wrong value. **Last resort:** if discard is illegal (max hint tokens), the encoder may use `delta > 0` to find any legal hint.
+The hinter sums visible peers’ recommendation codes (mod 9) and emits channel **`sum_mod` only** (no `delta` shift). If that channel cannot be built on the target hand (the all-one-rank corner case above), the hinter **skips hinting** and falls through to discard so receivers never decode a wrong value. There is no shifted-channel fallback: shifted hints would force every receiver to decode a wrong code at once, so they were removed.
 
 ---
 
@@ -106,15 +116,17 @@ When the observer **is** the hint target, channel inference uses public fields o
 The bot tries, in order:
 
 1. **Follow play** from decoded recommendation (when `plays_since_hint` and error count allow).
-2. **Give** an encoded hint at **exact** `sum_mod` (spend a hint token when legal).
+2. **Give** an exact-channel encoded hint at `sum_mod` (spend a hint token when legal).
 3. **Follow most-useless-slot discard** (codes 5–8).
 4. **Fallback:** discard **C1** (oldest), index `0`.
-5. **Shifted hint** (`allow_shift=True`) only if step 4 was illegal (max hint tokens).
+5. **Last-resort play of slot 0** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank teammate hand). Caps the damage to at most one bomb on this seat instead of broadcasting a wrong-channel code to every teammate, which is what the previous shifted-hint branch did.
 
 Play follow timing:
 
 - `plays_since_hint == 0`, or
 - `plays_since_hint == 1` and fewer than 2 bombs so far.
+
+**Note on dispatch order:** keeping hint **before** discard-follow is intentional. A hint isn't just spending a token — it also broadcasts the **next round of play/discard codes to every teammate** via the encoded channel. An earlier experiment that swapped these (`_try_follow_useless_slot_discard` before `_try_give_encoded_hint`) cratered the 500-game numbers (4p: 22.93 → 21.18, perfects 124 → 21, worst 17 → 1) because teammates were left without fresh codes long enough to bomb on stale play recommendations.
 
 ---
 
@@ -164,7 +176,7 @@ Compared to perfect games (sample of 40 each from the same batch):
 | Hints | ~23 | ~20 |
 | Total moves | ~59 | ~55 |
 
-Imperfect games are slightly **longer** but score lower because they **play less and discard more**: the team spends moves on the hint/discard cycle without converting enough into stacked cards. That matches the `play()` dispatch (hint before following discard advice) and the narrow **play-follow window** (`plays_since_hint` gating), which often defers plays until the next hint cycle.
+Imperfect games are slightly **longer** but score lower because they **play less and discard more**: the team spends moves on the hint/discard cycle without converting enough into stacked cards. The narrow **play-follow window** (`plays_since_hint` gating) often defers plays until the next hint cycle. Dispatch-order tweaks have been measured: swapping the order so the bot follows a discard recommendation **before** giving a hint cratered scores (124 → 21 perfect games, worst 17 → 1) because hint payloads also carry the next round of codes to teammates, so withholding hints starves the protocol. The current order (hint before discard-follow) is the one that preserved the most plays-per-game while still letting follow-discard refill the hint bank when an exact channel was available.
 
 Bombs are **not** the main loss mode after the strict-encoding fix (no 0-score games in this batch; worst score 17).
 

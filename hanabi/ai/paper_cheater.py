@@ -14,7 +14,7 @@ from hanabi.core.enums import CardKind
 from hanabi.core.game import CommonView, GameState, Hand, PlayerView
 from hanabi.core.move_generation import generate_all_valid_moves
 from hanabi.core.move_validation import is_move_legal_from_view
-from hanabi.core.moves import ColorHint, Discard, Move, NumberHint, Play
+from hanabi.core.moves import ColorHint, Discard, Move, NumberHint, Play, move_with_why
 from hanabi.core.player import Cheater
 
 logger = logging.getLogger(__name__)
@@ -81,28 +81,37 @@ class PaperCheater(Cheater):
             m for m in valid_moves if isinstance(m, Play) and self._play_would_succeed(state, idx, m)
         ]
         if winning_plays:
-            return min(winning_plays, key=lambda m: m.card)
+            chosen = min(winning_plays, key=lambda m: m.card)
+            return move_with_why(chosen, f"tier 1 (playable, lowest index): Play({chosen.card})")
 
         if _total_discarded_card_count(common) < 5 and discard_allowed:
             useless = self._useless_discards(valid_moves, state, idx)
             if useless:
-                return min(useless, key=lambda m: m.card)
+                chosen = min(useless, key=lambda m: m.card)
+                return move_with_why(
+                    chosen, f"tier 2 (early-game USELESS discard, <5 discarded): Discard({chosen.card})"
+                )
 
         if 0 < common.hint_tokens:
             hint_moves = [m for m in valid_moves if isinstance(m, (ColorHint, NumberHint))]
             legal_hints = [m for m in hint_moves if self._is_move_legal(state, player_view, m)]
             if legal_hints:
-                return _pick_hint_deterministic(legal_hints)
+                chosen = _pick_hint_deterministic(legal_hints)
+                return move_with_why(chosen, "tier 3 (hint, deterministic tiebreak): spend a hint token")
 
         if discard_allowed:
             useless = self._useless_discards(valid_moves, state, idx)
             if useless:
-                return min(useless, key=lambda m: m.card)
+                chosen = min(useless, key=lambda m: m.card)
+                return move_with_why(chosen, f"tier 4 (USELESS discard, lowest index): Discard({chosen.card})")
 
         if discard_allowed:
             duplicate_discards = self._duplicate_teammate_discards(valid_moves, state, idx)
             if duplicate_discards:
-                return min(duplicate_discards, key=lambda m: m.card)
+                chosen = min(duplicate_discards, key=lambda m: m.card)
+                return move_with_why(
+                    chosen, f"tier 5 (duplicate-of-teammate discard, lowest index): Discard({chosen.card})"
+                )
 
         if discard_allowed:
             non_critical = [
@@ -112,15 +121,18 @@ class PaperCheater(Cheater):
                 and CardKind.CRITICAL != self._card_kind_at_index(state, idx, m.card)
             ]
             if non_critical:
-                return min(non_critical, key=lambda m: m.card)
+                chosen = min(non_critical, key=lambda m: m.card)
+                return move_with_why(
+                    chosen, f"tier 6 (non-critical discard, lowest index): Discard({chosen.card})"
+                )
 
         if discard_allowed:
             for m in valid_moves:
                 if isinstance(m, Discard) and 0 == m.card:
-                    return m
+                    return move_with_why(m, "tier 7 (C1 discard fallback): Discard(0)")
 
         logger.warning("PaperCheater falling back to first valid move")
-        return valid_moves[0]
+        return move_with_why(valid_moves[0], "fallback: first valid move (all tiers exhausted)")
 
     def _is_move_legal(self, state: GameState, player_view: PlayerView, move: Move) -> bool:
         return is_move_legal_from_view(

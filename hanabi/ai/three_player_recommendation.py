@@ -7,14 +7,16 @@ Encodes a value with **mod-7** arithmetic over visible hands. **Seven physical c
 - **0–1:** left number — rank of the card at **index 0** (C1 / oldest), all matching indices;
   **next** / **prev** teammate by seat order.
 - **2–3:** left color — **color** of the card at **index 0**, all matching indices → next / prev.
-- **4–5:** right number — **minimum rank** among cards at indices ``1 .. n-1`` (exclude slot ``0``
-  from the pool only), then hint **every** card of that rank on the full hand (same as a normal
-  number hint). Example: ``R2 Y3 B4 R1 Y2`` (indices ``0``–``4``) → left number is **2**’s
-  (slots ``0`` and ``4``); right number is **1**’s (slot ``3`` only). Collapses with left spec
-  → channel unavailable.
-- **6:** right color — first standard suit (see ``_STANDARD_HINT_COLORS``) that appears on a card
-  at index ``>= 1``, then all cards of that color on the hand. Emitted only toward **next**
-  teammate (no “right color to previous” channel).
+- **4–5:** right number — rank of the **rightmost** card whose rank differs from the left-number
+  rank (i.e. from slot ``0``'s rank), then hint **every** card of that rank on the full hand
+  (same as a normal number hint). Example: ``R2 Y3 B4 R1 Y2`` (indices ``0``–``4``) → left
+  number is **2**’s (slots ``0`` and ``4``); right number is the rightmost non-``2`` rank,
+  which is ``R1`` at slot ``3`` → **1**’s on slot ``3``. Channel **unavailable** only if every
+  card in the hand has the same rank.
+- **6:** right color — color of the **rightmost** card whose color differs from the left-color
+  (i.e. from slot ``0``'s color), then all cards of that color on the hand. Emitted only toward
+  **next** teammate (no “right color to previous” channel). Channel **unavailable** only if
+  every card in the hand has the same color.
 
 **Seat offset (same pattern as :class:`~hanabi.ai.recommendation_player.RecommendationPlayer`):**
 for hinter ``H`` and hint target ``T``,
@@ -43,25 +45,17 @@ matches that for the **fallback** discard. **Decoded** actions ``0`` / ``6`` sti
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 NUM_PLAYERS_FOR_MINI_RECOMMENDATION = 3
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint, HintMove
+from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint, HintMove, move_with_why
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
 
 _REC_SLOT_ORDER = (0, 1, 2, 3, 4)
-
-_STANDARD_HINT_COLORS = (
-    Color.WHITE,
-    Color.RED,
-    Color.BLUE,
-    Color.YELLOW,
-    Color.GREEN,
-)
 
 
 class ThreePlayerRecommendationPlayer(BasePlayer):
@@ -101,22 +95,30 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
 
     def play(self, player_view: PlayerView) -> Move:
         assert player_view.own_hand_size > 0
+        # Reset so the post-dispatch assertion catches any branch that returns a move
+        # without recording its rationale.
+        self._last_decision_summary = None
         errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
         recommendation = self._get_my_recommendation()
 
         move = (
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
+            # IMPORTANT: keep hint BEFORE discard-follow. A given hint isn't just an info
+            # token spend — it also broadcasts the next round of play/discard recommendations
+            # to every teammate via the encoded channel. Swapping these two saved a hint
+            # token but cratered scores on a 500-game batch (3p: 22.61 → 20.31, perfects
+            # 18% → 2.4%, worst 15 → 3) because teammates started acting on stale codes.
             or self._try_give_encoded_hint(player_view)
             or self._try_follow_chop_and_discard_recommendation(player_view, recommendation)
             or self._try_discard_c1(player_view)
-            or self._try_give_encoded_hint(player_view, allow_shift=True)
+            or self._try_play_oldest_as_last_resort(player_view)
         )
         assert move is not None
         assert self.is_move_legal(player_view, move), "ThreePlayerRecommendationPlayer chooses legal moves only"
-        return move
-
-    def get_decision_summary(self) -> Optional[str]:
-        return self._last_decision_summary
+        assert self._last_decision_summary is not None, (
+            "every _try_* branch that returns a move must set _last_decision_summary"
+        )
+        return move_with_why(move, self._last_decision_summary)
 
     def _observe_encoding_hint(
         self,
@@ -168,6 +170,19 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
 
     def _get_my_recommendation(self) -> Optional[int]:
         return self._my_decoded_recommendation
+
+    def get_gui_recommendation_by_slot(self, player_view: PlayerView) -> Dict[int, str]:
+        """Map hand slot indices to ``play`` or ``discard`` for GUI indicators."""
+        rec = self._my_decoded_recommendation
+        if rec is None:
+            return {}
+        if 0 == rec:
+            chop = player_view.own_hand_size - 1
+            return {chop: "discard"} if 0 <= chop else {}
+        if 1 <= rec <= 5:
+            slot = rec - 1
+            return {slot: "play"} if slot < player_view.own_hand_size else {}
+        return {}
 
     def _get_recommendation_for_hand(
         self,
@@ -288,41 +303,55 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         self._last_decision_summary = (
             f"[3p mod-7] Play card {play_idx + 1} (code {recommendation}) — {detail}"
         )
+        # Recommendation consumed: clear so we don't act on it again on a future turn
+        # before a fresh hint arrives. Stale follow-play is what caused replay-debug
+        # misplays like P3 playing slot 0 a second time after only discards in between.
+        self._my_decoded_recommendation = None
         return Play(play_idx)
 
-    def _try_give_encoded_hint(self, player_view: PlayerView, *, allow_shift: bool = False) -> Optional[Move]:
+    def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
-        Emit a hint that encodes ``sum_mod7``.
+        Emit a hint that encodes ``sum_mod7`` on the **exact** channel ``cid == sum_mod7``.
 
-        Default (``allow_shift=False``): only the **exact** channel ``cid == sum_mod7`` is
-        built; if it can't be built (right-number / right-color spec collapses with left), we
-        abstain so receivers never decode a shifted value. The dispatch chain falls through to
-        discard. Every emitted hint therefore carries the intended recommendation exactly.
-
-        Last-resort (``allow_shift=True``): used **only** after the discard path was illegal
-        (max hint tokens). We then iterate ``delta`` to find any buildable channel because the
-        bot must produce a legal move. Receivers may decode a shifted value (one bomb at most
-        before the next strict hint resets state), which we accept since the alternative is no
-        legal move at all.
+        If that channel can't be built on the target's hand (only possible when the target
+        hand is entirely one rank or one color — see :func:`_right_number_spec` and
+        :func:`_right_color_spec`), we abstain so receivers never decode a shifted value. The
+        dispatch chain then falls through to discard / play-slot-0. Every emitted hint
+        therefore carries the intended recommendation exactly; there is no shifted-hint mode.
         """
         if 0 == self.common_view.hint_tokens:
             return None
         _, sum_mod7, peer_breakdown = self._sum_peer_recommendations(player_view)
-        deltas = range(7) if allow_shift else (0,)
-        for delta in deltas:
-            cid = (sum_mod7 + delta) % 7
-            hint_move = _build_channel_hint(self._player_index, player_view, cid)
-            if hint_move is None:
-                continue
-            if not self.is_move_legal(player_view, hint_move):
-                continue
-            kind = "shifted" if 0 != delta else "exact"
-            self._last_decision_summary = (
-                f"[3p mod-7] Hint channel {cid} ({kind}, delta={delta}) · "
-                f"peer codes sum mod 7 = {sum_mod7} · {peer_breakdown}"
-            )
-            return hint_move
-        return None
+        hint_move = _build_channel_hint(self._player_index, player_view, sum_mod7)
+        if hint_move is None:
+            return None
+        if not self.is_move_legal(player_view, hint_move):
+            return None
+        self._last_decision_summary = (
+            f"[3p mod-7] Hint channel {sum_mod7} (exact) · "
+            f"peer codes sum mod 7 = {sum_mod7} · {peer_breakdown}"
+        )
+        return hint_move
+
+    def _try_play_oldest_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
+        """
+        Last-resort fallback for the rare state where no other branch can fire:
+
+        - no play / discard recommendation to follow,
+        - exact-channel hint unbuildable (target hand all one rank or all one color),
+        - C1 discard illegal (max hint tokens).
+
+        Playing slot ``0`` is always legal as long as the hand is non-empty. The card is
+        typically the oldest in the hand (most accumulated hints) and so has the highest
+        a-priori chance of being playable. This replaces the old ``allow_shift=True`` branch
+        which would broadcast a wrong-channel code to every teammate at once.
+        """
+        if not self.is_move_legal(player_view, Play(0)):
+            return None
+        self._last_decision_summary = (
+            "[3p mod-7] Play slot 0 (last resort: no exact hint buildable at max tokens)"
+        )
+        return Play(0)
 
     def _try_follow_chop_and_discard_recommendation(
         self,
@@ -337,6 +366,8 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         if 0 == recommendation:
             if self.is_move_legal(player_view, Discard(chop)):
                 self._last_decision_summary = "[3p mod-7] Discard chop (code 0 · chop safe)"
+                # Recommendation consumed (see _try_follow_play_recommendation for rationale).
+                self._my_decoded_recommendation = None
                 return Discard(chop)
             return None
 
@@ -346,6 +377,8 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
                     continue
                 if self.is_move_legal(player_view, Discard(idx)):
                     self._last_decision_summary = "[3p mod-7] Discard non-chop slot (code 6 · keep chop)"
+                    # Recommendation consumed (see _try_follow_play_recommendation for rationale).
+                    self._my_decoded_recommendation = None
                     return Discard(idx)
             return None
 
@@ -485,18 +518,21 @@ def _left_number_spec(hand: List[Card]) -> tuple[Number, List[int]]:
 
 def _right_number_spec(hand: List[Card]) -> Optional[tuple[Number, List[int]]]:
     """
-    Minimum rank among cards at indices ``1 .. n-1``; all cards of that rank on the hand.
+    Rank of the **rightmost** card whose rank differs from :func:`_left_number_spec`'s rank;
+    touch all cards of that rank on the hand.
 
-    Unavailable when that spec equals :func:`_left_number_spec` (same hint as left).
+    Unavailable (returns ``None``) **only** when every card in the hand shares the same rank
+    (so no card can carry a "right" hint distinct from the left one). With a standard 5-card
+    hand and the standard deck this requires all 5 cards to be the same rank, which is rare.
     """
     if len(hand) < 2:
         return None
-    tail = hand[1:]
-    r = min((c.number for c in tail), key=lambda n: n.value)
-    indices = sorted(i for i, c in enumerate(hand) if r == c.number)
-    ln, li = _left_number_spec(hand)
-    if r == ln and indices == li:
+    left_rank = hand[0].number
+    rightmost_other = next((c for c in reversed(hand) if c.number != left_rank), None)
+    if rightmost_other is None:
         return None
+    r = rightmost_other.number
+    indices = sorted(i for i, c in enumerate(hand) if r == c.number)
     return r, indices
 
 
@@ -517,21 +553,22 @@ def _left_color_spec(hand: List[Card]) -> tuple[Color, List[int]]:
 
 def _right_color_spec(hand: List[Card]) -> Optional[tuple[Color, List[int]]]:
     """
-    First standard suit that appears on some card at index ``>= 1``; all cards of that color.
+    Color of the **rightmost** card whose color differs from :func:`_left_color_spec`'s color;
+    touch all cards of that color on the hand.
 
-    Unavailable when that equals :func:`_left_color_spec`.
+    Unavailable (returns ``None``) **only** when every card in the hand shares the same color.
+    With a standard 5-card hand each color only has 10 cards total in the deck, so this case
+    is rare but possible.
     """
     if len(hand) < 2:
         return None
-    left_c, left_i = _left_color_spec(hand)
-    for col in _STANDARD_HINT_COLORS:
-        if not any(hand[i].color == col for i in range(1, len(hand))):
-            continue
-        indices = sorted(i for i, c in enumerate(hand) if col == c.color)
-        if col == left_c and indices == left_i:
-            continue
-        return col, indices
-    return None
+    left_color = hand[0].color
+    rightmost_other = next((c for c in reversed(hand) if c.color != left_color), None)
+    if rightmost_other is None:
+        return None
+    col = rightmost_other.color
+    indices = sorted(i for i, c in enumerate(hand) if col == c.color)
+    return col, indices
 
 
 def _build_right_color_hint(target: int, hand: List[Card]) -> Optional[ColorHint]:

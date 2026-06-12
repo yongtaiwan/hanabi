@@ -27,6 +27,24 @@ from hanabi.core.enums import Number
 logger = logging.getLogger(__name__)
 
 
+def _replay_moves_equivalent(a: Move, b: Move) -> bool:
+    """Structural equality on the engine-relevant fields of two leaf moves.
+
+    Used by debug-replay to flag divergence between a bot's recomputed move and
+    the saved move; covers all :class:`hanabi.core.moves.ConcreteMove` variants
+    (Explained* subclasses included via isinstance).
+    """
+    if isinstance(a, Play) and isinstance(b, Play):
+        return a.card == b.card
+    if isinstance(a, Discard) and isinstance(b, Discard):
+        return a.card == b.card
+    if isinstance(a, ColorHint) and isinstance(b, ColorHint):
+        return a.teammate == b.teammate and a.color == b.color
+    if isinstance(a, NumberHint) and isinstance(b, NumberHint):
+        return a.teammate == b.teammate and a.number == b.number
+    return False
+
+
 class GUIGame:
     """Main GUI game controller."""
 
@@ -46,6 +64,12 @@ class GUIGame:
         self._is_replay_mode: bool = False
         self._replay_history: Optional[dict] = None
         self._replay_move_index: int = 0
+        # Debug-replay opt-in: when True, _update_replay_display instantiates the
+        # real bot classes from replay_history["players"] (instead of HumanPlayer
+        # placeholders) and surfaces each move's HasWhy rationale under the move
+        # in the event history. Recomputed move may diverge from the saved move
+        # for non-deterministic bots; the saved move is still what gets applied.
+        self._replay_debug_mode: bool = False
         self._suppress_dialogs: bool = False  # Set to True to disable messageboxes (for testing)
         self._game_ended: bool = False  # Track if game has ended to prevent duplicate end screens
         # Jobs from the game worker thread; drained only on the Tk main thread (_process_gui_updates)
@@ -757,6 +781,7 @@ class GUIGame:
         self._is_replay_mode = False
         self._replay_history = None
         self._replay_move_index = 0
+        self._replay_debug_mode = False
 
         # Clear the canvas and top panel (status bar)
         if self._display:
@@ -808,6 +833,8 @@ class GUIGame:
             self._replay_next_btn = None
         if hasattr(self, "_replay_last_btn"):
             self._replay_last_btn = None
+        if hasattr(self, "_replay_debug_btn"):
+            self._replay_debug_btn = None
 
         # Hide game control buttons
         if self._back_to_start_btn:
@@ -1355,6 +1382,7 @@ class GUIGame:
         self._replay_history = None
         self._replay_move_index = 0
         self._is_replay_mode = False
+        self._replay_debug_mode = False
 
         # Clear game
         self._game = None
@@ -1480,6 +1508,20 @@ class GUIGame:
         )
         self._replay_last_btn.pack(side=tk.LEFT, padx=2)
 
+        # Debug replay: toggle re-running the original bots so each move's HasWhy
+        # rationale ("why") shows up as a dim italic line under the move.
+        self._replay_debug_btn = tk.Button(
+            replay_frame,
+            text="🐞 Debug Replay",
+            command=self._toggle_replay_debug_mode,
+            bg="#95A5A6",
+            fg="black",
+            font=("Arial", 9),
+            highlightthickness=0,
+        )
+        self._replay_debug_btn.pack(side=tk.LEFT, padx=(8, 2))
+        self._refresh_replay_debug_btn_style()
+
         # Update button states
         self._update_replay_button_states()
 
@@ -1517,6 +1559,70 @@ class GUIGame:
                 self._replay_last_btn.config(state=tk.DISABLED if current_index >= total_moves else tk.NORMAL)
             except (tk.TclError, AttributeError):
                 self._replay_last_btn = None
+
+    def _instantiate_replay_player(self, class_name: str, player_index: int, settings):
+        """
+        Build an AI seat for debug-replay by looking up ``class_name`` in
+        :data:`hanabi.ai.PLAYER_CLASSES`. Returns ``None`` when the class is
+        unknown (e.g. an old / removed bot) **or** when the class does not
+        support the saved game's configuration — caller falls back to a
+        placeholder so the replay still steps without comments for that seat.
+
+        Stochastic bots (`RandomPlayer`, `MonteCarloPlayer`) are constructed with
+        a per-seat deterministic seed so re-running the same file always yields
+        the same recomputed comments.
+        """
+        import random
+        from hanabi.ai import PLAYER_CLASSES
+        from hanabi.ai.random_player import RandomPlayer
+        from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
+
+        cls = PLAYER_CLASSES.get(class_name)
+        if cls is None:
+            return None
+        if not cls.supports_game_settings(settings):
+            logger.warning(
+                f"Replay debug: {class_name} does not support saved game settings; falling back."
+            )
+            return None
+        seed = 1_000_000 + player_index
+        if cls is RandomPlayer:
+            return RandomPlayer(player_index, rng=random.Random(seed))
+        if cls is MonteCarloPlayer:
+            # Tight budget keeps the replay re-run snappy; debug is about
+            # surfacing the bot's reasoning, not its full live-play strength.
+            return MonteCarloPlayer(
+                player_index,
+                config=MonteCarloConfig(
+                    min_think_time_s=0.0,
+                    max_think_time_s=2.0,
+                    min_simulations=1,
+                    max_simulations=20,
+                    rollout_mc_steps=1,
+                    rng_seed=seed,
+                ),
+            )
+        return cls(player_index)
+
+    def _toggle_replay_debug_mode(self):
+        """Toggle debug-replay (re-run real bots to surface ``move.why()``)."""
+        self._replay_debug_mode = not self._replay_debug_mode
+        self._refresh_replay_debug_btn_style()
+        # Re-render at the current position so comments appear/disappear immediately.
+        self._update_replay_display()
+        self._update_replay_button_states()
+
+    def _refresh_replay_debug_btn_style(self):
+        """Recolor the debug button to reflect on/off state."""
+        if not getattr(self, "_replay_debug_btn", None):
+            return
+        try:
+            if self._replay_debug_mode:
+                self._replay_debug_btn.config(bg="#E67E22", fg="white", text="🐞 Debug Replay (on)")
+            else:
+                self._replay_debug_btn.config(bg="#95A5A6", fg="black", text="🐞 Debug Replay")
+        except (tk.TclError, AttributeError):
+            self._replay_debug_btn = None
 
     def _replay_first(self):
         """Go to first move in replay."""
@@ -1579,15 +1685,29 @@ class GUIGame:
         self._display._replay_player_names = players_list
 
         # Reconstruct game from history up to current move index
-        from hanabi.core.player import HumanPlayer
+        from hanabi.core.player import HumanPlayer, BasePlayer, Cheater
         from hanabi.core.game_history import GameHistory
+        from hanabi.core.moves import HasWhy
 
         settings_dict = self._replay_history.get("settings", {})
         num_players = settings_dict.get("num_players", 3)
+        players_list = self._replay_history.get("players", [])
 
-        # Use HintTrackingPlayer (HumanPlayer extends it) so hints are tracked
-        placeholder_players = [HumanPlayer(i) for i in range(num_players)]
-        team = PlayerTeam(placeholder_players)
+        # In debug mode, resurrect the bots saved alongside the replay so we can
+        # call play() per turn and surface their why() rationale. Otherwise (default),
+        # use HumanPlayer placeholders for a fast pure-state replay (today's behavior).
+        settings = GameHistory.settings_from_history_dict(self._replay_history)
+        replay_players = []
+        debug_active = self._replay_debug_mode and bool(players_list)
+        for i in range(num_players):
+            inst = None
+            if debug_active:
+                class_name = players_list[i] if i < len(players_list) else ""
+                inst = self._instantiate_replay_player(class_name, i, settings)
+            if inst is None:
+                inst = HumanPlayer(i)  # placeholder seat — no rationale shown
+            replay_players.append(inst)
+        team = PlayerTeam(replay_players)
 
         # Set up move callback to track moves for event history
         moves_applied = []  # Track moves for event history
@@ -1626,6 +1746,24 @@ class GUIGame:
                 )
                 continue
 
+            # Debug: ask the resurrected bot what it would do *now*, purely to
+            # extract its HasWhy rationale. The saved move is still what gets
+            # applied below so the replay stays faithful even when the bot
+            # would diverge (we flag divergence in the rationale label).
+            recomputed_why = None
+            recomputed_diverges = False
+            if debug_active:
+                seat = team.players[current_player]
+                if isinstance(seat, Cheater):
+                    recomputed = seat.play(old_state)
+                elif isinstance(seat, BasePlayer):
+                    recomputed = seat.play(self._game._get_player_view(current_player))
+                else:
+                    recomputed = None  # HumanPlayer placeholder fallback seat
+                if isinstance(recomputed, HasWhy):
+                    recomputed_why = recomputed.why()
+                    recomputed_diverges = not _replay_moves_equivalent(recomputed, move)
+
             self._game._process_move(current_player, move)
             # Note: _process_move calls _notify_players internally
             self._game._advance_turn()
@@ -1639,7 +1777,6 @@ class GUIGame:
             # Add move to event history
             move_message = self._format_move_message(current_player, move, old_state, new_state)
             # Check if this is an AI player (based on player class names from history)
-            players_list = self._replay_history.get("players", [])
             is_ai_player = (
                 current_player < len(players_list)
                 and players_list[current_player] != "GUIPlayer"
@@ -1647,6 +1784,12 @@ class GUIGame:
                 and players_list[current_player] != "ConsolePlayer"
             )
             self._display.display_move_result(True, move_message, current_player, is_ai_player)
+
+            if recomputed_why:
+                class_label = players_list[current_player] if current_player < len(players_list) else "?"
+                if recomputed_diverges:
+                    class_label = f"{class_label} (recomputed ≠ saved)"
+                self._display.display_ai_rationale(class_label, recomputed_why)
 
         # Update display with the reconstructed game state
         self._display.set_game(self._game)

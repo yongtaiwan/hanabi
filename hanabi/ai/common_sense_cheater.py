@@ -15,7 +15,7 @@ from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import GameState, Hand, PlayerView
 from hanabi.core.move_generation import generate_all_valid_moves
 from hanabi.core.move_validation import is_move_legal_from_view
-from hanabi.core.moves import ColorHint, Discard, Move, NumberHint, Play
+from hanabi.core.moves import ColorHint, Discard, Move, NumberHint, Play, move_with_why
 from hanabi.core.player import Cheater
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,10 @@ class CommonSenseCheater(Cheater):
 
         playable_plays = [m for m in valid_moves if isinstance(m, Play) and self._play_would_succeed(state, idx, m)]
         if playable_plays:
-            return self._choose_play(playable_plays, state, idx)
+            chosen = self._choose_play(playable_plays, state, idx)
+            return move_with_why(
+                chosen, f"tier 1 (playable plays): max newly-playable delta, tiebreak 51234 → Play({chosen.card})"
+            )
 
         # USELESS discards only appear in valid_moves when discard_allowed (see move_generation).
         useless_discards = [
@@ -93,7 +96,8 @@ class CommonSenseCheater(Cheater):
         ]
         if useless_discards:
             assert discard_allowed, "discard moves present implies discard_allowed"
-            return self._pick_discard_by_rank_order(useless_discards, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            chosen = self._pick_discard_by_rank_order(useless_discards, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            return move_with_why(chosen, f"tier 2 (USELESS discard, 4321 rank): Discard({chosen.card})")
 
         redundant_discards = [
             m
@@ -102,7 +106,10 @@ class CommonSenseCheater(Cheater):
         ]
         if redundant_discards:
             assert discard_allowed, "discard moves present implies discard_allowed"
-            return self._pick_discard_by_rank_order(redundant_discards, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            chosen = self._pick_discard_by_rank_order(redundant_discards, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            return move_with_why(
+                chosen, f"tier 3 (redundant non-critical discard, copy elsewhere): Discard({chosen.card})"
+            )
 
         # When not discard_allowed, we often reach here with USELESS cards still in hand;
         # spending a hint is required to unlock discards (or wait for a firework bonus).
@@ -110,7 +117,8 @@ class CommonSenseCheater(Cheater):
         if hint_moves and 0 < common.hint_tokens:
             legal_hints = [m for m in hint_moves if self._is_move_legal(state, player_view, m)]
             if legal_hints:
-                return self._pick_hint_deterministic(legal_hints)
+                chosen = self._pick_hint_deterministic(legal_hints)
+                return move_with_why(chosen, "tier 4 (hint, deterministic tiebreak): spend a hint token")
 
         solo_noncrit = [
             m
@@ -119,7 +127,10 @@ class CommonSenseCheater(Cheater):
         ]
         if solo_noncrit:
             assert discard_allowed, "discard moves present implies discard_allowed"
-            return self._pick_discard_by_rank_order(solo_noncrit, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            chosen = self._pick_discard_by_rank_order(solo_noncrit, state, idx, _NONCRITICAL_DISCARD_RANK_ORDER)
+            return move_with_why(
+                chosen, f"tier 5 (solo non-critical discard, 4321 rank): Discard({chosen.card})"
+            )
 
         critical_discards = [
             m
@@ -128,10 +139,13 @@ class CommonSenseCheater(Cheater):
         ]
         if critical_discards:
             assert discard_allowed, "discard moves present implies discard_allowed"
-            return self._pick_discard_by_rank_order(critical_discards, state, idx, _CRITICAL_DISCARD_RANK_ORDER)
+            chosen = self._pick_discard_by_rank_order(critical_discards, state, idx, _CRITICAL_DISCARD_RANK_ORDER)
+            return move_with_why(
+                chosen, f"tier 6 (CRITICAL discard, 54321 rank, last resort): Discard({chosen.card})"
+            )
 
         logger.warning("CommonSenseCheater falling back to first valid move")
-        return valid_moves[0]
+        return move_with_why(valid_moves[0], "fallback: first valid move (all tiers exhausted)")
 
     def _is_move_legal(self, state: GameState, player_view: PlayerView, move: Move) -> bool:
         return is_move_legal_from_view(
