@@ -21,12 +21,23 @@ All seats used `ThreePlayerRecommendationPlayer`; before each `Game.create`, `ra
 |--------|--------|
 | Completed | 500 / 500 |
 | Failures | 0 |
-| Score min / max | 0 / 25 |
-| Mean score | ~18.0 |
-| Std dev | ~6.4 |
-| Perfect (25) | 33 games |
+| Score min / max | 16 / 25 |
+| Mean score | 22.86 |
+| Std dev | 1.84 |
+| Perfect (25) | 115 games (23%) |
 
-Rough throughput on the machine used for the run was on the order of **250+ games/s** (engine-only, no UI).
+Rough throughput on the machine used for the run was on the order of **100+ games/s** (engine-only, no UI).
+
+History of recent improvements (same seed scheme, same 500-game batch):
+
+| Change | Mean | Perfects | Worst |
+|---|---:|---:|---:|
+| Pre-tweaks (May baseline) | 22.16 | 65 | 15 |
+| + consume-on-follow (clear rec after acting on it) | 22.55 | 82 | 16 |
+| + "rightmost non-left" right-number/right-color spec | 22.86 | 115 | 16 |
+| + removed shifted-hint mode (replace with play-slot-0 fallback) | 22.86 | 115 | 16 |
+
+(The last two ship together: with the new right-spec, the exact channel is unbuildable only on all-one-rank / all-one-color hands — fewer than 1 occurrence per 500 games — so the shifted-hint branch is no longer needed and was removed in favour of a safer single-seat fallback.)
 
 ---
 
@@ -53,13 +64,17 @@ Hints are real **number** or **color** moves (`NumberHint` / `ColorHint`) built 
 | 1 | Left number | Previous | Same as 0, to previous teammate. |
 | 2 | Left color | Next | **Color** of card at **index 0**; touch all cards of that color. |
 | 3 | Left color | Previous | Same as 2, to previous teammate. |
-| 4 | Right number | Next | **Minimum rank** among cards at indices **1..n-1**; then touch all cards of that rank on the **full** hand. |
+| 4 | Right number | Next | Rank of the **rightmost** card whose rank ≠ slot-0's rank; touch all cards of that rank on the **full** hand. |
 | 5 | Right number | Previous | Same as 4, to previous teammate. |
-| 6 | Right color | **Next only** | First standard suit (fixed color order) that appears on some slot **≥ 1**; touch all cards of that color. No “right color to previous” channel. |
+| 6 | Right color | **Next only** | Color of the **rightmost** card whose color ≠ slot-0's color; touch all cards of that color. No “right color to previous” channel. |
 
-Example (indices `0`–`4`): `R2 Y3 B4 R1 Y2` → **left number** is **2**’s (slots `0` and `4`); **right number** is **1**’s (slot `3`). If the right-number spec would produce the **same** move as left-number, that channel is **unavailable** for that hand.
+Examples (indices `0`–`4`):
+- `R2 Y3 B4 R1 Y2` → **left number** = `2`'s at `[0, 4]`; **right number** = rightmost non-`2` rank, i.e. `R1` at slot `3` → `1`'s at `[3]`.
+- `R3 R3 G3 B4 B5` → **left number** = `3`'s at `[0, 1, 2]`; **right number** = rightmost non-`3` = `B5` → `5`'s at `[4]`.
 
-Modular **payload:** the hinter sums teammates’ recommendation codes (mod 7), then picks the **smallest** `delta` in `0..6` such that channel `(sum + delta) % 7` yields a **legal** hint.
+The right-number / right-color channel is **unbuildable** only when every card in the hand shares the same rank (channels 4, 5) or color (channel 6) — in a 5-card hand that needs all 5 cards to be the same rank / color, which is rare (≤ 1 hand per 500-game batch in measured runs).
+
+Modular **payload:** the hinter sums teammates’ recommendation codes (mod 7) and emits **only** the exact channel `cid == sum_mod7`. If that channel can’t be built on the target hand (the all-one-rank / all-one-color corner case above), the hint branch abstains and the dispatch chain falls through. There is no shifted-channel fallback: shifted hints would force every receiver to decode a wrong code at once, so they were removed.
 
 ---
 
@@ -94,9 +109,14 @@ where `peer_rec` is the **other** non-hinter peer’s recommendation code (the h
 The bot tries, in order:
 
 1. **Follow play** from decoded recommendation (when timing / errors allow).
-2. **Give** an encoded hint (spend a hint token when legal).
+2. **Give** an exact-channel encoded hint (spend a hint token when legal).
 3. **Follow chop/discard** recommendation (codes 0 or 6).
 4. **Fallback:** discard **C1** (oldest), index `0`, like the paper bot’s default.
+5. **Last-resort play of slot 0** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank / all-one-color teammate hand). Caps the damage to at most one bomb on this seat instead of broadcasting a wrong-channel code to every teammate, which is what the previous shifted-hint branch did.
+
+**Note on dispatch order:** keeping hint **before** discard-follow is intentional. A hint isn't just spending a token — it also broadcasts the **next round of play/discard codes to every teammate** via the encoded channel. An earlier experiment that put `_try_follow_chop_and_discard_recommendation` before `_try_give_encoded_hint` cratered the 500-game numbers (3p: 22.86 → 20.31, perfects 115 → 12, worst 16 → 3) because teammates were left without fresh codes long enough to bomb on stale play recommendations.
+
+**Consume-on-follow:** whenever step 1 or step 3 returns a move, `self._my_decoded_recommendation` is cleared. The decoded recommendation is otherwise sticky (only overwritten when a *new* encoded hint is observed), and the global `_plays_since_hint` counter still permits a second “follow” if only one teammate has played since the last hint. Together those would re-fire the same slot recommendation on the next own-turn even though the originally indicated card has already been played and the hand shifted — that is exactly the failure mode seen in debug-replay logs (e.g. P3 re-playing slot 0 after only discards in between, then bombing). Clearing on consume makes the second own-turn after a hint fall through to discard / hint instead.
 
 ---
 
@@ -121,11 +141,9 @@ The engine applies normal Hanabi legality (hint tokens, touching rules). The min
 Both **GUI** (`gui_game.py` **on_move** path) and **console** (`console_game.py`) print:
 
 1. **First line:** `[HH:MM:SS T##] …` — human-readable **move** (play/discard/hint), with console colorization on keywords where implemented. Hint lines look like `Pα hints Pβ: <rank or color> at <1-based slots>`.
-2. **Second line (if the mover has `get_decision_summary`):**  
-   **`ThreePlayerRecommendationPlayer` ·** `<summary>`  
-   - Class name: **bright yellow**  
-   - Summary text: **cyan**  
-   Summaries for this bot are prefixed with **`[3p mod-7]`** and describe the chosen channel, peer sum mod 7, follow-play/follow-discard rules, etc.
+2. **Second line (when the returned move implements `HasWhy`, i.e. `move.why()` is available):**  
+   **`ThreePlayerRecommendationPlayer:` `<summary>`**  
+   The mini-rec bot wraps its chosen move with `move_with_why(...)` in `play()`, so the standard GUI/console rendering picks the rationale up automatically. Summaries are prefixed with **`[3p mod-7]`** and describe the chosen channel, peer sum mod 7, follow-play / follow-discard rules, etc.
 
 So the **action** is always shown **before** the **AI explanation** on the terminal trace. The **canvas** game UI updates from the same move callback; the pattern above is the **copy/paste terminal log** order.
 

@@ -3,11 +3,11 @@ Random AI player for Hanabi game.
 """
 
 import random
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import PlayerView
-from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint
+from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint, move_with_why
 from hanabi.core.enums import Color, Number
 from hanabi.core.move_generation import generate_all_valid_moves
 
@@ -27,16 +27,21 @@ class RandomPlayer(BasePlayer):
     :meth:`hanabi.core.player.BasePlayer.is_move_legal`, which matches engine
     hint and card-index rules using only ``common_view``, ``game_settings``, and
     ``playerView``.
+
+    Pass a seeded :class:`random.Random` via ``rng`` to make the player reproducible
+    (e.g. for debug-replay). Default is the module-level :mod:`random`.
     """
 
-    def __init__(self, player_index: int):
+    def __init__(self, player_index: int, *, rng: Optional[random.Random] = None):
         """
         Initialize a random AI player.
 
         Args:
             player_index: The index of this player
+            rng: Optional dedicated random source for reproducibility (default: module ``random``).
         """
         super().__init__(player_index)
+        self._rng = rng if rng is not None else random
 
     def play(self, player_view: PlayerView) -> Move:
         """
@@ -54,7 +59,8 @@ class RandomPlayer(BasePlayer):
         if not potential_moves:
             # No moves available - create a play move as fallback
             hand_size = player_view.own_hand_size
-            return Play(0) if hand_size > 0 else Play(0)
+            fallback = Play(0) if hand_size > 0 else Play(0)
+            return move_with_why(fallback, "random: no valid moves generated (fallback Play(0))")
 
         # Filter moves to only include valid ones RIGHT NOW
         # This is critical because the common_view is shared and can change
@@ -74,10 +80,12 @@ class RandomPlayer(BasePlayer):
 
             # If still no valid moves, return a play move anyway (game will validate)
             if not valid_moves:
-                return Play(0) if hand_size > 0 else Play(0)
+                fallback = Play(0) if hand_size > 0 else Play(0)
+                return move_with_why(fallback, "random: no legal moves after filter (fallback Play(0))")
 
         # Randomly select from validated moves
-        selected = random.choice(valid_moves)
+        selected = self._rng.choice(valid_moves)
+        candidate_pool_size = len(valid_moves)
 
         # Only do a final check for hint moves to ensure tokens are still available
         # This is the only case where state can change between validation and selection
@@ -88,18 +96,21 @@ class RandomPlayer(BasePlayer):
                 # Prefer non-play moves if available
                 other_moves = [m for m in valid_moves if not isinstance(m, (ColorHint, NumberHint))]
                 if other_moves:
-                    selected = random.choice(other_moves)
+                    selected = self._rng.choice(other_moves)
+                    candidate_pool_size = len(other_moves)
                 else:
                     # Only plays available, use one of them
                     play_moves = [m for m in valid_moves if isinstance(m, Play)]
                     if play_moves:
-                        selected = random.choice(play_moves)
+                        selected = self._rng.choice(play_moves)
+                        candidate_pool_size = len(play_moves)
                     else:
                         # Last resort
                         hand_size = player_view.own_hand_size
                         selected = Play(0) if hand_size > 0 else Play(0)
+                        candidate_pool_size = 1
 
-        return selected
+        return move_with_why(selected, f"random: uniform pick from {candidate_pool_size} legal move(s)")
 
     def _generate_all_valid_moves(self, player_view: PlayerView) -> List[Move]:
         """

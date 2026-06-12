@@ -14,7 +14,7 @@ everyone who is neither giver nor receiver is an **observer** (several seats whe
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict
 
 from hanabi.core.game import CommonView, GameSettings, PlayerView
 from hanabi.core.move_generation import generate_all_valid_moves
@@ -42,10 +42,6 @@ class ThreePlayerConventionPlayer(BasePlayer):
     legal after filtering with :meth:`~hanabi.core.player.BasePlayer.is_move_legal`.
     """
 
-    def __init__(self, player_index: int):
-        super().__init__(player_index)
-        self._last_decision_summary: Optional[str] = None
-
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
         return NUM_PLAYERS_FOR_THREE_PLAYER_CONVENTION == game_settings.num_players
@@ -66,13 +62,8 @@ class ThreePlayerConventionPlayer(BasePlayer):
         )
         for move in candidates:
             if self.is_move_legal(player_view, move):
-                self._last_decision_summary = None
                 return move
         assert False, "expected at least one legal move with a non-empty hand"
-
-    def get_decision_summary(self) -> Optional[str]:
-        """Return a short explanation of the last move for console/GUI display."""
-        return self._last_decision_summary
 
     @staticmethod
     def chop_slot_from_public_information(*, hand_size: int) -> int:

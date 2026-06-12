@@ -19,6 +19,7 @@ from hanabi.core.enums import Color, Number
 from hanabi.core.card import Card
 from hanabi.core.game import Game, GameState
 from hanabi.core.moves import Move, ColorHint, NumberHint
+from hanabi.gui.recommendation_display import RecommendationAction, recommendations_by_slot_for_seat
 
 
 class GUIDisplay:
@@ -41,6 +42,9 @@ class GUIDisplay:
         Color.BLUE: "Blue",
         Color.MULTI: "Multi",
     }
+
+    REC_PLAY_COLOR = "#27AE60"
+    REC_DISCARD_COLOR = "#E74C3C"
 
     def __init__(self, root: tk.Tk):
         """
@@ -372,6 +376,25 @@ class GUIDisplay:
             self._add_event_to_history(formatted_msg, "success", player_index, is_ai, turn_number=turn_number)
         else:
             self._add_event_to_history(f"Error: {message}", "error", player_index, is_ai, turn_number=turn_number)
+
+    def display_ai_rationale(self, player_class_name: str, comment: str) -> None:
+        """
+        Append a dim italic line beneath the latest move in the event history,
+        showing the AI's :meth:`hanabi.core.moves.HasWhy.why` text from a debug replay.
+
+        Format: ``  ↳ <ClassName>: <comment>``.
+
+        Intentionally does **not** append to ``_event_history``: that list is used by
+        :meth:`_add_event_to_history` as the move-index source for the saved
+        ``_replay_turn_numbers`` lookup, so any extra entries here would shift every
+        subsequent move's displayed turn number.
+        """
+        assert self._history_text is not None, "history text widget not initialized"
+        line = f"  ↳ {player_class_name}: {comment}"
+        self._history_text.config(state=tk.NORMAL)
+        self._history_text.insert(tk.END, line + "\n", "ai_comment")
+        self._history_text.see(tk.END)
+        self._history_text.config(state=tk.DISABLED)
 
     def display_game_end(self, game: Game) -> None:
         """Display game end information."""
@@ -889,6 +912,8 @@ class GUIDisplay:
         self._history_text.tag_config("error", foreground="#FF6B6B")  # Light red
         self._history_text.tag_config("timestamp", foreground="#888888")  # Grey
         self._history_text.tag_config("game_end", foreground="#FFD700", font=("Arial", 11, "bold"))  # Gold for game end
+        # Dim italic line used for AI rationale ("why" text) under a move during debug replay.
+        self._history_text.tag_config("ai_comment", foreground="#A0A0A0", font=("Arial", 10, "italic"))
 
     def _on_canvas_click(self, event):
         """Handle canvas click - delegate to input handler or close menu."""
@@ -1894,6 +1919,11 @@ class GUIDisplay:
                 font=("Arial", 12, "bold" if is_current_player else "normal"),
             )
 
+            # Recommendation indicators (play/discard) for recommendation AI seats
+            seat_recommendations: Dict[int, RecommendationAction] = {}
+            if self._game:
+                seat_recommendations = recommendations_by_slot_for_seat(self._game, i)
+
             # Draw cards in hand
             total_width = len(hand.cards) * (card_width + spacing) - spacing
             start_x = x - total_width // 2
@@ -1921,6 +1951,7 @@ class GUIDisplay:
                     card.number,
                     show_front=show_front,
                     hints=card_hints,  # Always pass hints - card and hints are a unit
+                    recommendation=seat_recommendations.get(card_idx),
                     clickable=True,  # All cards clickable for action menu
                     player_idx=i,
                     card_idx=card_idx,
@@ -1942,6 +1973,7 @@ class GUIDisplay:
         number: Number,
         show_front: bool = True,
         hints: Dict[str, any] = None,
+        recommendation: Optional[RecommendationAction] = None,
         clickable: bool = False,
         player_idx: int = None,
         card_idx: int = None,
@@ -2012,6 +2044,9 @@ class GUIDisplay:
                         font=("Arial", 12, "bold"),
                         tags=("card",),
                     )
+
+            if recommendation is not None:
+                self._draw_recommendation_indicator(x, y, card_height, recommendation)
         else:
             bg_color = "#2C3E50"
             outline_color = "#87CEEB" if clickable else "#666666"
@@ -2122,7 +2157,42 @@ class GUIDisplay:
                         tags=("card",),
                     )
 
+            if recommendation is not None:
+                self._draw_recommendation_indicator(x, y, card_height, recommendation)
+
         return widget
+
+    def _draw_recommendation_indicator(
+        self, x: int, y: int, card_height: int, recommendation: RecommendationAction
+    ) -> None:
+        """Small badge above the card: green ▶ for play, red ✕ for discard (mirrors hint boxes below)."""
+        box_height = 18
+        box_width = 22
+        top_y = y - card_height // 2 - 2 - box_height
+        if "play" == recommendation:
+            fill = self.REC_PLAY_COLOR
+            label = "▶"
+        else:
+            fill = self.REC_DISCARD_COLOR
+            label = "✕"
+        self._canvas.create_rectangle(
+            x - box_width // 2,
+            top_y,
+            x + box_width // 2,
+            top_y + box_height,
+            fill=fill,
+            outline="#000000",
+            width=1,
+            tags=("card",),
+        )
+        self._canvas.create_text(
+            x,
+            top_y + box_height // 2,
+            text=label,
+            fill="white",
+            font=("Arial", 11, "bold"),
+            tags=("card",),
+        )
 
     def _on_action_selected(self, action: str):
         """Handle action selection from menu."""

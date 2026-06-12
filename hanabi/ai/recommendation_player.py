@@ -41,7 +41,7 @@ hint; discards do not increment it.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 NUM_PLAYERS_FOR_RECOMMENDATION = 5
 # Cox et al. count “errors” against standard three fuse tokens; ``1 == live_tokens`` is “two errors”.
@@ -231,6 +231,16 @@ class RecommendationPlayer(BasePlayer):
             "hint-time decode should exist for every receiver; only the hinter has no self-recommendation"
         )
         return None
+
+    def get_gui_recommendation_by_slot(self, player_view: PlayerView) -> Dict[int, str]:
+        """Map hand slot indices to ``play`` or ``discard`` for GUI indicators."""
+        rec = self._get_my_recommendation()
+        if rec is None:
+            return {}
+        if rec < len(Slot):
+            return {rec: "play"} if rec < player_view.own_hand_size else {}
+        discard_idx = rec - len(Slot)
+        return {discard_idx: "discard"} if discard_idx < player_view.own_hand_size else {}
 
     def _get_recommendation_for_hand(
         self,
