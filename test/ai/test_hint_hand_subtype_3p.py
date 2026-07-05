@@ -138,8 +138,25 @@ class TestEncodeHandType(unittest.TestCase):
             ),
         )
 
-
-class TestHandTypeWhenNoPlayable(unittest.TestCase):
+    def test_stale_critical_uses_physical_playable_for_encoding(self) -> None:
+        """Pile advance: belief CRITICAL but card physically PLAYABLE counts for hand type."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.BLUE: Suit({Number.ONE: 1})},
+            cards_played={Color.GREEN: Number.FOUR, Color.BLUE: Number.TWO},
+        )
+        hand = [
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.RED, Number.THREE),
+        ]
+        stale_critical = [CardKind.CRITICAL, None, None, None, None]
+        self.assertEqual(5, h3p._encode_hand_type(hand, 5, common, settings, stale_critical))
     def test_chop_safe_is_type_zero(self) -> None:
         kinds = [CardKind.DISPENSABLE, CardKind.USELESS, CardKind.CRITICAL]
         self.assertEqual(0, h3p._hand_type_when_no_playable(kinds, _unknown_belief(3)))

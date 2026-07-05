@@ -508,21 +508,18 @@ def _kinds_for_hand_type_encoding(
     """
     Effective per-slot kinds for hand-type encoding.
 
-    Slots already identified **playable** in convention belief are omitted from playable
-    ordering (treated as useless for type ``1``–``5``). Other identified kinds are kept.
-    Duplicate physical cards both playable count only the leftmost as playable.
+    Visible hands use full-information :meth:`~hanabi.core.game.CommonView.card_kind`
+    so pile advances stay current (e.g. CRITICAL becoming PLAYABLE). Belief only masks
+    slots already identified **playable** in the convention (treated as useless for
+    type ``1``–``5``). Duplicate physical cards both playable count only the leftmost.
     """
     assert len(identified_kinds) == len(cards)
     kinds: List[CardKind] = []
     for slot, card in enumerate(cards):
-        physical = common_view.card_kind(card, settings)
-        identified = identified_kinds[slot]
-        if CardKind.PLAYABLE == identified:
+        if CardKind.PLAYABLE == identified_kinds[slot]:
             kinds.append(CardKind.USELESS)
-        elif identified is not None:
-            kinds.append(identified)
         else:
-            kinds.append(physical)
+            kinds.append(common_view.card_kind(card, settings))
     return _collapse_duplicate_playable_cards_for_hand_type(cards, kinds)
 
 
