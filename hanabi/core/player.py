@@ -162,6 +162,10 @@ class BasePlayer(Observer, Player):
             case _:
                 assert_never(m)
 
+    # TODO: Pass observer-facing FinishedPlay/FinishedDiscard from Game._notify_players
+    # (played_card, successful on plays). Rename CardMove.card -> card_index first; intent
+    # moves stay Play/Discard. Lets bots drop discard-pile diffing for safe invalidation.
+
     def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
         """Hook: a player played a card. Default does nothing."""
 
