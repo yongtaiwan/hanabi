@@ -151,6 +151,9 @@ class HintHandSubtype3P(BasePlayer):
         self._inferred_card_kind[player_index] = shifted
 
     def _try_play_oldest_playable(self, player_view: PlayerView) -> Optional[Move]:
+        # TODO: Compare play-order strategies when multiple slots are PLAYABLE (leftmost slot
+        # vs hint-identification FIFO vs physically-playable filter). FIFO hint order scored
+        # ~0.17 lower on 100-game batches (duplicate-rank stale PLAYABLE marks across seats).
         for slot, kind in enumerate(self._inferred_card_kind[self._player_index]):
             if CardKind.PLAYABLE != kind:
                 continue
