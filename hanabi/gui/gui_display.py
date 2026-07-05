@@ -20,6 +20,7 @@ from hanabi.core.card import Card
 from hanabi.core.game import Game, GameState
 from hanabi.core.moves import Move, ColorHint, NumberHint
 from hanabi.gui.recommendation_display import RecommendationAction, recommendations_by_slot_for_seat
+from hanabi.gui.convention_belief_display import ConventionSlotOverlay, convention_overlays_for_seat
 
 
 class GUIDisplay:
@@ -45,6 +46,9 @@ class GUIDisplay:
 
     REC_PLAY_COLOR = "#27AE60"
     REC_DISCARD_COLOR = "#E74C3C"
+    CONVENTION_MISMATCH_OUTLINE = "#9B59B6"
+    CONVENTION_MISMATCH_OUTLINE_WIDTH = 4
+    CONVENTION_CHOP_BADGE_COLOR = "#5D6D7E"
 
     def __init__(self, root: tk.Tk):
         """
@@ -1871,8 +1875,8 @@ class GUIDisplay:
             hand = paint_state.player_hands[i]
             is_current_player = i == self._current_player
 
-            # Draw player label - always on top of hand
-            label_offset = 60
+            # Draw player label above convention/recommendation badges (badges sit ~55px above card center)
+            label_offset = 88
             # Always place label above the cards (toward center)
             label_y = y - label_offset
 
@@ -1921,8 +1925,10 @@ class GUIDisplay:
 
             # Recommendation indicators (play/discard) for recommendation AI seats
             seat_recommendations: Dict[int, RecommendationAction] = {}
+            seat_convention_overlays: Dict[int, ConventionSlotOverlay] = {}
             if self._game:
                 seat_recommendations = recommendations_by_slot_for_seat(self._game, i)
+                seat_convention_overlays = convention_overlays_for_seat(self._game, i)
 
             # Draw cards in hand
             total_width = len(hand.cards) * (card_width + spacing) - spacing
@@ -1952,6 +1958,7 @@ class GUIDisplay:
                     show_front=show_front,
                     hints=card_hints,  # Always pass hints - card and hints are a unit
                     recommendation=seat_recommendations.get(card_idx),
+                    convention_overlay=seat_convention_overlays.get(card_idx),
                     clickable=True,  # All cards clickable for action menu
                     player_idx=i,
                     card_idx=card_idx,
@@ -1974,6 +1981,7 @@ class GUIDisplay:
         show_front: bool = True,
         hints: Dict[str, any] = None,
         recommendation: Optional[RecommendationAction] = None,
+        convention_overlay: Optional[ConventionSlotOverlay] = None,
         clickable: bool = False,
         player_idx: int = None,
         card_idx: int = None,
@@ -2047,6 +2055,8 @@ class GUIDisplay:
 
             if recommendation is not None:
                 self._draw_recommendation_indicator(x, y, card_height, recommendation)
+            if convention_overlay is not None:
+                self._draw_convention_slot_overlay(x, y, card_height, convention_overlay)
         else:
             bg_color = "#2C3E50"
             outline_color = "#87CEEB" if clickable else "#666666"
@@ -2159,8 +2169,128 @@ class GUIDisplay:
 
             if recommendation is not None:
                 self._draw_recommendation_indicator(x, y, card_height, recommendation)
+            if convention_overlay is not None:
+                self._draw_convention_slot_overlay(x, y, card_height, convention_overlay)
 
         return widget
+
+    def _draw_convention_slot_overlay(
+        self, x: int, y: int, card_height: int, overlay: ConventionSlotOverlay
+    ) -> None:
+        """Chop axe badge on the left; inferred kind badge to its right (magenta outline if mismatch)."""
+        box_height = 18
+        kind_width = 22
+        chop_width = 16
+        gap = 2
+        top_y = y - card_height // 2 - 2 - box_height
+
+        has_kind = overlay.kind is not None
+        has_chop = overlay.is_chop
+        if not has_kind and not has_chop:
+            return
+
+        if has_chop and has_kind:
+            group_width = chop_width + gap + kind_width
+            chop_cx = x - group_width // 2 + chop_width // 2
+            kind_cx = x - group_width // 2 + chop_width + gap + kind_width // 2
+        elif has_chop:
+            chop_cx = x
+            kind_cx = x
+        else:
+            chop_cx = x
+            kind_cx = x
+
+        if has_chop:
+            self._draw_chop_axe_badge(chop_cx, top_y, box_height, chop_width)
+        if has_kind:
+            self._draw_convention_kind_badge(kind_cx, top_y, box_height, kind_width, overlay)
+
+    def _draw_convention_kind_badge(
+        self,
+        center_x: int,
+        top_y: int,
+        box_height: int,
+        box_width: int,
+        overlay: ConventionSlotOverlay,
+    ) -> None:
+        from hanabi.core.enums import CardKind
+
+        kind = overlay.kind
+        assert kind is not None
+        if CardKind.PLAYABLE == kind:
+            fill, label = self.REC_PLAY_COLOR, "▶"
+        elif CardKind.USELESS == kind:
+            fill, label = self.REC_DISCARD_COLOR, "✕"
+        elif CardKind.CRITICAL == kind:
+            fill, label = "#F39C12", "!"
+        else:
+            fill, label = "#7F8C8D", "/"
+        outline = self.CONVENTION_MISMATCH_OUTLINE if overlay.kind_mismatch else "#000000"
+        outline_width = self.CONVENTION_MISMATCH_OUTLINE_WIDTH if overlay.kind_mismatch else 1
+        self._canvas.create_rectangle(
+            center_x - box_width // 2,
+            top_y,
+            center_x + box_width // 2,
+            top_y + box_height,
+            fill=fill,
+            outline=outline,
+            width=outline_width,
+            tags=("card",),
+        )
+        self._canvas.create_text(
+            center_x,
+            top_y + box_height // 2,
+            text=label,
+            fill="white",
+            font=("Arial", 11, "bold"),
+            tags=("card",),
+        )
+
+    def _draw_chop_axe_badge(self, center_x: int, top_y: int, box_height: int, box_width: int) -> None:
+        """Small chop badge with a canvas-drawn axe (left of kind badge when both shown)."""
+        left = center_x - box_width // 2
+        right = center_x + box_width // 2
+        bottom = top_y + box_height
+        self._canvas.create_rectangle(
+            left,
+            top_y,
+            right,
+            bottom,
+            fill=self.CONVENTION_CHOP_BADGE_COLOR,
+            outline="#000000",
+            width=1,
+            tags=("card",),
+        )
+        handle_top = top_y + 4
+        handle_bottom = bottom - 3
+        blade_top = top_y + 3
+        self._canvas.create_line(
+            center_x,
+            handle_top,
+            center_x,
+            handle_bottom,
+            fill="white",
+            width=2,
+            tags=("card",),
+        )
+        self._canvas.create_line(
+            center_x,
+            handle_top,
+            center_x + 5,
+            blade_top,
+            fill="white",
+            width=2,
+            tags=("card",),
+        )
+        self._canvas.create_line(
+            center_x,
+            handle_top,
+            center_x - 3,
+            blade_top + 1,
+            fill="white",
+            width=2,
+            tags=("card",),
+        )
 
     def _draw_recommendation_indicator(
         self, x: int, y: int, card_height: int, recommendation: RecommendationAction

@@ -128,6 +128,19 @@ class HintHandSubtype3P(BasePlayer):
         assert self._last_decision_summary is not None
         return move_with_why(move, self._last_decision_summary)
 
+    def get_gui_inferred_kind_by_slot(self, target_seat: int) -> Dict[int, CardKind]:
+        """Return ``{slot: CardKind}`` for ``target_seat`` where belief is known (omit unknown slots)."""
+        if not self._inferred_card_kind or target_seat >= len(self._inferred_card_kind):
+            return {}
+        row = self._inferred_card_kind[target_seat]
+        return {slot: kind for slot, kind in enumerate(row) if kind is not None}
+
+    def get_gui_chop_slot(self, target_seat: int) -> Optional[int]:
+        """Leftmost unknown or dispensable slot on ``target_seat`` (convention chop), or ``None``."""
+        if not self._inferred_card_kind or target_seat >= len(self._inferred_card_kind):
+            return None
+        return _chop_slot_from_belief(self._inferred_card_kind[target_seat])
+
     def _shift_kinds_after_removal(self, player_index: int, removed: int, observer_view: PlayerView) -> None:
         assert self._inferred_card_kind, "belief must be initialized before play/discard observe"
         row = self._inferred_card_kind[player_index]

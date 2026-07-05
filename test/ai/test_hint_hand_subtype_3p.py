@@ -833,5 +833,26 @@ class TestSafeDoublePlay(unittest.TestCase):
         self.assertEqual(CardKind.PLAYABLE, players[0]._inferred_card_kind[2][0])
 
 
+class TestHintHandSubtype3PGui(unittest.TestCase):
+    def test_get_gui_chop_slot_is_leftmost_unknown_or_dispensable(self) -> None:
+        """Chop is the leftmost unknown or dispensable slot."""
+        player = HintHandSubtype3P(0)
+        settings = create_standard_game_settings(3)
+        player.set_game_settings(settings)
+        self.assertEqual(0, player.get_gui_chop_slot(0))
+        player._inferred_card_kind[0][0] = CardKind.CRITICAL
+        self.assertEqual(1, player.get_gui_chop_slot(0))
+        player._inferred_card_kind[0][1] = CardKind.DISPENSABLE
+        self.assertEqual(1, player.get_gui_chop_slot(0))
+
+    def test_get_gui_inferred_kind_by_slot_omits_unknown(self) -> None:
+        """Only known belief slots appear in the GUI map."""
+        player = HintHandSubtype3P(0)
+        settings = create_standard_game_settings(3)
+        player.set_game_settings(settings)
+        player._inferred_card_kind[1][2] = CardKind.PLAYABLE
+        self.assertEqual({2: CardKind.PLAYABLE}, player.get_gui_inferred_kind_by_slot(1))
+
+
 if __name__ == "__main__":
     unittest.main()
