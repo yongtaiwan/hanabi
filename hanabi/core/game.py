@@ -1247,7 +1247,7 @@ class Game:
             if isinstance(player, BasePlayer):
                 player.set_common_view(self.state.common_view)
 
-    def _notify_players(self, player_index: int, move: Move) -> None:
+    def _notify_players(self, player_index: int, move: Move, state_before_move: GameState) -> None:
         """Notify all :class:`~hanabi.core.player.BasePlayer` seats about a move."""
         from .player import BasePlayer
 
@@ -1258,6 +1258,13 @@ class Game:
                     move,
                     observer_view=self._get_player_view(observer_index),
                 )
+        _maybe_assert_hint_hand_subtype_beliefs_in_sync(
+            self._team.players,
+            player_index,
+            move,
+            cards_played_before=state_before_move.common_view.cards_played,
+            hand_cards=[hand.cards for hand in self.state.player_hands],
+        )
 
     def _get_player_view(self, player_index: int) -> PlayerView:
         """
@@ -1332,7 +1339,7 @@ class Game:
 
         # Notify players about the move BEFORE the callback
         # This ensures hints are updated before display is refreshed
-        self._notify_players(player_index, move)
+        self._notify_players(player_index, move, state_before_move)
 
         # Notify global callback with old and new state (for display, logging, etc.)
         if self._on_move is not None:
@@ -1354,3 +1361,27 @@ class Game:
             f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}, "
             f"is_finished={last_state.is_finished()}"
         )
+
+
+def _maybe_assert_hint_hand_subtype_beliefs_in_sync(
+    players: List[Any],
+    hinter_index: int,
+    move: Move,
+    *,
+    cards_played_before: Optional[Dict[Color, Number]] = None,
+    hand_cards: Optional[List[List[Card]]] = None,
+) -> None:
+    """When all seats are ``HintHandSubtype3P``, propagate hint beliefs and assert matrices match."""
+    if 3 != len(players):
+        return
+    from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P, align_convention_beliefs_after_move
+
+    if not all(isinstance(player, HintHandSubtype3P) for player in players):
+        return
+    align_convention_beliefs_after_move(
+        players,
+        hinter_index,
+        move,
+        cards_played_before=cards_played_before,
+        hand_cards=hand_cards,
+    )
