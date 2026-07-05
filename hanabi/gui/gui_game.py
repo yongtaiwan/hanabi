@@ -260,6 +260,7 @@ class GUIGame:
             RecommendationPlayer,
             ThreePlayerRecommendationPlayer,
             FourPlayerRecommendationPlayer,
+            FivePlayerRecommendationPlayer,
         )
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
@@ -285,6 +286,7 @@ class GUIGame:
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
             ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
             ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
+            ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -683,6 +685,13 @@ class GUIGame:
 
                 print(
                     f"{_MiniRecColors.BRIGHT_BLUE}4p mini-recommendation: mod-9 decode · channels 0–8 — "
+                    f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
+                )
+            if 5 == num_players and getattr(ai_player_type, "__name__", "") == "FivePlayerRecommendationPlayer":
+                from hanabi.console.console_display import Colors as _MiniRecColors
+
+                print(
+                    f"{_MiniRecColors.BRIGHT_BLUE}5p mini-recommendation: mod-16 decode · channels 0–15 — "
                     f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
                 )
 

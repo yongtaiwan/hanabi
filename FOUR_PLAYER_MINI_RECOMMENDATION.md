@@ -22,9 +22,9 @@ All seats used `FourPlayerRecommendationPlayer`; `seed=42` per batch (`deck_seed
 | Completed | 500 / 500 |
 | Failures | 0 |
 | Score min / max | 17 / 25 |
-| Mean score | 22.93 |
-| Std dev | 1.87 |
-| Perfect (25) | 124 games (24.8%) |
+| Mean score | 23.48 |
+| Std dev | 1.58 |
+| Perfect (25) | 176 games (35.2%) |
 
 Recent improvements (same seed scheme):
 
@@ -33,6 +33,7 @@ Recent improvements (same seed scheme):
 | Pre-tweaks (May baseline) | 22.77 | 110 | 17 |
 | + "rightmost non-left" right-number spec | 22.93 | 124 | 17 |
 | + removed shifted-hint mode (replace with play-slot-0 fallback) | 22.93 | 124 | 17 |
+| + strong/weak hint scoring + single-rec queue (`set_latest`) | 23.48 | 176 | 17 |
 
 (The last two ship together: with the new right-number spec, the exact channel is unbuildable only on all-one-rank hands — 0 occurrences per 500 games in measured runs — so the shifted-hint branch is no longer needed and was removed in favour of a safer single-seat fallback.)
 
@@ -115,16 +116,21 @@ When the observer **is** the hint target, channel inference uses public fields o
 
 The bot tries, in order:
 
-1. **Follow play** from decoded recommendation (when `plays_since_hint` and error count allow).
-2. **Give** an exact-channel encoded hint at `sum_mod` (spend a hint token when legal).
+1. **Follow play** from decoded recommendation (when `plays_since_hint` and error count allow — **loose gate**, see below).
+2. **Strong hint** — encoded hint only if scoring says it helps teammates enough (`new_plays ≥ 2`, or `new_discards ≥ 1`, or `saves ≥ 1`).
 3. **Follow most-useless-slot discard** (codes 5–8).
-4. **Fallback:** discard **C1** (oldest), index `0`.
-5. **Last-resort play of slot 0** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank teammate hand). Caps the damage to at most one bomb on this seat instead of broadcasting a wrong-channel code to every teammate, which is what the previous shifted-hint branch did.
+4. **Weak hint** — encoded hint if the candidate has any non-zero effect (`total ≥ 1`).
+5. **Fallback:** discard **C1** (oldest), index `0`.
+6. **Last-resort play of newest slot** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank teammate hand).
 
-Play follow timing:
+### Play-follow gate (**loose**, hardcoded)
 
-- `plays_since_hint == 0`, or
-- `plays_since_hint == 1` and fewer than 2 bombs so far.
+Follow a decoded **play** code (`1`–`4`) when:
+
+- `plays_since_hint == 0`, **or**
+- fewer than 2 bombs so far (`errors < 2`) — **even if several team Plays** have happened since the hint.
+
+So with 0–1 errors, a stale play recommendation can still be followed after `plays_since_hint == 2, 3, …`. This is **looser** than the **paper** gate on 3p and 5p. Grid tests on 5p showed tightening to paper helps there (+0.7 mean); 4p still scores ~23.5 with the loose gate, so it is unchanged.
 
 **Note on dispatch order:** keeping hint **before** discard-follow is intentional. A hint isn't just spending a token — it also broadcasts the **next round of play/discard codes to every teammate** via the encoded channel. An earlier experiment that swapped these (`_try_follow_useless_slot_discard` before `_try_give_encoded_hint`) cratered the 500-game numbers (4p: 22.93 → 21.18, perfects 124 → 21, worst 17 → 1) because teammates were left without fresh codes long enough to bomb on stale play recommendations.
 
@@ -187,6 +193,7 @@ Optional tooling: `python3 tools/analyze_4p_losses.py` (reads `statistics.json` 
 ## Related classes
 
 - **3p mini-rec:** `ThreePlayerRecommendationPlayer` (`hanabi/ai/three_player_recommendation.py`).
+- **5p mini-rec:** `FivePlayerRecommendationPlayer` (`hanabi/ai/five_player_recommendation.py`).
 - **5-player paper strategy:** `RecommendationPlayer` (`hanabi/ai/recommendation_player.py`).
 - **Tests:** `test/ai/test_four_player_recommendation.py`.
 - **Experiments:** `run_ai_experiments.py` key `four_player_recommendation` (4p only).

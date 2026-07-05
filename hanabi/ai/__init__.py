@@ -10,6 +10,7 @@ from .monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 from .recommendation_player import RecommendationPlayer
 from .three_player_recommendation import ThreePlayerRecommendationPlayer
 from .four_player_recommendation import FourPlayerRecommendationPlayer
+from .five_player_recommendation import FivePlayerRecommendationPlayer
 from .common_sense_cheater import CommonSenseCheater
 from .paper_cheater import PaperCheater
 
@@ -26,6 +27,7 @@ PLAYER_CLASSES: Dict[str, Type] = {
         RecommendationPlayer,
         ThreePlayerRecommendationPlayer,
         FourPlayerRecommendationPlayer,
+        FivePlayerRecommendationPlayer,
         CommonSenseCheater,
         PaperCheater,
     )
@@ -39,6 +41,7 @@ __all__ = [
     "RecommendationPlayer",
     "ThreePlayerRecommendationPlayer",
     "FourPlayerRecommendationPlayer",
+    "FivePlayerRecommendationPlayer",
     "CommonSenseCheater",
     "PaperCheater",
     "PLAYER_CLASSES",
