@@ -3,6 +3,7 @@
 import unittest
 
 from hanabi.ai.three_player_recommendation import (
+    NUM_CHANNELS,
     NUM_PLAYERS_FOR_MINI_RECOMMENDATION,
     ThreePlayerRecommendationPlayer,
     _infer_channel_id,
@@ -22,6 +23,32 @@ class TestThreePlayerRecommendationSettings(unittest.TestCase):
 
     def test_num_players_constant(self) -> None:
         self.assertEqual(3, NUM_PLAYERS_FOR_MINI_RECOMMENDATION)
+        self.assertEqual(7, NUM_CHANNELS)
+
+
+class TestHintScoring(unittest.TestCase):
+    def test_strong_hint_blocked_when_peers_already_tracked(self) -> None:
+        settings = create_standard_game_settings(3)
+        hand = [Card(Color.RED, Number.ONE)] * 5
+        view = PlayerView(
+            teammates={1: Hand(hand), 2: Hand(hand)},
+            own_hand_size=5,
+        )
+        common = CommonView(
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player = ThreePlayerRecommendationPlayer(0)
+        player.set_game_settings(settings)
+        player.set_common_view(common)
+        for seat in (1, 2):
+            player._peer_tracked_rec[seat] = player._get_recommendation_for_hand(hand, common, settings)
+        score = player._score_candidate_hint(view)
+        self.assertEqual(0, score.total())
+        self.assertIsNone(player._try_strong_hint(view))
 
 
 class TestChannelInference(unittest.TestCase):

@@ -15,18 +15,22 @@ Implementation lives in `hanabi/ai/three_player_recommendation.py`.
 
 ## Simulation batch (500 games)
 
-All seats used `ThreePlayerRecommendationPlayer`; before each `Game.create`, `random.seed(10_000 + game_index)` so decks differ per run.
+All seats used `ThreePlayerRecommendationPlayer`; `seed=42` per batch (`deck_seed = 42 + run_id`).
 
 | Metric | Value |
 |--------|--------|
 | Completed | 500 / 500 |
 | Failures | 0 |
 | Score min / max | 16 / 25 |
-| Mean score | 22.86 |
-| Std dev | 1.84 |
-| Perfect (25) | 115 games (23%) |
+| Mean score | 23.52 |
+| Std dev | 1.62 |
+| Perfect (25) | 178 games (35.6%) |
 
-Rough throughput on the machine used for the run was on the order of **100+ games/s** (engine-only, no UI).
+Command:
+
+```bash
+python3 run_ai_experiments.py --players 3 --runs 500 --seed 42 --ais three_player_recommendation
+```
 
 History of recent improvements (same seed scheme, same 500-game batch):
 
@@ -36,8 +40,9 @@ History of recent improvements (same seed scheme, same 500-game batch):
 | + consume-on-follow (clear rec after acting on it) | 22.55 | 82 | 16 |
 | + "rightmost non-left" right-number/right-color spec | 22.86 | 115 | 16 |
 | + removed shifted-hint mode (replace with play-slot-0 fallback) | 22.86 | 115 | 16 |
+| + strong/weak hint scoring (ported from 4p mini-rec) | 23.52 | 178 | 16 |
 
-(The last two ship together: with the new right-spec, the exact channel is unbuildable only on all-one-rank / all-one-color hands — fewer than 1 occurrence per 500 games — so the shifted-hint branch is no longer needed and was removed in favour of a safer single-seat fallback.)
+(The shifted-hint removal and right-spec rows ship together: with the new right-spec, the exact channel is unbuildable only on all-one-rank / all-one-color hands — fewer than 1 occurrence per 500 games — so the shifted-hint branch is no longer needed and was removed in favour of a safer single-seat fallback.)
 
 ---
 
@@ -108,11 +113,25 @@ where `peer_rec` is the **other** non-hinter peer’s recommendation code (the h
 
 The bot tries, in order:
 
-1. **Follow play** from decoded recommendation (when timing / errors allow).
-2. **Give** an exact-channel encoded hint (spend a hint token when legal).
+1. **Follow play** from decoded recommendation (when timing / errors allow — **paper gate**, see below).
+2. **Strong hint** — encoded hint only if scoring says it helps teammates enough (`new_plays ≥ 2`, or `new_discards ≥ 1`, or `saves ≥ 1`).
 3. **Follow chop/discard** recommendation (codes 0 or 6).
-4. **Fallback:** discard **C1** (oldest), index `0`, like the paper bot’s default.
-5. **Last-resort play of slot 0** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank / all-one-color teammate hand). Caps the damage to at most one bomb on this seat instead of broadcasting a wrong-channel code to every teammate, which is what the previous shifted-hint branch did.
+4. **Weak hint** — encoded hint if the candidate has any non-zero effect (`total ≥ 1`).
+5. **Fallback:** discard **C1** (oldest), index `0`, like the paper bot’s default.
+6. **Last-resort play of slot 0** when none of the above is legal — only reached at max hint tokens with an unbuildable exact channel (all-one-rank / all-one-color teammate hand). Caps the damage to at most one bomb on this seat instead of broadcasting a wrong-channel code to every teammate.
+
+### Play-follow gate (**paper**, hardcoded)
+
+`_plays_since_hint` counts **Play** moves by **any** player since the last encoding hint (resets to 0 when a hint is observed).
+
+Follow a decoded **play** code (`1`–`5`) only when:
+
+- `plays_since_hint == 0` (no team play since the hint), **or**
+- `plays_since_hint == 1` **and** fewer than 2 bombs so far (`errors < 2`).
+
+If two or more **Play** moves have happened since the hint, skip follow and fall through to hint / discard.
+
+This matches Cox et al. / the 5-player `RecommendationPlayer` timing rules. It is **stricter** than the **loose** gate used on 4p (see `FOUR_PLAYER_MINI_RECOMMENDATION.md`).
 
 **Note on dispatch order:** keeping hint **before** discard-follow is intentional. A hint isn't just spending a token — it also broadcasts the **next round of play/discard codes to every teammate** via the encoded channel. An earlier experiment that put `_try_follow_chop_and_discard_recommendation` before `_try_give_encoded_hint` cratered the 500-game numbers (3p: 22.86 → 20.31, perfects 115 → 12, worst 16 → 3) because teammates were left without fresh codes long enough to bomb on stale play recommendations.
 
@@ -151,5 +170,7 @@ So the **action** is always shown **before** the **AI explanation** on the termi
 
 ## Related classes
 
+- **4p mini-rec:** `FourPlayerRecommendationPlayer` (`hanabi/ai/four_player_recommendation.py`).
+- **5p mini-rec:** `FivePlayerRecommendationPlayer` (`hanabi/ai/five_player_recommendation.py`).
 - **5-player paper strategy:** `RecommendationPlayer` (`hanabi/ai/recommendation_player.py`).
 - **Tests:** `test/ai/test_three_player_recommendation.py`.

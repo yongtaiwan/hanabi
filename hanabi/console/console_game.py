@@ -78,6 +78,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             RecommendationPlayer,
             ThreePlayerRecommendationPlayer,
             FourPlayerRecommendationPlayer,
+            FivePlayerRecommendationPlayer,
         )
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
@@ -99,6 +100,7 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
             ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
             ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
+            ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -284,6 +286,11 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             print(
                 f"{Colors.BRIGHT_BLUE}4p mini-recommendation: mod-9 decode · physical channels 0–8 "
                 f"(left rank & color, right rank × next / next+1 / next+2 teammate).{Colors.RESET}"
+            )
+        if 5 == num_players and ai_type_name == "FivePlayerRecommendationPlayer":
+            print(
+                f"{Colors.BRIGHT_BLUE}5p mini-recommendation: mod-16 decode · physical channels 0–15 "
+                f"(left/right rank & color × next … next+3 teammate).{Colors.RESET}"
             )
     print("=" * 70)
 

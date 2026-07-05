@@ -16,11 +16,17 @@ def recommendations_by_slot_for_seat(game: Game, seat: int) -> Dict[int, Recomme
     from hanabi.ai.recommendation_player import RecommendationPlayer
     from hanabi.ai.three_player_recommendation import ThreePlayerRecommendationPlayer
     from hanabi.ai.four_player_recommendation import FourPlayerRecommendationPlayer
+    from hanabi.ai.five_player_recommendation import FivePlayerRecommendationPlayer
 
     player = game.team.players[seat]
     if not isinstance(
         player,
-        (RecommendationPlayer, ThreePlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
+        (
+            RecommendationPlayer,
+            ThreePlayerRecommendationPlayer,
+            FourPlayerRecommendationPlayer,
+            FivePlayerRecommendationPlayer,
+        ),
     ):
         return {}
     return player.get_gui_recommendation_by_slot(game.get_player_view(seat))

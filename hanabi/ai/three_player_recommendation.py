@@ -45,9 +45,12 @@ matches that for the **fallback** discard. **Decoded** actions ``0`` / ``6`` sti
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict
+from typing import Dict, List, NamedTuple, Optional
 
 NUM_PLAYERS_FOR_MINI_RECOMMENDATION = 3
+NUM_CHANNELS = 7
+_PLAY_CODES = frozenset({1, 2, 3, 4, 5})
+_CHOP_REC_CODES = frozenset({0, 6})
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
@@ -56,6 +59,24 @@ from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
 
 _REC_SLOT_ORDER = (0, 1, 2, 3, 4)
+
+
+class _HintScore(NamedTuple):
+    """Per-bucket counters for a candidate hint (see :meth:`ThreePlayerRecommendationPlayer._score_candidate_hint`)."""
+
+    new_plays: int
+    new_discards: int
+    saves: int
+    flips: int
+
+    def total(self) -> int:
+        return self.new_plays + self.new_discards + self.saves + self.flips
+
+    def fmt(self) -> str:
+        return (
+            f"new_plays={self.new_plays} new_discards={self.new_discards} "
+            f"saves={self.saves} flips={self.flips}"
+        )
 
 
 class ThreePlayerRecommendationPlayer(BasePlayer):
@@ -70,6 +91,8 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         self._plays_since_hint: int = 0
         self._last_decision_summary: Optional[str] = None
         self._my_decoded_recommendation: Optional[int] = None
+        # Per-peer codes from the last hint cycle (for hint scoring ``before``); mirrors 4p queue tracking.
+        self._peer_tracked_rec: Dict[int, int] = {}
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
@@ -83,15 +106,22 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
 
     def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
+        self._maybe_consume_peer_recommendation(player_index, move)
         self._plays_since_hint += 1
+
+    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
+        super().observe_discard_move(player_index, move, observer_view)
+        self._maybe_consume_peer_recommendation(player_index, move)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
         self._observe_encoding_hint(player_index, move, observer_view)
+        self._update_peer_recommendations_from_hint(player_index, observer_view)
 
     def observe_number_hint_move(self, player_index: int, move: NumberHint, observer_view: PlayerView) -> None:
         super().observe_number_hint_move(player_index, move, observer_view)
         self._observe_encoding_hint(player_index, move, observer_view)
+        self._update_peer_recommendations_from_hint(player_index, observer_view)
 
     def play(self, player_view: PlayerView) -> Move:
         assert player_view.own_hand_size > 0
@@ -103,13 +133,11 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
 
         move = (
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
-            # IMPORTANT: keep hint BEFORE discard-follow. A given hint isn't just an info
-            # token spend — it also broadcasts the next round of play/discard recommendations
-            # to every teammate via the encoded channel. Swapping these two saved a hint
-            # token but cratered scores on a 500-game batch (3p: 22.61 → 20.31, perfects
-            # 18% → 2.4%, worst 15 → 3) because teammates started acting on stale codes.
-            or self._try_give_encoded_hint(player_view)
+            # Strong hint sits above discard-follow (same thresholds as 4p mini-rec grid winner).
+            # Hint stays BEFORE discard-follow — swapping cratered 3p scores (22.86 → 20.31 on 500g).
+            or self._try_strong_hint(player_view)
             or self._try_follow_chop_and_discard_recommendation(player_view, recommendation)
+            or self._try_weak_hint(player_view)
             or self._try_discard_c1(player_view)
             or self._try_play_oldest_as_last_resort(player_view)
         )
@@ -132,7 +160,30 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         channel_id = _infer_channel_id(player_index, target, move, hand_cards)
         if self._player_index != player_index:
             peer_rec = self._peer_recommendation_for_decode(observer_view, exclude_index=player_index)
-            self._my_decoded_recommendation = (channel_id - peer_rec) % 7
+            self._my_decoded_recommendation = (channel_id - peer_rec) % NUM_CHANNELS
+
+    def _update_peer_recommendations_from_hint(
+        self, hinter_index: int, observer_view: PlayerView
+    ) -> None:
+        """Refresh tracked peer codes after a hint (``before`` for hint scoring)."""
+        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+            if p == hinter_index or p == self._player_index:
+                continue
+            if p not in observer_view.teammates:
+                continue
+            self._peer_tracked_rec[p] = self._get_recommendation_for_hand(
+                observer_view.teammates[p].cards,
+                self.common_view,
+                self.game_settings,
+            )
+
+    def _maybe_consume_peer_recommendation(self, mover_index: int, move: Move) -> None:
+        if mover_index == self._player_index:
+            return
+        if mover_index not in self._peer_tracked_rec:
+            return
+        if _move_matches_3p_rec(move, self._peer_tracked_rec[mover_index]):
+            del self._peer_tracked_rec[mover_index]
 
     def _hand_cards_for_hint_target(self, target: int, observer_view: PlayerView) -> Optional[List[Card]]:
         """Visible cards on the hinted seat, or ``None`` when the observer is the receiver (own hand omitted)."""
@@ -166,7 +217,7 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
             )
             total += rec
             parts.append(f"P{p + 1}:{rec}")
-        return total, total % 7, ", ".join(parts)
+        return total, total % NUM_CHANNELS, ", ".join(parts)
 
     def _get_my_recommendation(self) -> Optional[int]:
         return self._my_decoded_recommendation
@@ -333,6 +384,68 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         )
         return hint_move
 
+    def _try_strong_hint(self, player_view: PlayerView) -> Optional[Move]:
+        """Hint gate: ``new_plays >= 2`` OR ``new_discards >= 1`` OR ``saves >= 1``."""
+        score = self._score_candidate_hint(player_view)
+        if not (score.new_plays >= 2 or score.new_discards >= 1 or score.saves >= 1):
+            return None
+        move = self._try_give_encoded_hint(player_view)
+        if move is None:
+            return None
+        self._last_decision_summary = f"{self._last_decision_summary} · {score.fmt()} [strong]"
+        return move
+
+    def _try_weak_hint(self, player_view: PlayerView) -> Optional[Move]:
+        """Hint gate: any scoring bucket non-zero (before blind C1 discard)."""
+        score = self._score_candidate_hint(player_view)
+        if score.total() == 0:
+            return None
+        move = self._try_give_encoded_hint(player_view)
+        self._last_decision_summary = f"{self._last_decision_summary} · {score.fmt()} [weak]"
+        return move
+
+    def _score_candidate_hint(self, player_view: PlayerView) -> _HintScore:
+        """Score a hint now; 3p codes: play ``1``–``5``, chop recs ``0`` / ``6``."""
+        new_plays = new_discards = saves = flips = 0
+        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+            if p == self._player_index or p not in player_view.teammates:
+                continue
+            peer_hand = player_view.teammates[p].cards
+            before = self._peer_tracked_rec.get(p)
+            after = self._get_recommendation_for_hand(peer_hand, self.common_view, self.game_settings)
+
+            is_save = False
+            if before in _PLAY_CODES and after != before and (before - 1) < len(peer_hand):
+                card_for_play = peer_hand[before - 1]
+                if CardKind.PLAYABLE != self.common_view.card_kind(card_for_play, self.game_settings):
+                    is_save = True
+            elif before in _CHOP_REC_CODES and after != before:
+                chop = _chop_index(len(peer_hand))
+                if 0 == before and chop < len(peer_hand):
+                    if CardKind.CRITICAL == self.common_view.card_kind(peer_hand[chop], self.game_settings):
+                        is_save = True
+                elif 6 == before:
+                    for idx in _REC_SLOT_ORDER:
+                        if idx >= len(peer_hand) or idx == chop:
+                            continue
+                        if CardKind.CRITICAL == self.common_view.card_kind(peer_hand[idx], self.game_settings):
+                            is_save = True
+                            break
+
+            is_new_play = after in _PLAY_CODES and before not in _PLAY_CODES
+            is_new_discard = after in _CHOP_REC_CODES and before not in _CHOP_REC_CODES
+            is_flip = before != after and not (is_new_play or is_new_discard or is_save)
+
+            if is_new_play:
+                new_plays += 1
+            if is_new_discard:
+                new_discards += 1
+            if is_save:
+                saves += 1
+            if is_flip:
+                flips += 1
+        return _HintScore(new_plays, new_discards, saves, flips)
+
     def _try_play_oldest_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
         """
         Last-resort fallback for the rare state where no other branch can fire:
@@ -399,6 +512,17 @@ def _slot_card(hand_cards: List[Card], idx: int) -> Optional[Card]:
 def _chop_index(hand_size: int) -> int:
     assert 0 < hand_size
     return hand_size - 1
+
+
+def _move_matches_3p_rec(move: Move, rec: int) -> bool:
+    """True when ``move`` follows tracked recommendation ``rec`` (3p chop/play codes)."""
+    if rec in _PLAY_CODES and isinstance(move, Play):
+        return move.card == rec - 1
+    if 0 == rec and isinstance(move, Discard):
+        return True
+    if 6 == rec and isinstance(move, Discard):
+        return True
+    return False
 
 
 def _seat_offset_pos(hinter: int, target: int) -> int:
