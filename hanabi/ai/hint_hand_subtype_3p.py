@@ -210,6 +210,11 @@ class HintHandSubtype3P(BasePlayer):
         )
         hint_move = _build_hint_for_encoded(self._player_index, player_view, enc_type)
         if hint_move is None:
+            # TODO: Rare deadlock when ``_build_hint_for_encoded`` returns ``None`` (e.g. target
+            # hand is all one rank — five 1s — and channel type needs OLD/MID number). At max hint
+            # tokens discards are illegal too; ``play()`` may fall through to ``_discard_oldest``.
+            # Fallback: send a literal color/number hint on the target hand; all seats skip mod-8
+            # decode for that hint; receiver plays touched cards at face value (early-game 1s).
             return None
         assert self.is_move_legal(player_view, hint_move), (
             f"built convention hint is illegal: {hint_move!r} enc_type={enc_type}"
