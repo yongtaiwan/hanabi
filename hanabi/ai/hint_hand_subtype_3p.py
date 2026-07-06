@@ -305,6 +305,13 @@ def align_convention_beliefs_after_move(
     """After a public move, propagate hint beliefs and optionally clear duplicate playables."""
     if isinstance(move, (ColorHint, NumberHint)):
         propagate_convention_belief_from_hinter(players, mover_index)
+        if hand_cards is not None:
+            matrix = players[mover_index]._inferred_card_kind
+            for seat, cards in enumerate(hand_cards):
+                _collapse_duplicate_identified_playables_in_row(cards, matrix, seat)
+            canonical = [row.copy() for row in matrix]
+            for player in players:
+                player._inferred_card_kind = [row.copy() for row in canonical]
 
     if (
         isinstance(move, Play)
@@ -516,15 +523,17 @@ def _kinds_for_hand_type_encoding(
     """
     Effective per-slot kinds for hand-type encoding.
 
-    Visible hands use full-information :meth:`~hanabi.core.game.CommonView.card_kind`
-    so pile advances stay current (e.g. CRITICAL becoming PLAYABLE). Belief only masks
-    slots already identified **playable** in the convention (treated as useless for
-    type ``1``–``5``). Duplicate physical cards both playable count only the leftmost.
+    Belief masks slots already identified in the convention: **playable** (treated as useless
+    for type ``1``–``5`` so the next hint target is found) and **useless** (including duplicate-
+    playable collapse — do not resurrect via physical :meth:`~hanabi.core.game.CommonView.card_kind`).
+    Duplicate physical cards both playable count only the leftmost.
     """
     assert len(identified_kinds) == len(cards)
     kinds: List[CardKind] = []
     for slot, card in enumerate(cards):
         if CardKind.PLAYABLE == identified_kinds[slot]:
+            kinds.append(CardKind.USELESS)
+        elif CardKind.USELESS == identified_kinds[slot]:
             kinds.append(CardKind.USELESS)
         else:
             kinds.append(common_view.card_kind(card, settings))
@@ -775,6 +784,30 @@ def _assign_kind_to_matrix(
     inferred_card_kind[player_index][slot] = new_kind
 
 
+def _collapse_duplicate_identified_playables_in_row(
+    cards: List[Card],
+    inferred_card_kind: List[List[Optional[CardKind]]],
+    player_index: int,
+) -> None:
+    """
+    Leftmost ``PLAYABLE`` per :class:`~hanabi.core.card.Card` identity wins.
+
+    Later duplicate ``PLAYABLE`` marks for the same physical card become ``USELESS`` (only one
+    copy should be played). Requires visible hand ``cards`` for the row.
+    """
+    row = inferred_card_kind[player_index]
+    assert len(cards) == len(row)
+    seen: Dict[Card, int] = {}
+    for slot, kind in enumerate(row):
+        if CardKind.PLAYABLE != kind:
+            continue
+        card = cards[slot]
+        if card in seen:
+            _assign_kind_to_matrix(inferred_card_kind, player_index, slot, CardKind.USELESS)
+        else:
+            seen[card] = slot
+
+
 def _chop_slot_from_belief(belief: List[Optional[CardKind]]) -> Optional[int]:
     """Leftmost unknown or safe (``DISPENSABLE``) slot; never ``CRITICAL`` / ``PLAYABLE`` / ``USELESS``."""
     for slot, kind in enumerate(belief):
@@ -786,7 +819,9 @@ def _chop_slot_from_belief(belief: List[Optional[CardKind]]) -> Optional[int]:
 def _transition_allowed(current: Optional[CardKind], new_kind: CardKind) -> bool:
     if current == new_kind:
         return True
-    if CardKind.PLAYABLE == current or CardKind.USELESS == current:
+    if CardKind.PLAYABLE == current:
+        return CardKind.USELESS == new_kind
+    if CardKind.USELESS == current:
         return False
     if CardKind.CRITICAL == current:
         return CardKind.PLAYABLE == new_kind

@@ -276,19 +276,95 @@ class TestBeliefDecode(unittest.TestCase):
         h3p._apply_decoded_hand_type(matrix, 0, 3)
         self.assertEqual(CardKind.PLAYABLE, matrix[0][2])
 
-    def test_transition_playable_is_terminal(self) -> None:
+    def test_transition_playable_allows_duplicate_collapse_to_useless(self) -> None:
+        self.assertTrue(h3p._transition_allowed(CardKind.PLAYABLE, CardKind.USELESS))
+        self.assertFalse(h3p._transition_allowed(CardKind.USELESS, CardKind.PLAYABLE))
         self.assertFalse(h3p._transition_allowed(CardKind.PLAYABLE, CardKind.DISPENSABLE))
+        self.assertFalse(h3p._transition_allowed(CardKind.USELESS, CardKind.DISPENSABLE))
         self.assertTrue(h3p._transition_allowed(CardKind.CRITICAL, CardKind.PLAYABLE))
         self.assertFalse(h3p._transition_allowed(CardKind.CRITICAL, CardKind.DISPENSABLE))
 
     def test_decode_asserts_on_conflicting_transition(self) -> None:
-        """Decode must not silently skip; conflicting marks are convention bugs."""
-        settings = create_standard_game_settings(3)
-        player = HintHandSubtype3P(0)
-        player.set_game_settings(settings)
-        player._inferred_card_kind[1] = [None, None, None, None, CardKind.USELESS]
+        """Decode must not silently skip; disallowed kind transitions are convention bugs."""
+        matrix: List[List[Optional[CardKind]]] = [[None, None, None, None, CardKind.USELESS]]
         with self.assertRaises(AssertionError):
-            h3p._apply_decoded_hand_type(player._inferred_card_kind, 1, 1)
+            h3p._apply_decoded_hand_type(matrix, 0, 1)
+
+
+class TestDuplicateIdentifiedPlayableCollapse(unittest.TestCase):
+    def test_later_duplicate_playable_becomes_useless(self) -> None:
+        """Leftmost ``PLAYABLE`` per card identity wins; right duplicate is ``USELESS``."""
+        cards = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.RED, Number.ONE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        matrix: List[List[Optional[CardKind]]] = [
+            [CardKind.PLAYABLE, None, CardKind.PLAYABLE, None, None],
+        ]
+        h3p._collapse_duplicate_identified_playables_in_row(cards, matrix, 0)
+        self.assertEqual(CardKind.PLAYABLE, matrix[0][0])
+        self.assertEqual(CardKind.USELESS, matrix[0][2])
+
+    def test_different_playable_cards_unchanged(self) -> None:
+        cards = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.ONE),
+            Card(Color.GREEN, Number.ONE),
+        ]
+        matrix: List[List[Optional[CardKind]]] = [
+            [CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE],
+        ]
+        h3p._collapse_duplicate_identified_playables_in_row(cards, matrix, 0)
+        self.assertEqual([CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE], matrix[0])
+
+    def test_duplicate_useless_belief_not_reencoded_as_playable(self) -> None:
+        """Belief ``USELESS`` (duplicate collapse) must not resurrect as play type ``1``–``5``."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.RED, Number.ONE),
+        ]
+        belief: List[Optional[CardKind]] = [
+            CardKind.PLAYABLE,
+            None,
+            None,
+            None,
+            CardKind.USELESS,
+        ]
+        self.assertEqual(0, h3p._encode_hand_type(hand, 5, common, settings, belief))
+
+    def test_align_after_hint_collapses_duplicate_playables(self) -> None:
+        """Hinter canonical row is collapsed and copied to every seat after a hint."""
+        settings = create_standard_game_settings(3)
+        players = [HintHandSubtype3P(i) for i in range(3)]
+        for player in players:
+            player.set_game_settings(settings)
+        duplicate_playable = [CardKind.PLAYABLE, None, CardKind.PLAYABLE, None, None]
+        for player in players:
+            player._inferred_card_kind[1] = duplicate_playable.copy()
+        hand_cards = [
+            [Card(Color.WHITE, Number.FOUR)] * 5,
+            [
+                Card(Color.RED, Number.ONE),
+                Card(Color.BLUE, Number.TWO),
+                Card(Color.RED, Number.ONE),
+                Card(Color.GREEN, Number.THREE),
+                Card(Color.YELLOW, Number.FOUR),
+            ],
+            [Card(Color.WHITE, Number.FIVE)] * 5,
+        ]
+        hint = ColorHint(1, [0], Color.WHITE)
+        h3p.align_convention_beliefs_after_move(players, 0, hint, hand_cards=hand_cards)
+        expected = [CardKind.PLAYABLE, None, CardKind.USELESS, None, None]
+        for player in players:
+            self.assertEqual(expected, player._inferred_card_kind[1])
 
 
 class TestChopFromBelief(unittest.TestCase):
