@@ -1,4 +1,4 @@
-"""GUI overlays for DynamicHandType3P inferred card kinds and chop."""
+"""GUI overlays for 3p convention bots (DynamicHandType3P / DynamicRecommendation3P)."""
 
 from __future__ import annotations
 
@@ -13,20 +13,23 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ConventionSlotOverlay:
-    """Per-slot belief overlay for :class:`~hanabi.ai.dynamic_hand_type_3p.DynamicHandType3P`."""
+    """Per-slot belief overlay for 3p convention bots."""
 
     kind: Optional[CardKind]
     is_chop: bool
     is_unplayable: bool
     is_recommended: bool
     kind_mismatch: bool
+    # None → draw axe (DHT). True → ``X`` (DR confirmed). False → ``/`` (DR unconfirmed).
+    chop_confirmed: Optional[bool] = None
 
 
-def _dynamic_hand_type_bot_for_team(game: Game):
+def _convention_bot_for_team(game: Game):
     from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P
+    from hanabi.ai.dynamic_recommendation_3p import DynamicRecommendation3P
 
     for player in game.team.players:
-        if isinstance(player, DynamicHandType3P):
+        if isinstance(player, (DynamicHandType3P, DynamicRecommendation3P)):
             return player
     return None
 
@@ -38,7 +41,7 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
     ``kind_mismatch`` is set when inferred kind is known and differs from full-information
     :meth:`~hanabi.core.game.CommonView.card_kind` for that card.
     """
-    bot = _dynamic_hand_type_bot_for_team(game)
+    bot = _convention_bot_for_team(game)
     if bot is None:
         return {}
 
@@ -50,7 +53,12 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
     kinds = bot.get_gui_inferred_kind_by_slot(target_seat)
     unplayable_slots = bot.get_gui_unplayable_slots(target_seat)
     chop_slot = bot.get_gui_chop_slot(target_seat)
-    recommended_slot = bot.get_gui_recommended_slot(target_seat)
+    recommended_slot = (
+        bot.get_gui_recommended_slot(target_seat) if hasattr(bot, "get_gui_recommended_slot") else None
+    )
+    chop_confirmed = (
+        bot.get_gui_chop_confirmed(target_seat) if hasattr(bot, "get_gui_chop_confirmed") else None
+    )
     settings = game.settings
     common_view = state.common_view
 
@@ -72,5 +80,6 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
             is_unplayable=is_unplayable,
             is_recommended=is_recommended,
             kind_mismatch=kind_mismatch,
+            chop_confirmed=chop_confirmed if is_chop else None,
         )
     return overlays

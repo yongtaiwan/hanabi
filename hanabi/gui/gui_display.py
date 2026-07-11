@@ -2188,7 +2188,16 @@ class GUIDisplay:
 
         badges = []
         if overlay.is_chop:
-            badges.append((chop_width, lambda cx: self._draw_chop_axe_badge(cx, top_y, box_height, chop_width)))
+            if overlay.chop_confirmed is None:
+                badges.append((chop_width, lambda cx: self._draw_chop_axe_badge(cx, top_y, box_height, chop_width)))
+            elif overlay.chop_confirmed:
+                badges.append(
+                    (chop_width, lambda cx: self._draw_chop_text_badge(cx, top_y, box_height, chop_width, "X"))
+                )
+            else:
+                badges.append(
+                    (chop_width, lambda cx: self._draw_chop_text_badge(cx, top_y, box_height, chop_width, "/"))
+                )
         if overlay.is_unplayable:
             badges.append(
                 (pause_width, lambda cx: self._draw_convention_unplayable_badge(cx, top_y, box_height, pause_width))
@@ -2358,6 +2367,29 @@ class GUIDisplay:
             blade_top + 1,
             fill="white",
             width=2,
+            tags=("card",),
+        )
+
+    def _draw_chop_text_badge(
+        self, center_x: int, top_y: int, box_height: int, box_width: int, label: str
+    ) -> None:
+        """Chop badge with ``/`` (unconfirmed) or ``X`` (confirmed) for DynamicRecommendation3P."""
+        self._canvas.create_rectangle(
+            center_x - box_width // 2,
+            top_y,
+            center_x + box_width // 2,
+            top_y + box_height,
+            fill=self.CONVENTION_CHOP_BADGE_COLOR,
+            outline="#000000",
+            width=1,
+            tags=("card",),
+        )
+        self._canvas.create_text(
+            center_x,
+            top_y + box_height // 2,
+            text=label,
+            fill="white",
+            font=("Arial", 11, "bold"),
             tags=("card",),
         )
 

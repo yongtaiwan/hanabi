@@ -26,6 +26,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         self.assertIsNone(overlays[0].kind)
         self.assertFalse(overlays[0].is_unplayable)
         self.assertFalse(overlays[0].kind_mismatch)
+        self.assertIsNone(overlays[0].chop_confirmed)
 
     def test_kind_mismatch_when_belief_differs_from_actual(self) -> None:
         """Magenta-outline flag when inferred kind disagrees with full information."""
@@ -77,6 +78,23 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         team = PlayerTeam([RandomPlayer(i) for i in range(3)])
         game = Game.create(team=team, settings=settings)
         self.assertEqual({}, convention_overlays_for_seat(game, 0))
+
+    def test_dynamic_recommendation_chop_confirmed_flag(self) -> None:
+        """DR bot exposes chop_confirmed True/False for / vs X icons."""
+        from hanabi.ai.dynamic_recommendation_3p import DynamicRecommendation3P
+
+        settings = create_standard_game_settings(3)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for player in players:
+            player.set_game_settings(settings)
+        game = Game.create(team=PlayerTeam(players), settings=settings)
+        overlays = convention_overlays_for_seat(game, 0)
+        self.assertIn(0, overlays)
+        self.assertTrue(overlays[0].is_chop)
+        self.assertFalse(overlays[0].chop_confirmed)
+        players[0]._hand_belief[0].chop_confirmed = True
+        overlays = convention_overlays_for_seat(game, 0)
+        self.assertTrue(overlays[0].chop_confirmed)
 
 
 if __name__ == "__main__":

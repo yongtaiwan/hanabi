@@ -1378,6 +1378,10 @@ def _maybe_assert_hint_hand_subtype_beliefs_in_sync(
         DynamicHandType3P,
         align_convention_beliefs_after_move as align_dynamic_hand_type,
     )
+    from hanabi.ai.dynamic_recommendation_3p import (
+        DynamicRecommendation3P,
+        align_convention_beliefs_after_move as align_dynamic_recommendation,
+    )
     from hanabi.ai.hint_hand_subtype_3p import (
         HintHandSubtype3P,
         align_convention_beliefs_after_move as align_hint_hand_subtype,
@@ -1385,6 +1389,8 @@ def _maybe_assert_hint_hand_subtype_beliefs_in_sync(
 
     if all(isinstance(player, DynamicHandType3P) for player in players):
         align = align_dynamic_hand_type
+    elif all(isinstance(player, DynamicRecommendation3P) for player in players):
+        align = align_dynamic_recommendation
     elif all(isinstance(player, HintHandSubtype3P) for player in players):
         align = align_hint_hand_subtype
     else:
