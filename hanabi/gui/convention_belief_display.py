@@ -1,4 +1,4 @@
-"""GUI overlays for HintHandSubtype3P inferred card kinds and chop."""
+"""GUI overlays for DynamicHandType3P inferred card kinds and chop."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ConventionSlotOverlay:
-    """Per-slot belief overlay for :class:`~hanabi.ai.hint_hand_subtype_3p.HintHandSubtype3P`."""
+    """Per-slot belief overlay for :class:`~hanabi.ai.dynamic_hand_type_3p.DynamicHandType3P`."""
 
     kind: Optional[CardKind]
     is_chop: bool
@@ -22,11 +22,11 @@ class ConventionSlotOverlay:
     kind_mismatch: bool
 
 
-def _hint_hand_subtype_bot_for_team(game: Game):
-    from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P
+def _dynamic_hand_type_bot_for_team(game: Game):
+    from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P
 
     for player in game.team.players:
-        if isinstance(player, HintHandSubtype3P):
+        if isinstance(player, DynamicHandType3P):
             return player
     return None
 
@@ -38,7 +38,7 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
     ``kind_mismatch`` is set when inferred kind is known and differs from full-information
     :meth:`~hanabi.core.game.CommonView.card_kind` for that card.
     """
-    bot = _hint_hand_subtype_bot_for_team(game)
+    bot = _dynamic_hand_type_bot_for_team(game)
     if bot is None:
         return {}
 

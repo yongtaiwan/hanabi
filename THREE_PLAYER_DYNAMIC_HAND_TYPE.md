@@ -1,6 +1,6 @@
-# Three-player hint-hand-type convention (3p HHT)
+# Three-player dynamic hand-type convention (3p DHT)
 
-Human-executable convention for **3-player Hanabi** using **mod-8** hint encoding. This document is the canonical spec for `HintHandSubtype3P` (`hanabi/ai/hint_hand_subtype_3p.py`).
+Human-executable convention for **3-player Hanabi** using **mod-8** hint encoding. This document is the canonical spec for `DynamicHandType3P` (`hanabi/ai/dynamic_hand_type_3p.py`).
 
 **Related (different bots):**
 
@@ -24,7 +24,7 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 2. **Two independent axes** — **playability** and **discard information** are updated separately; within discard, **legacy kind** and **recommendation state** are separate layers (§2.2).
 3. **Maximum information per hint** — e.g. play type `3` identifies one playable card *and* proves newer candidates are unplayable.
 4. **Two encoding modes per hand** — **legacy** (original hand-type convention) and **recommendation** (play/discard recommendations), chosen independently per hand from belief counts.
-5. **Same wire format** — always **mod 8**, same eight physical hint channels as the original 3p HHT convention.
+5. **Same wire format** — always **mod 8**, same eight physical hint channels as the original 3p DHT convention.
 
 ### 1.3 What this convention is not
 
@@ -198,7 +198,7 @@ When encoding or decoding discard type `0`, recompute chop from current belief �
 
 ## 4. Hint wire format (mod 8)
 
-Unchanged from the original 3p HHT convention. Hints are real `NumberHint` / `ColorHint` moves.
+Unchanged from the original 3p DHT convention. Hints are real `NumberHint` / `ColorHint` moves.
 
 ### 4.1 Eight channels (encoded type `0`–`7`)
 
@@ -328,7 +328,7 @@ When **summing** the channel, legacy mode uses the original hand-type encoder:
 - If the hand still has a playable candidate among slots not convention-masked: type `1`–`5` = position of newest such playable from the right (using visible cards + belief masks as today).
 - Else: type `0` / `6` / `7` from the **discard anchor**’s physical kind (visible card + pile when legacy kind not belief-fixed).
 
-See existing `hint_hand_subtype_3p.py` (`_encode_hand_type`, `_kinds_for_hand_type_encoding`) for the exact mask/collapse rules until the implementation is upgraded.
+See existing `dynamic_hand_type_3p.py` (`_encode_hand_type`, `_kinds_for_hand_type_encoding`) for the exact mask/collapse rules until the implementation is upgraded.
 
 ---
 
@@ -429,7 +429,7 @@ If the bot (or human) gives a **non-convention** literal hint (e.g. early-game a
 
 ---
 
-## 9. Play strategy (`HintHandSubtype3P`)
+## 9. Play strategy (`DynamicHandType3P`)
 
 Ordered dispatch (first legal move wins). Discard steps follow **chop priority** (§3.4).
 
@@ -566,7 +566,7 @@ Early literal 1-hints narrowing playability — **deferred** (no update for now)
 - [ ] Rec discard chain mapping (§7.2)
 - [ ] Play reopening + safe invalidation (§8)
 - [ ] Dispatch: insert discard `recommended` (§9)
-- [ ] Copy recommendation priority helpers into `hint_hand_subtype_3p.py` only
+- [ ] Copy recommendation priority helpers into `dynamic_hand_type_3p.py` only
 - [ ] GUI trash-can for `recommended`
 - [ ] Tests mirroring §10 examples
 - [ ] Module docstring pointer to this file

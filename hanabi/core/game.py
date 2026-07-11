@@ -1371,14 +1371,25 @@ def _maybe_assert_hint_hand_subtype_beliefs_in_sync(
     cards_played_before: Optional[Dict[Color, Number]] = None,
     hand_cards: Optional[List[List[Card]]] = None,
 ) -> None:
-    """When all seats are ``HintHandSubtype3P``, propagate hint beliefs and assert matrices match."""
+    """When all seats share a 3p convention bot, propagate beliefs and assert matrices match."""
     if 3 != len(players):
         return
-    from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P, align_convention_beliefs_after_move
+    from hanabi.ai.dynamic_hand_type_3p import (
+        DynamicHandType3P,
+        align_convention_beliefs_after_move as align_dynamic_hand_type,
+    )
+    from hanabi.ai.hint_hand_subtype_3p import (
+        HintHandSubtype3P,
+        align_convention_beliefs_after_move as align_hint_hand_subtype,
+    )
 
-    if not all(isinstance(player, HintHandSubtype3P) for player in players):
+    if all(isinstance(player, DynamicHandType3P) for player in players):
+        align = align_dynamic_hand_type
+    elif all(isinstance(player, HintHandSubtype3P) for player in players):
+        align = align_hint_hand_subtype
+    else:
         return
-    align_convention_beliefs_after_move(
+    align(
         players,
         hinter_index,
         move,

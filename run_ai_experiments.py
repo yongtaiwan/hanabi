@@ -5,7 +5,8 @@ This script compares selected AIs on the same shuffled decks for 2–5-player ga
 Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
 ``recommendation`` runs only for 5-player settings; ``three_player_recommendation`` runs only
 for 3-player settings (mod-7 mini variant); ``hint_hand_subtype_3p`` runs only for
-3-player settings (gDoc hint-hand-subtype convention); ``four_player_recommendation`` runs only for
+3-player settings (classic gDoc hint-hand-subtype convention); ``dynamic_hand_type_3p`` runs only for
+3-player settings (legacy↔recommendation dynamic hand-type); ``four_player_recommendation`` runs only for
 4-player settings (mod-9 mini variant); ``five_player_recommendation`` runs only for
 5-player settings (mod-16 mini variant).
 ``commonsense_cheater`` (``CommonSenseCheater``) and ``paper_cheater`` (``PaperCheater``) are
@@ -56,6 +57,7 @@ from hanabi.ai import (
     FourPlayerRecommendationPlayer,
     FivePlayerRecommendationPlayer,
     HintHandSubtype3P,
+    DynamicHandType3P,
 )
 
 try:
@@ -119,8 +121,13 @@ def create_five_player_recommendation_player(player_index: int) -> FivePlayerRec
 
 
 def create_hint_hand_subtype_3p_player(player_index: int) -> HintHandSubtype3P:
-    """Factory for HintHandSubtype3P (3-player hint-hand-subtype convention; 3-player games only)."""
+    """Factory for HintHandSubtype3P (classic 3p hint-hand-subtype; 3-player games only)."""
     return HintHandSubtype3P(player_index)
+
+
+def create_dynamic_hand_type_3p_player(player_index: int) -> DynamicHandType3P:
+    """Factory for DynamicHandType3P (3p dynamic hand-type convention; 3-player games only)."""
+    return DynamicHandType3P(player_index)
 
 
 # CLI keys for --ais (order here defines column / summary order).
@@ -133,6 +140,7 @@ _AI_ORDER = (
     "recommendation",
     "three_player_recommendation",
     "hint_hand_subtype_3p",
+    "dynamic_hand_type_3p",
     "four_player_recommendation",
     "five_player_recommendation",
 )
@@ -152,6 +160,10 @@ _AI_REGISTRY: Dict[str, Tuple[str, Callable[[int], object]]] = {
     "hint_hand_subtype_3p": (
         "HintHandSubtype3P",
         create_hint_hand_subtype_3p_player,
+    ),
+    "dynamic_hand_type_3p": (
+        "DynamicHandType3P",
+        create_dynamic_hand_type_3p_player,
     ),
     "four_player_recommendation": (
         "FourPlayerRecommendationPlayer",
@@ -196,6 +208,8 @@ def _ai_factories_for_settings(settings, enabled: FrozenSet[str]) -> Dict[str, C
         if key == "three_player_recommendation" and not ThreePlayerRecommendationPlayer.supports_game_settings(settings):
             continue
         if key == "hint_hand_subtype_3p" and not HintHandSubtype3P.supports_game_settings(settings):
+            continue
+        if key == "dynamic_hand_type_3p" and not DynamicHandType3P.supports_game_settings(settings):
             continue
         if key == "four_player_recommendation" and not FourPlayerRecommendationPlayer.supports_game_settings(settings):
             continue
@@ -486,8 +500,7 @@ def main() -> None:
         description=(
             "Run AI comparison experiments (Random, CommonSense, CommonSenseCheater, PaperCheater, "
             "MonteCarlo, Recommendation, ThreePlayerRecommendation, HintHandSubtype3P, "
-            "FourPlayerRecommendation, "
-            "FivePlayerRecommendation)."
+            "DynamicHandType3P, FourPlayerRecommendation, FivePlayerRecommendation)."
         )
     )
     parser.add_argument(
@@ -516,16 +529,15 @@ def main() -> None:
         metavar="NAME",
         default=list(_CLI_DEFAULT_AIS),
         help=(
-            "Which AIs to run (default: random, commonsense, montecarlo, recommendation, "
-            "three_player_recommendation, hint_hand_subtype_3p, four_player_recommendation, five_player_recommendation). "
+            "Which AIs to run (default: interactive set including both 3p convention bots). "
             "Names: random, commonsense, commonsense_cheater, paper_cheater, montecarlo, "
             "recommendation, three_player_recommendation, hint_hand_subtype_3p, "
-            "four_player_recommendation, "
-            "five_player_recommendation. "
+            "dynamic_hand_type_3p, four_player_recommendation, five_player_recommendation. "
             "``recommendation`` and ``five_player_recommendation`` are auto-skipped for non-5p; "
-            "``three_player_recommendation`` and ``hint_hand_subtype_3p`` for non-3p; ``four_player_recommendation`` for non-4p. "
+            "``three_player_recommendation``, ``hint_hand_subtype_3p``, and ``dynamic_hand_type_3p`` "
+            "for non-3p; ``four_player_recommendation`` for non-4p. "
             "Add commonsense_cheater and/or paper_cheater for full-state benchmarks (not in GUI/console). "
-            "Example: --ais random commonsense commonsense_cheater paper_cheater"
+            "Example: --ais random commonsense dynamic_hand_type_3p"
         ),
     )
     args = parser.parse_args()

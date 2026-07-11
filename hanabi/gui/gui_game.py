@@ -259,6 +259,8 @@ class GUIGame:
             ThreePlayerRecommendationPlayer,
             FourPlayerRecommendationPlayer,
             FivePlayerRecommendationPlayer,
+            HintHandSubtype3P,
+            DynamicHandType3P,
         )
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
@@ -283,6 +285,8 @@ class GUIGame:
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
             ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
+            ("3p Hint Hand Type", HintHandSubtype3P, HintHandSubtype3P),
+            ("3p Dynamic Hand Type", DynamicHandType3P, DynamicHandType3P),
             ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
             ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),

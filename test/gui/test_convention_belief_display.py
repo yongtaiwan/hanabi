@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from hanabi.ai.h3p_belief import Playability, RecState, slot_belief_from_legacy_kind
-from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P
+from hanabi.ai.dht_belief import Playability, RecState, slot_belief_from_legacy_kind
+from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P
 from hanabi.core.enums import CardKind
 from hanabi.core.game import Game, create_standard_game_settings
 from hanabi.core.player import PlayerTeam
@@ -16,7 +16,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
     def test_chop_overlay_on_unknown_leftmost_slot(self) -> None:
         """Unknown chop slot shows overlay with chop and no kind."""
         settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i) for i in range(3)]
+        players = [DynamicHandType3P(i) for i in range(3)]
         for player in players:
             player.set_game_settings(settings)
         game = Game.create(team=PlayerTeam(players), settings=settings)
@@ -30,7 +30,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
     def test_kind_mismatch_when_belief_differs_from_actual(self) -> None:
         """Magenta-outline flag when inferred kind disagrees with full information."""
         settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i) for i in range(3)]
+        players = [DynamicHandType3P(i) for i in range(3)]
         for player in players:
             player.set_game_settings(settings)
         game = Game.create(team=PlayerTeam(players), settings=settings)
@@ -44,7 +44,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
     def test_recommended_overlay_without_kind(self) -> None:
         """Recommended discard belief shows trash-can overlay even when legacy kind is unknown."""
         settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i) for i in range(3)]
+        players = [DynamicHandType3P(i) for i in range(3)]
         for player in players:
             player.set_game_settings(settings)
         game = Game.create(team=PlayerTeam(players), settings=settings)
@@ -58,7 +58,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
     def test_unplayable_overlay_without_kind(self) -> None:
         """Unplayable playability shows pause overlay even when legacy kind is unknown."""
         settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i) for i in range(3)]
+        players = [DynamicHandType3P(i) for i in range(3)]
         for player in players:
             player.set_game_settings(settings)
         game = Game.create(team=PlayerTeam(players), settings=settings)
@@ -69,7 +69,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         self.assertIsNone(overlays[4].kind)
         self.assertFalse(overlays[4].is_chop)
 
-    def test_no_overlays_without_hint_hand_bot(self) -> None:
+    def test_no_overlays_without_dynamic_hand_type_bot(self) -> None:
         """Non-convention teams produce no overlays."""
         from hanabi.ai.random_player import RandomPlayer
 

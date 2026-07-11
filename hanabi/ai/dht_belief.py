@@ -1,4 +1,4 @@
-"""Convention belief types and pure helpers for :mod:`hanabi.ai.hint_hand_subtype_3p`."""
+"""Convention belief types and pure helpers for :mod:`hanabi.ai.dynamic_hand_type_3p`."""
 
 from __future__ import annotations
 
