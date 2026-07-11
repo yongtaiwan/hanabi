@@ -29,6 +29,9 @@ class HandBelief:
     slots: List[SlotBelief] = field(default_factory=list)
     chop: Optional[int] = None
     chop_confirmed: bool = False
+    # True after any discard-code decode. Cleared on default/reset chop; demoted on reopen
+    # when not confirmed. Used for GUI/analysis; step 3 uses ``chop_confirmed`` only.
+    chop_hinted: bool = False
 
 
 def fresh_slot_belief() -> SlotBelief:
@@ -37,7 +40,7 @@ def fresh_slot_belief() -> SlotBelief:
 
 def fresh_hand_belief(hand_size: int) -> HandBelief:
     slots = [fresh_slot_belief() for _ in range(hand_size)]
-    return HandBelief(slots=slots, chop=0 if hand_size else None, chop_confirmed=False)
+    return HandBelief(slots=slots, chop=0 if hand_size else None, chop_confirmed=False, chop_hinted=False)
 
 
 def set_playability(belief: SlotBelief, playability: Playability) -> None:
@@ -65,6 +68,12 @@ def ensure_default_chop(hand: HandBelief) -> None:
         return
     hand.chop = default_chop_slot(hand)
     hand.chop_confirmed = False
+    hand.chop_hinted = False
+
+
+def clear_chop_hint_flags(hand: HandBelief) -> None:
+    hand.chop_confirmed = False
+    hand.chop_hinted = False
 
 
 def discard_chain(hand: HandBelief) -> List[int]:
@@ -115,7 +124,7 @@ def apply_play_decode(hand: HandBelief, k: int) -> None:
     set_playability(hand.slots[target], Playability.PLAYABLE)
     if hand.chop == target:
         hand.chop = default_chop_slot(hand)
-        hand.chop_confirmed = False
+        clear_chop_hint_flags(hand)
 
 
 def apply_discard_decode_with_n_play(hand: HandBelief, decoded: int, n_play_before: int) -> None:
@@ -135,10 +144,12 @@ def apply_discard_decode_with_n_play(hand: HandBelief, decoded: int, n_play_befo
         assert remainder, f"catch-all remainder empty: chain={chain} m={m}"
         hand.chop = remainder[0]
         hand.chop_confirmed = 1 == len(remainder)
+        hand.chop_hinted = True
         return
     assert index < len(chain), f"discard index {index} past chain {chain}"
     hand.chop = chain[index]
     hand.chop_confirmed = True
+    hand.chop_hinted = True
 
 
 def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
@@ -155,7 +166,7 @@ def reset_chop_after_removal(hand: HandBelief, removed: int) -> None:
         return
     if removed == hand.chop:
         hand.chop = None
-        hand.chop_confirmed = False
+        clear_chop_hint_flags(hand)
         return
     if removed < hand.chop:
         hand.chop -= 1
@@ -166,10 +177,13 @@ def finalize_chop_after_shift(hand: HandBelief) -> None:
 
 
 def reopen_unplayable(hands: List[HandBelief]) -> None:
+    """Reopen play-closed slots; demote unconfirmed catch-all urgency only."""
     for hand in hands:
         for belief in hand.slots:
             if Playability.UNPLAYABLE == belief.playability:
                 set_playability(belief, Playability.UNKNOWN)
+        if not hand.chop_confirmed:
+            hand.chop_hinted = False
 
 
 def play_reopens_playability(
@@ -209,6 +223,7 @@ def copy_hand_belief(hand: HandBelief) -> HandBelief:
         slots=[SlotBelief(b.playability) for b in hand.slots],
         chop=hand.chop,
         chop_confirmed=hand.chop_confirmed,
+        chop_hinted=hand.chop_hinted,
     )
 
 

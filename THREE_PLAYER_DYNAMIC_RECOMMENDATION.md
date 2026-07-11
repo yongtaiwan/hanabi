@@ -179,7 +179,9 @@ A card that is neither current chop, nor a named newer chain slot, nor that olde
 
 ## 6. Encoding (peer code)
 
-Computed **independently per visible teammate hand**, then summed mod 8.
+Computed per visible teammate hand, then summed mod 8.
+
+**Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Belief snapshot is still taken before either decode mutates state (§4.2); only the **encoder’s ranking** for prev may depend on next’s chosen discard identity (§6.4).
 
 ### 6.1 Prefer play
 
@@ -206,6 +208,20 @@ If the preferred physical discard is not in the indicable set, pick the best **i
 
 Each convention hint **freshly** computes both peer codes from the current snapshot. Do not re-apply a stored relative discard instruction between hints beyond ordinary chop maintenance (§8).
 
+### 6.4 Double-discard guard
+
+When encoding **prev**, treat these physical card identities as **almost-critical**:
+
+1. If next’s peer code on **this** hint is a discard recommendation — the card at that implied chop.
+2. If next already has a convention chop with `chop_hinted` or `chop_confirmed` from an **earlier** discard decode — that chop card, even when this hint gives next a **play** code.
+
+Encoder discard ranking (lower = better to recommend):
+
+`useless > dispensable > other > almost-critical > critical > playable`
+
+So a protected duplicate is worse than a normal dispensable, but **better than a true critical** — never prefer burning a unique critical over the protected copy.
+
+Rationale: independent encoding can recommend the same identity on both hands. Next is encoded first; standing discard belief on next must also protect prev.
 ---
 
 ## 7. Decoding
@@ -246,15 +262,49 @@ With no legacy `safe` kind, middle-rank discard-pile invalidation of “safe” 
 
 ## 9. Play strategy (`DynamicRecommendation3P`)
 
-Ordered dispatch (first legal move wins):
+1. **Play** oldest (leftmost) `playable` if any.
+2. Otherwise choose **hint vs discard chop** from hint quality × chop class (below).
+3. If somehow no chop remains, discard slot `0`.
 
-1. **Play** leftmost `playable`
-2. **Hint** if the convention hint would newly identify a playable for the **next** player (same urgency exclusions as DHT step-2: no topping-up, no double-play identity, etc.)
-3. **Discard chop** if `chop_confirmed`
-4. **Hint** (convention channel)
-5. **Discard chop** if chop exists and not confirmed (default / catch-all / post-chop reset)
+### 9.1 Chop class (own hand; mutually exclusive)
 
-If hints are unavailable or unbuildable, fall through to step 5 (or discard slot `0` if somehow no chop).
+| Class | Definition |
+|-------|------------|
+| `confirmed` | `chop_confirmed` |
+| `catchall` | `chop_hinted` and not `chop_confirmed` (multi-slot catch-all recommendation) |
+| `default` | chop exists but not hinted (opening / reset / reopen demotion) |
+
+### 9.2 Hint quality (would-be convention channel)
+
+Evaluated only when a convention hint is **buildable**. If the type is unbuildable, treat quality as `mediocre` and use literal fallback when the matrix says hint.
+
+| Class | Definition |
+|-------|------------|
+| `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers) |
+| `bad` | Channel would newly mark the **same** playable identity on both peers (**double-play**) |
+| `mediocre` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal) |
+
+### 9.3 Decision matrix
+
+When **both** hint and discard are legal:
+
+| hint \\ chop | confirmed | catchall | default |
+|--------------|-----------|----------|---------|
+| **good** | Hint | Hint | Hint |
+| **mediocre** | Discard | Hint | Hint |
+| **bad** | Discard | Discard | Hint |
+
+Guards outside the matrix:
+
+- No hint tokens → discard (by chop / oldest)
+- Discard illegal (max hints) → hint anyway (even `bad`)
+
+Reading the matrix:
+
+- `good` always beats chop (tempo unlock for next).
+- `confirmed` beats non-good hints (trust the discard).
+- `bad` loses only to `catchall`; with `default` still hint (avoid burning criticals / playables on unhinted chop).
+- `mediocre` + unconfirmed → hint.
 
 ---
 
@@ -263,15 +313,15 @@ If hints are unavailable or unbuildable, fall through to step 5 (or discard slot
 ### 10.1 Opening deal
 
 - `N_play = 5` → play codes `1..5`, discard codes `D = [0, 7, 6]` (`m = 3`).
-- Chop = slot `0`, unconfirmed.
+- Chop = slot `0`, unconfirmed → chop class `default`.
 - Named discard options: confirm `0`; set chop to 1st newer candidate (`7`); catch-all (`6`) → oldest remainder after those two named positions.
 
 ### 10.2 Confirm chop
 
 Hinter encodes discard `0` for a peer with no playable to mark.
 
-- Decode: all unknowns → unplayable; `chop_confirmed = true`.
-- That player’s turn: step 3 discards chop before spending a hint.
+- Decode: all unknowns → unplayable; `chop_confirmed = true` → chop class `confirmed`.
+- That player’s turn: matrix discards on any non-`good` hint.
 
 ### 10.3 Catch-all
 
@@ -280,11 +330,11 @@ Hinter encodes discard `0` for a peer with no playable to mark.
 If named positions are only chop + several newer slots and the hinter’s best discard is deep:
 
 - Last code catch-all sets chop to oldest slot **not** covered by `D[0]…D[m-2]`’s specific targets.
-- If that remainder has one slot → `confirmed = true` (treat like a named confirm); if several → `confirmed = false` and prefer hint (step 4) before discarding (step 5).
+- If that remainder has one slot → `confirmed = true` (chop class `confirmed`); if several → `confirmed = false`, `chop_hinted = true` (chop class `catchall`). With a `mediocre` hint, the matrix still prefers hint over discarding that catch-all; with a `bad` (double-play) hint, it prefers the catch-all discard.
 
 ### 10.4 After discarding confirmed chop
 
-Chop card gone → new chop = leftmost discard candidate, `confirmed = false` → later turns use step 5 until a new discard hint confirms again.
+Chop card gone → new chop = leftmost discard candidate, `confirmed = false` → chop class `default` until a new discard hint confirms again.
 
 ---
 
@@ -301,7 +351,8 @@ Chop card gone → new chop = leftmost discard candidate, `confirmed = false` �
 | Catch-all | Last discard code; oldest of remainder `R`; confirmed iff `|R| = 1` |
 | Type `0` | Confirm **current** chop |
 | Chop after chop leaves | Leftmost discard candidate, unconfirmed |
-| Encode discard choice | Best among **indicable** options only |
+| Encode discard choice | Best among **indicable** options only; prev sees next’s discard id as almost-critical |
+| Encode order | Next peer code, then previous |
 | Recompute | Fresh peer codes on each convention hint |
 | Dispatch | Play → step-2 hint → confirmed chop → hint → unconfirmed chop |
 | Mod-8 wire | Unchanged |
