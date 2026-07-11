@@ -17,6 +17,8 @@ class ConventionSlotOverlay:
 
     kind: Optional[CardKind]
     is_chop: bool
+    is_unplayable: bool
+    is_recommended: bool
     kind_mismatch: bool
 
 
@@ -46,7 +48,9 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
         return {}
 
     kinds = bot.get_gui_inferred_kind_by_slot(target_seat)
+    unplayable_slots = bot.get_gui_unplayable_slots(target_seat)
     chop_slot = bot.get_gui_chop_slot(target_seat)
+    recommended_slot = bot.get_gui_recommended_slot(target_seat)
     settings = game.settings
     common_view = state.common_view
 
@@ -54,11 +58,19 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
     for slot, card in enumerate(hand.cards):
         kind = kinds.get(slot)
         is_chop = chop_slot == slot
-        if kind is None and not is_chop:
+        is_unplayable = slot in unplayable_slots
+        is_recommended = recommended_slot == slot
+        if kind is None and not is_chop and not is_unplayable and not is_recommended:
             continue
         kind_mismatch = False
         if kind is not None:
             actual = common_view.card_kind(card, settings)
             kind_mismatch = kind != actual
-        overlays[slot] = ConventionSlotOverlay(kind=kind, is_chop=is_chop, kind_mismatch=kind_mismatch)
+        overlays[slot] = ConventionSlotOverlay(
+            kind=kind,
+            is_chop=is_chop,
+            is_unplayable=is_unplayable,
+            is_recommended=is_recommended,
+            kind_mismatch=kind_mismatch,
+        )
     return overlays

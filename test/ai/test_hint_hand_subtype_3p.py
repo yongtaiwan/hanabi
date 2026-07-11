@@ -5,12 +5,44 @@ from __future__ import annotations
 import unittest
 from typing import List, Optional
 
+from hanabi.ai.h3p_belief import (
+    HandEncodingMode,
+    LegacyDiscardKind,
+    Playability,
+    RecState,
+    apply_decoded_value,
+    chop_slot,
+    discard_anchor_slot,
+    discard_type_for_slot,
+    hand_encoding_mode,
+    legacy_kind_row,
+    set_playability,
+    slot_belief_from_legacy_kind,
+)
 from hanabi.ai import hint_hand_subtype_3p as h3p
 from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P, HintSlotShape
 from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
 from hanabi.core.moves import ColorHint, Discard, NumberHint, Play
+
+
+def _legacy_row(kinds: List[Optional[CardKind]]) -> List[h3p.SlotBelief]:
+    return [slot_belief_from_legacy_kind(k) for k in kinds]
+
+
+def _set_legacy_row(player: HintHandSubtype3P, seat: int, kinds: List[Optional[CardKind]]) -> None:
+    player._slot_belief[seat] = _legacy_row(kinds)
+
+
+def _player_legacy_matrix(player: HintHandSubtype3P) -> List[List[Optional[CardKind]]]:
+    return [legacy_kind_row(row) for row in player._slot_belief]
+
+
+def _belief_matrix_from_legacy(
+    matrix: List[List[Optional[CardKind]]],
+) -> List[List[h3p.SlotBelief]]:
+    return [_legacy_row(row) for row in matrix]
 
 
 def _common(settings=None) -> CommonView:
@@ -118,7 +150,7 @@ class TestEncodeHandType(unittest.TestCase):
         ]
         self.assertEqual(1, h3p._encode_hand_type(hand, 5, common, settings, _unknown_belief(5)))
         self.assertEqual(
-            4,
+            3,
             h3p._encode_hand_type(
                 hand,
                 5,
@@ -138,8 +170,8 @@ class TestEncodeHandType(unittest.TestCase):
             ),
         )
 
-    def test_stale_critical_uses_physical_playable_for_encoding(self) -> None:
-        """Pile advance: belief CRITICAL but card physically PLAYABLE counts for hand type."""
+    def test_stale_critical_does_not_encode_as_play_while_unplayable(self) -> None:
+        """Critical+unplayable belief is not a play candidate; encode from next unsettled slot."""
         settings = create_standard_game_settings(3)
         common = CommonView(
             live_tokens=3,
@@ -155,8 +187,26 @@ class TestEncodeHandType(unittest.TestCase):
             Card(Color.WHITE, Number.FOUR),
             Card(Color.RED, Number.THREE),
         ]
+        # G5 is physically playable but critical+unplayable belief skips it; B4 is dispensable → 0.
         stale_critical = [CardKind.CRITICAL, None, None, None, None]
-        self.assertEqual(5, h3p._encode_hand_type(hand, 5, common, settings, stale_critical))
+        self.assertEqual(CardKind.PLAYABLE, common.card_kind(hand[0], settings))
+        self.assertEqual(0, h3p._encode_hand_type(hand, 5, common, settings, stale_critical))
+
+    def test_play_type_indexes_unknown_playability_only(self) -> None:
+        """Legacy play types are k-th among unknown playability, not absolute from-new."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.YELLOW, Number.FIVE),
+        ]
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        row[4].playability = Playability.UNPLAYABLE
+        row[3].playability = Playability.UNPLAYABLE
+        self.assertEqual(3, h3p._encode_hand_type(hand, 5, common, settings, row))
     def test_chop_safe_is_type_zero(self) -> None:
         kinds = [CardKind.DISPENSABLE, CardKind.USELESS, CardKind.CRITICAL]
         self.assertEqual(0, h3p._hand_type_when_no_playable(kinds, _unknown_belief(3)))
@@ -170,7 +220,7 @@ class TestEncodeHandType(unittest.TestCase):
         self.assertEqual(7, h3p._hand_type_when_no_playable(kinds, _unknown_belief(2)))
 
     def test_no_playable_type_six_when_chop_critical_not_first_useless(self) -> None:
-        """Encode types 0/6/7 from chop, not first left-to-right useless/critical."""
+        """Encode types 0/6/7 from discard anchor (skips known useless), not raw leftmost kind."""
         kinds = [
             CardKind.USELESS,
             CardKind.CRITICAL,
@@ -179,6 +229,19 @@ class TestEncodeHandType(unittest.TestCase):
             CardKind.DISPENSABLE,
         ]
         belief: List[Optional[CardKind]] = [CardKind.USELESS, None, None, None, None]
+        self.assertEqual(6, h3p._hand_type_when_no_playable(kinds, belief))
+
+    def test_no_playable_type_six_skips_known_critical_anchor(self) -> None:
+        """With leftmost already critical, encode type 6 from the next slot's physical kind."""
+        kinds = [
+            CardKind.CRITICAL,
+            CardKind.CRITICAL,
+            CardKind.USELESS,
+            CardKind.DISPENSABLE,
+            CardKind.DISPENSABLE,
+        ]
+        belief: List[Optional[CardKind]] = [CardKind.CRITICAL, None, None, None, None]
+        self.assertEqual(1, discard_anchor_slot(_legacy_row(belief)))
         self.assertEqual(6, h3p._hand_type_when_no_playable(kinds, belief))
 
 
@@ -254,39 +317,37 @@ class TestBeliefDecode(unittest.TestCase):
         matrix = [[None] * 5]
         h3p._apply_decoded_hand_type(matrix, 0, 3)
         self.assertEqual(CardKind.PLAYABLE, matrix[0][2])
+        self.assertIsNone(matrix[0][3])
+        self.assertIsNone(matrix[0][4])
         self.assertIsNone(matrix[0][0])
 
     def test_type_zero_marks_chop_safe(self) -> None:
-        matrix = [[None, None, None]]
+        matrix = [[None] * 5]
         h3p._apply_decoded_hand_type(matrix, 0, 0)
         self.assertEqual(CardKind.DISPENSABLE, matrix[0][0])
 
     def test_type_six_marks_chop_critical(self) -> None:
-        matrix = [[None, CardKind.CRITICAL, None]]
+        matrix = [[None] * 5]
         h3p._apply_decoded_hand_type(matrix, 0, 6)
         self.assertEqual(CardKind.CRITICAL, matrix[0][0])
 
     def test_type_seven_marks_chop_useless(self) -> None:
-        matrix = [[None, None, None]]
+        matrix = [[None] * 5]
         h3p._apply_decoded_hand_type(matrix, 0, 7)
         self.assertEqual(CardKind.USELESS, matrix[0][0])
 
     def test_type_three_marks_third_from_new_playable(self) -> None:
-        matrix = [[None, None, None, None, None]]
+        matrix = [[None] * 5]
         h3p._apply_decoded_hand_type(matrix, 0, 3)
         self.assertEqual(CardKind.PLAYABLE, matrix[0][2])
+        self.assertIsNone(matrix[0][3])
+        self.assertIsNone(matrix[0][4])
 
-    def test_transition_playable_allows_duplicate_collapse_to_useless(self) -> None:
-        self.assertTrue(h3p._transition_allowed(CardKind.PLAYABLE, CardKind.USELESS))
-        self.assertFalse(h3p._transition_allowed(CardKind.USELESS, CardKind.PLAYABLE))
-        self.assertFalse(h3p._transition_allowed(CardKind.PLAYABLE, CardKind.DISPENSABLE))
-        self.assertFalse(h3p._transition_allowed(CardKind.USELESS, CardKind.DISPENSABLE))
-        self.assertTrue(h3p._transition_allowed(CardKind.CRITICAL, CardKind.PLAYABLE))
-        self.assertFalse(h3p._transition_allowed(CardKind.CRITICAL, CardKind.DISPENSABLE))
-
-    def test_decode_asserts_on_conflicting_transition(self) -> None:
-        """Decode must not silently skip; disallowed kind transitions are convention bugs."""
-        matrix: List[List[Optional[CardKind]]] = [[None, None, None, None, CardKind.USELESS]]
+    def test_decode_asserts_on_invalid_play_type(self) -> None:
+        """Play decode with no unknown slots is a convention bug."""
+        matrix: List[List[Optional[CardKind]]] = [
+            [CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.USELESS]
+        ]
         with self.assertRaises(AssertionError):
             h3p._apply_decoded_hand_type(matrix, 0, 1)
 
@@ -304,7 +365,9 @@ class TestDuplicateIdentifiedPlayableCollapse(unittest.TestCase):
         matrix: List[List[Optional[CardKind]]] = [
             [CardKind.PLAYABLE, None, CardKind.PLAYABLE, None, None],
         ]
-        h3p._collapse_duplicate_identified_playables_in_row(cards, matrix, 0)
+        slot_belief = [_legacy_row(matrix[0])]
+        h3p._collapse_duplicate_identified_playables_in_row(cards, slot_belief, 0)
+        matrix[0] = legacy_kind_row(slot_belief[0])
         self.assertEqual(CardKind.PLAYABLE, matrix[0][0])
         self.assertEqual(CardKind.USELESS, matrix[0][2])
 
@@ -317,7 +380,9 @@ class TestDuplicateIdentifiedPlayableCollapse(unittest.TestCase):
         matrix: List[List[Optional[CardKind]]] = [
             [CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE],
         ]
-        h3p._collapse_duplicate_identified_playables_in_row(cards, matrix, 0)
+        slot_belief = [_legacy_row(matrix[0])]
+        h3p._collapse_duplicate_identified_playables_in_row(cards, slot_belief, 0)
+        matrix[0] = legacy_kind_row(slot_belief[0])
         self.assertEqual([CardKind.PLAYABLE, CardKind.PLAYABLE, CardKind.PLAYABLE], matrix[0])
 
     def test_duplicate_useless_belief_not_reencoded_as_playable(self) -> None:
@@ -348,7 +413,7 @@ class TestDuplicateIdentifiedPlayableCollapse(unittest.TestCase):
             player.set_game_settings(settings)
         duplicate_playable = [CardKind.PLAYABLE, None, CardKind.PLAYABLE, None, None]
         for player in players:
-            player._inferred_card_kind[1] = duplicate_playable.copy()
+            player._slot_belief[1] = _legacy_row(duplicate_playable)
         hand_cards = [
             [Card(Color.WHITE, Number.FOUR)] * 5,
             [
@@ -364,21 +429,49 @@ class TestDuplicateIdentifiedPlayableCollapse(unittest.TestCase):
         h3p.align_convention_beliefs_after_move(players, 0, hint, hand_cards=hand_cards)
         expected = [CardKind.PLAYABLE, None, CardKind.USELESS, None, None]
         for player in players:
-            self.assertEqual(expected, player._inferred_card_kind[1])
+            self.assertEqual(expected, _player_legacy_matrix(player)[1])
+
+
+class TestDiscardAnchorFromBelief(unittest.TestCase):
+    def test_leftmost_needs_discard_info(self) -> None:
+        row = _legacy_row([CardKind.USELESS, None, CardKind.DISPENSABLE])
+        self.assertEqual(1, discard_anchor_slot(row))
+
+    def test_critical_is_skipped_as_discard_anchor(self) -> None:
+        """Known critical does not need discard info; anchor is the next unsettled slot."""
+        row = _legacy_row([CardKind.CRITICAL, None, CardKind.DISPENSABLE])
+        self.assertEqual(1, discard_anchor_slot(row))
+
+    def test_no_anchor_when_only_useless_or_critical(self) -> None:
+        row = _legacy_row([CardKind.USELESS, CardKind.CRITICAL, CardKind.USELESS])
+        self.assertIsNone(discard_anchor_slot(row))
+
+    def test_type_six_marks_next_after_known_critical(self) -> None:
+        """Re-decode type 6 after leftmost critical marks the next unsettled slot."""
+        from hanabi.ai.h3p_belief import apply_decoded_value, Playability
+
+        row = _legacy_row([CardKind.CRITICAL, None, None, None, None])
+        for belief in row:
+            belief.playability = Playability.UNKNOWN
+        apply_decoded_value(row, 6)
+        self.assertEqual(Playability.UNPLAYABLE, row[0].playability)
+        self.assertEqual(LegacyDiscardKind.CRITICAL, row[0].legacy_kind)
+        self.assertEqual(LegacyDiscardKind.CRITICAL, row[1].legacy_kind)
+        self.assertEqual(LegacyDiscardKind.UNKNOWN, row[2].legacy_kind)
+        # Criticals are tier 5; chop is leftmost unknown kind (tier 4).
+        self.assertEqual(2, chop_slot(row))
 
 
 class TestChopFromBelief(unittest.TestCase):
-    def test_leftmost_unknown_or_safe(self) -> None:
-        slots = [CardKind.USELESS, None, CardKind.DISPENSABLE]
-        self.assertEqual(1, h3p._chop_slot_from_belief(slots))
+    def test_useless_outranks_recommended(self) -> None:
+        row = _legacy_row([None, CardKind.USELESS, None, None, None])
+        row[3].rec_state = RecState.RECOMMENDED
+        self.assertEqual(1, chop_slot(row))
 
-    def test_critical_is_never_chop(self) -> None:
-        slots = [CardKind.CRITICAL, None, CardKind.DISPENSABLE]
-        self.assertEqual(1, h3p._chop_slot_from_belief(slots))
-
-    def test_no_chop_when_all_critical(self) -> None:
-        slots = [CardKind.CRITICAL, CardKind.CRITICAL, CardKind.CRITICAL]
-        self.assertIsNone(h3p._chop_slot_from_belief(slots))
+    def test_recommended_outranks_safe(self) -> None:
+        row = _legacy_row([CardKind.DISPENSABLE, None, None, None, None])
+        row[2].rec_state = RecState.RECOMMENDED
+        self.assertEqual(2, chop_slot(row))
 
 
 class TestPlayableSlotFromHandType(unittest.TestCase):
@@ -392,7 +485,7 @@ class TestPlayableSlotFromHandType(unittest.TestCase):
 
 class TestStep5IdentifiesNewPlayable(unittest.TestCase):
     def test_true_when_decode_would_newly_mark_playable(self) -> None:
-        """P1 has W1 playable; P3 hint encodes type 1 so P1 observer gets slot 4 playable."""
+        """Next player (P1 for hinter P3) gets W1 newly marked playable → step-2 urgent."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         view = PlayerView(
@@ -418,7 +511,7 @@ class TestStep5IdentifiesNewPlayable(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        beliefs: List[List[Optional[CardKind]]] = [[None] * 5 for _ in range(3)]
+        beliefs = _belief_matrix_from_legacy([[None] * 5 for _ in range(3)])
         self.assertTrue(
             h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
         )
@@ -441,11 +534,143 @@ class TestStep5IdentifiesNewPlayable(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        beliefs: list[list[CardKind | None]] = [
-            [None, None, None, None, CardKind.PLAYABLE],
-            [None, None, None, None, None],
-            [None, None, None, None, None],
-        ]
+        beliefs = _belief_matrix_from_legacy(
+            [
+                [None, None, None, None, CardKind.PLAYABLE],
+                [None, None, None, None, None],
+                [None, None, None, None, None],
+            ]
+        )
+        self.assertFalse(
+            h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
+        )
+
+    def test_false_when_same_identity_already_playable_on_other_seat(self) -> None:
+        """Do not prioritize a hint that would double-mark the same playable card."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.WHITE, Number.FIVE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        beliefs = _belief_matrix_from_legacy([[None] * 5 for _ in range(3)])
+        set_playability(beliefs[1][4], Playability.PLAYABLE)
+        self.assertFalse(
+            h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
+        )
+
+    def test_false_when_only_topping_up_hand_that_already_has_playable(self) -> None:
+        """Defer when next already has a playable (topping up is not step-2-urgent)."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.ONE),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.WHITE, Number.FIVE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.WHITE, Number.FOUR),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        beliefs = _belief_matrix_from_legacy([[None] * 5 for _ in range(3)])
+        set_playability(beliefs[0][0], Playability.PLAYABLE)
+        self.assertFalse(
+            h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
+        )
+
+    def test_false_when_both_peers_would_newly_mark_same_identity(self) -> None:
+        """Next's new playable matching prev's new mark is double-play risk — not urgent."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.WHITE, Number.FIVE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        beliefs = _belief_matrix_from_legacy([[None] * 5 for _ in range(3)])
+        self.assertFalse(
+            h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
+        )
+
+    def test_false_when_only_prev_player_gets_new_playable(self) -> None:
+        """Prev-only unlock is not step-2-urgent (next can hint after a discard)."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.WHITE, Number.FIVE),
+                        Card(Color.RED, Number.FOUR),
+                    ]
+                ),
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        beliefs = _belief_matrix_from_legacy([[None] * 5 for _ in range(3)])
         self.assertFalse(
             h3p._convention_hint_would_identify_new_playable(2, view, common, settings, beliefs)
         )
@@ -495,15 +720,15 @@ class TestBeliefLifecycle(unittest.TestCase):
         player = HintHandSubtype3P(1)
         player.set_game_settings(settings)
         for seat in range(3):
-            self.assertEqual(5, len(player._inferred_card_kind[seat]))
-            self.assertTrue(all(kind is None for kind in player._inferred_card_kind[seat]))
+            self.assertEqual(5, len(player._slot_belief[seat]))
+            self.assertTrue(all(kind is None for kind in _player_legacy_matrix(player)[seat]))
 
     def test_drawn_slot_unknown_after_play(self) -> None:
         settings = create_standard_game_settings(3)
         player = HintHandSubtype3P(0)
         player.set_game_settings(settings)
         player.set_common_view(_common(settings))
-        player._inferred_card_kind[0] = [None, CardKind.CRITICAL, CardKind.PLAYABLE, None, CardKind.USELESS]
+        _set_legacy_row(player, 0, [None, CardKind.CRITICAL, CardKind.PLAYABLE, None, CardKind.USELESS])
         view = PlayerView(
             teammates={
                 1: Hand([Card(Color.RED, Number.TWO)] * 5),
@@ -514,7 +739,7 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.observe_play_move(0, Play(2), view)
         self.assertEqual(
             [None, CardKind.CRITICAL, None, CardKind.USELESS, None],
-            player._inferred_card_kind[0],
+            _player_legacy_matrix(player)[0],
         )
 
     def test_shrink_hand_when_no_draw(self) -> None:
@@ -523,7 +748,7 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.set_game_settings(settings)
         common = _common(settings)
         player.set_common_view(common)
-        player._inferred_card_kind[0] = [None, None, None, CardKind.PLAYABLE, None]
+        _set_legacy_row(player, 0, [None, None, None, CardKind.PLAYABLE, None])
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
             hint_tokens=common.hint_tokens,
@@ -539,7 +764,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             own_hand_size=4,
         )
         player.observe_discard_move(0, Discard(1), view)
-        self.assertEqual([None, None, CardKind.PLAYABLE, None], player._inferred_card_kind[0])
+        self.assertEqual([None, None, CardKind.PLAYABLE, None], _player_legacy_matrix(player)[0])
 
     def test_safe_cleared_on_non_useless_middle_rank_discard(self) -> None:
         settings = create_standard_game_settings(3)
@@ -547,10 +772,10 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.set_game_settings(settings)
         common = _common(settings)
         player.set_common_view(common)
-        player._inferred_card_kind = [
-            [None, CardKind.DISPENSABLE, None, CardKind.CRITICAL, None],
-            [CardKind.DISPENSABLE, None, None, None, None],
-            [None, None, CardKind.DISPENSABLE, None, None],
+        player._slot_belief = [
+            _legacy_row([None, CardKind.DISPENSABLE, None, CardKind.CRITICAL, None]),
+            _legacy_row([CardKind.DISPENSABLE, None, None, None, None]),
+            _legacy_row([None, None, CardKind.DISPENSABLE, None, None]),
         ]
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
@@ -569,10 +794,10 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.observe_discard_move(1, Discard(2), view)
         self.assertEqual(
             [None, None, None, CardKind.CRITICAL, None],
-            player._inferred_card_kind[0],
+            _player_legacy_matrix(player)[0],
         )
-        self.assertEqual([None, None, None, None, None], player._inferred_card_kind[1])
-        self.assertEqual([None, None, None, None, None], player._inferred_card_kind[2])
+        self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[1])
+        self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[2])
 
     def test_safe_unchanged_on_useless_middle_rank_discard(self) -> None:
         settings = create_standard_game_settings(3)
@@ -580,7 +805,7 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.set_game_settings(settings)
         common = _common(settings)
         player.set_common_view(common)
-        player._inferred_card_kind[1] = [None, CardKind.DISPENSABLE, None, None, None]
+        _set_legacy_row(player, 1, [None, CardKind.DISPENSABLE, None, None, None])
         player._discard_pile_snapshot = {Color.RED: {Number.THREE: 1}}
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
@@ -597,7 +822,39 @@ class TestBeliefLifecycle(unittest.TestCase):
             own_hand_size=5,
         )
         player.observe_discard_move(1, Discard(0), view)
-        self.assertEqual([CardKind.DISPENSABLE, None, None, None, None], player._inferred_card_kind[1])
+        self.assertEqual([CardKind.DISPENSABLE, None, None, None, None], _player_legacy_matrix(player)[1])
+
+    def test_frontier_play_reopens_unplayable_using_played_snapshot(self) -> None:
+        """Game updates common_view before observe; reopen must use prior cards_played snapshot."""
+        settings = create_standard_game_settings(3)
+        player = HintHandSubtype3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(_common(settings))
+        player._cards_played_snapshot = {}
+        for seat in range(3):
+            for belief in player._slot_belief[seat]:
+                belief.playability = Playability.UNPLAYABLE
+        # Simulate post-move common_view already showing R1 played.
+        player._common_view = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=39,
+            cards_discarded={},
+            cards_played={Color.RED: Number.ONE},
+        )
+        view = PlayerView(
+            teammates={
+                1: Hand([Card(Color.GREEN, Number.TWO)] * 4),
+                2: Hand([Card(Color.BLUE, Number.THREE)] * 5),
+            },
+            own_hand_size=5,
+        )
+        player.observe_play_move(1, Play(0), view)
+        self.assertTrue(
+            all(Playability.UNKNOWN == b.playability for row in player._slot_belief for b in row),
+            "frontier-opening play must reopen all unplayable slots",
+        )
+        self.assertEqual({Color.RED: Number.ONE}, player._cards_played_snapshot)
 
     def test_safe_unchanged_on_rank_one_discard(self) -> None:
         settings = create_standard_game_settings(3)
@@ -605,7 +862,7 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.set_game_settings(settings)
         common = _common(settings)
         player.set_common_view(common)
-        player._inferred_card_kind[0] = [None, CardKind.DISPENSABLE, None, None, None]
+        _set_legacy_row(player, 0, [None, CardKind.DISPENSABLE, None, None, None])
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
             hint_tokens=common.hint_tokens,
@@ -621,7 +878,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             own_hand_size=4,
         )
         player.observe_discard_move(0, Discard(0), view)
-        self.assertEqual([CardKind.DISPENSABLE, None, None, None], player._inferred_card_kind[0])
+        self.assertEqual([CardKind.DISPENSABLE, None, None, None], _player_legacy_matrix(player)[0])
 
     def test_safe_cleared_on_middle_rank_misplay(self) -> None:
         settings = create_standard_game_settings(3)
@@ -629,10 +886,10 @@ class TestBeliefLifecycle(unittest.TestCase):
         player.set_game_settings(settings)
         common = _common(settings)
         player.set_common_view(common)
-        player._inferred_card_kind = [
-            [None, CardKind.DISPENSABLE, None, None, None],
-            [CardKind.DISPENSABLE, None, None, None, None],
-            [None, None, None, None, None],
+        player._slot_belief = [
+            _legacy_row([None, CardKind.DISPENSABLE, None, None, None]),
+            _legacy_row([CardKind.DISPENSABLE, None, None, None, None]),
+            _legacy_row([None] * 5),
         ]
         player._common_view = CommonView(
             live_tokens=common.live_tokens - 1,
@@ -649,8 +906,8 @@ class TestBeliefLifecycle(unittest.TestCase):
             own_hand_size=5,
         )
         player.observe_play_move(1, Play(0), view)
-        self.assertEqual([None, None, None, None, None], player._inferred_card_kind[0])
-        self.assertEqual([None, None, None, None, None], player._inferred_card_kind[1])
+        self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[0])
+        self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[1])
 
 
 class TestPlaySmoke(unittest.TestCase):
@@ -682,7 +939,7 @@ class TestPlaySmoke(unittest.TestCase):
         player = HintHandSubtype3P(0)
         player.set_game_settings(settings)
         player.set_common_view(_common(settings))
-        player._inferred_card_kind[0] = [None, CardKind.PLAYABLE, None, None, None]
+        _set_legacy_row(player, 0, [None, CardKind.PLAYABLE, None, None, None])
         view = PlayerView(
             teammates={
                 1: Hand([Card(Color.RED, Number.TWO)] * 5),
@@ -721,8 +978,8 @@ class TestBeliefSyncAfterHint(unittest.TestCase):
         for player, view in zip(players, views):
             player.observe_number_hint_move(0, hint, view)
         h3p.align_convention_beliefs_after_move(players, 0, hint)
-        self.assertEqual(players[0]._inferred_card_kind, players[1]._inferred_card_kind)
-        self.assertTrue(any(kind is not None for kind in players[0]._inferred_card_kind[1]))
+        self.assertEqual(_player_legacy_matrix(players[0]), _player_legacy_matrix(players[1]))
+        self.assertTrue(any(kind is not None for kind in _player_legacy_matrix(players[0])[1]))
 
     def test_hinter_updates_both_non_hinter_rows(self) -> None:
         settings = create_standard_game_settings(3)
@@ -736,11 +993,11 @@ class TestBeliefSyncAfterHint(unittest.TestCase):
         hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
         hinter.observe_number_hint_move(0, hint, view)
         self.assertTrue(
-            any(kind is not None for kind in hinter._inferred_card_kind[1]),
+            any(kind is not None for kind in _player_legacy_matrix(hinter)[1]),
             "hinter should update hint target row from channel decode",
         )
         self.assertTrue(
-            any(kind is not None for kind in hinter._inferred_card_kind[2]),
+            any(kind is not None for kind in _player_legacy_matrix(hinter)[2]),
             "hinter should update other non-hinter row from channel decode",
         )
 
@@ -768,7 +1025,7 @@ class TestBeliefSyncAfterHint(unittest.TestCase):
         hinter.set_game_settings(settings)
         hinter.set_common_view(common)
         hinter.observe_number_hint_move(0, hint, view)
-        self.assertEqual(expected[2], hinter._inferred_card_kind[2])
+        self.assertEqual(expected[2], _player_legacy_matrix(hinter)[2])
 
 
 class TestSafeDoublePlay(unittest.TestCase):
@@ -820,13 +1077,13 @@ class TestSafeDoublePlay(unittest.TestCase):
             cards_played={Color.RED: Number.ONE},
         )
         player.set_common_view(common)
-        player._inferred_card_kind = [
-            [None] * 5,
-            [CardKind.PLAYABLE, None, None, None, None],
-            [None, CardKind.PLAYABLE, None, None, None],
+        player._slot_belief = [
+            _legacy_row([None] * 5),
+            _legacy_row([CardKind.PLAYABLE, None, None, None, None]),
+            _legacy_row([None, CardKind.PLAYABLE, None, None, None]),
         ]
         h3p._invalidate_playable_matching_card_on_other_players(
-            player._inferred_card_kind,
+            player._slot_belief,
             mover_index=0,
             hand_cards=[
                 [Card(Color.WHITE, Number.FOUR)] * 5,
@@ -835,14 +1092,14 @@ class TestSafeDoublePlay(unittest.TestCase):
             ],
             played_card=Card(Color.RED, Number.ONE),
         )
-        self.assertIsNone(player._inferred_card_kind[1][0])
-        self.assertIsNone(player._inferred_card_kind[2][1])
+        self.assertIsNone(_player_legacy_matrix(player)[1][0])
+        self.assertIsNone(_player_legacy_matrix(player)[2][1])
 
     def test_no_invalidate_when_mover_is_teammate_row(self) -> None:
-        matrix: List[List[Optional[CardKind]]] = [
-            [None] * 2,
-            [CardKind.PLAYABLE, None],
-            [None] * 2,
+        matrix = [
+            _legacy_row([None] * 2),
+            _legacy_row([CardKind.PLAYABLE, None]),
+            _legacy_row([None] * 2),
         ]
         h3p._invalidate_playable_matching_card_on_other_players(
             matrix,
@@ -854,7 +1111,7 @@ class TestSafeDoublePlay(unittest.TestCase):
             ],
             played_card=Card(Color.RED, Number.ONE),
         )
-        self.assertEqual(CardKind.PLAYABLE, matrix[1][0])
+        self.assertEqual(CardKind.PLAYABLE, legacy_kind_row(matrix[1])[0])
 
     def test_align_clears_stale_playable_at_one_life(self) -> None:
         settings = create_standard_game_settings(3)
@@ -871,10 +1128,10 @@ class TestSafeDoublePlay(unittest.TestCase):
                 )
             )
         for player in players:
-            player._inferred_card_kind = [
-                [None] * 3,
-                [None] * 3,
-                [CardKind.PLAYABLE, None, None],
+            player._slot_belief = [
+                _legacy_row([None] * 3),
+                _legacy_row([None] * 3),
+                _legacy_row([CardKind.PLAYABLE, None, None]),
             ]
         move = Play(0)
         hand_cards = [
@@ -889,7 +1146,7 @@ class TestSafeDoublePlay(unittest.TestCase):
             cards_played_before={},
             hand_cards=hand_cards,
         )
-        self.assertIsNone(players[0]._inferred_card_kind[2][0])
+        self.assertIsNone(_player_legacy_matrix(players[0])[2][0])
 
     def test_safe_double_play_disabled_skips_align_invalidation(self) -> None:
         settings = create_standard_game_settings(3)
@@ -905,10 +1162,10 @@ class TestSafeDoublePlay(unittest.TestCase):
                     cards_played={Color.RED: Number.ONE},
                 )
             )
-            player._inferred_card_kind = [
-                [None] * 3,
-                [None] * 3,
-                [CardKind.PLAYABLE, None, None],
+            player._slot_belief = [
+                _legacy_row([None] * 3),
+                _legacy_row([None] * 3),
+                _legacy_row([CardKind.PLAYABLE, None, None]),
             ]
         move = Play(0)
         hand_cards = [
@@ -923,19 +1180,169 @@ class TestSafeDoublePlay(unittest.TestCase):
             cards_played_before={},
             hand_cards=hand_cards,
         )
-        self.assertEqual(CardKind.PLAYABLE, players[0]._inferred_card_kind[2][0])
+        self.assertEqual(CardKind.PLAYABLE, _player_legacy_matrix(players[0])[2][0])
+
+
+class TestRecommendationMode(unittest.TestCase):
+    def test_rec_play_decode_does_not_mark_newer_unplayable(self) -> None:
+        """Rec play picks by rank, not newest playable — newer unknowns stay unknown."""
+        # n_play=3, n_disc=5 → recommendation mode (sum 8).
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        row[2].playability = Playability.UNPLAYABLE
+        row[3].playability = Playability.UNPLAYABLE
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+        # Unknown-from-newest: [4, 1, 0]. Type 3 → slot 0 playable; 4 and 1 stay unknown.
+        apply_decoded_value(row, 3)
+        self.assertEqual(Playability.PLAYABLE, row[0].playability)
+        self.assertEqual(Playability.UNKNOWN, row[1].playability)
+        self.assertEqual(Playability.UNKNOWN, row[4].playability)
+
+    def test_legacy_play_decode_marks_newer_unplayable(self) -> None:
+        """Legacy play type still proves newer unknowns are unplayable."""
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        self.assertEqual(HandEncodingMode.LEGACY, hand_encoding_mode(row))
+        apply_decoded_value(row, 3)
+        self.assertEqual(Playability.PLAYABLE, row[2].playability)
+        self.assertEqual(Playability.UNPLAYABLE, row[3].playability)
+        self.assertEqual(Playability.UNPLAYABLE, row[4].playability)
+        self.assertEqual(Playability.UNKNOWN, row[0].playability)
+        self.assertEqual(Playability.UNKNOWN, row[1].playability)
+
+    def test_legacy_type_zero_switches_hand_to_recommendation_mode(self) -> None:
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        apply_decoded_value(row, 0)
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+
+    def test_rec_type_zero_marks_chop_recommended(self) -> None:
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        apply_decoded_value(row, 0)
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+        apply_decoded_value(row, 0)
+        chop = chop_slot(row)
+        assert chop is not None
+        self.assertEqual(RecState.RECOMMENDED, row[chop].rec_state)
+
+    def test_discard_recommended_before_safe_chop(self) -> None:
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player = HintHandSubtype3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(common)
+        row = player._slot_belief[0]
+        row[1].legacy_kind = LegacyDiscardKind.SAFE
+        row[3].rec_state = RecState.RECOMMENDED
+        view = PlayerView(
+            teammates={
+                1: Hand([Card(Color.RED, Number.TWO)] * 5),
+                2: Hand([Card(Color.BLUE, Number.THREE)] * 5),
+            },
+            own_hand_size=5,
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        assert isinstance(move, Discard)
+        self.assertEqual(3, move.card)
+
+    def test_rec_encode_ignores_physical_useless_older_than_chop(self) -> None:
+        """Visible useless older than belief chop is not encodable; encode chop instead."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.RED: Suit({Number.ONE: 3})},
+            cards_played={Color.RED: Number.ONE},
+        )
+        hand = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.YELLOW, Number.FIVE),
+        ]
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        for belief in row:
+            belief.playability = Playability.UNPLAYABLE
+        row[3].rec_state = RecState.RECOMMENDED
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+        self.assertEqual(3, chop_slot(row))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[0], settings))
+        code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
+        self.assertEqual(0, code)
+
+    def test_rec_encode_skips_physically_playable_chop(self) -> None:
+        """Do not recommend discarding a stale-unplayable slot that is physically playable."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.YELLOW, Number.FIVE),
+        ]
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        for belief in row:
+            belief.playability = Playability.UNPLAYABLE
+        # Slot 0 is chop and physically playable; slot 1 is trash.
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.BLUE: Suit({Number.TWO: 2})},
+            cards_played={},
+        )
+        self.assertEqual(CardKind.PLAYABLE, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[1], settings))
+        code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
+        self.assertEqual(discard_type_for_slot(row, 1), code)
+
+    def test_rec_encode_dispensable_prefers_highest_rank(self) -> None:
+        """Among safe discards on the chop chain, prefer highest rank (then oldest)."""
+        settings = create_standard_game_settings(3)
+        # No yellow/green piles: Y2, G4, G2 are dispensable; W4 playable → not on chain.
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.RED: Number.THREE, Color.WHITE: Number.THREE, Color.BLUE: Number.ONE},
+        )
+        hand = [
+            Card(Color.YELLOW, Number.TWO),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.GREEN, Number.TWO),
+        ]
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        set_playability(row[3], Playability.PLAYABLE)
+        for slot in (0, 1, 2, 4):
+            set_playability(row[slot], Playability.UNPLAYABLE)
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[1], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[4], settings))
+        code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
+        self.assertEqual(discard_type_for_slot(row, 1), code)
 
 
 class TestHintHandSubtype3PGui(unittest.TestCase):
-    def test_get_gui_chop_slot_is_leftmost_unknown_or_dispensable(self) -> None:
-        """Chop is the leftmost unknown or dispensable slot."""
+    def test_get_gui_chop_slot_uses_priority_tiers(self) -> None:
+        """Chop is the expected discard by priority tiers (§3.4)."""
         player = HintHandSubtype3P(0)
         settings = create_standard_game_settings(3)
         player.set_game_settings(settings)
         self.assertEqual(0, player.get_gui_chop_slot(0))
-        player._inferred_card_kind[0][0] = CardKind.CRITICAL
+        _set_legacy_row(player, 0, [CardKind.CRITICAL, None, None, None, None])
         self.assertEqual(1, player.get_gui_chop_slot(0))
-        player._inferred_card_kind[0][1] = CardKind.DISPENSABLE
+        _set_legacy_row(player, 0, [CardKind.CRITICAL, CardKind.DISPENSABLE, None, None, None])
         self.assertEqual(1, player.get_gui_chop_slot(0))
 
     def test_get_gui_inferred_kind_by_slot_omits_unknown(self) -> None:
@@ -943,7 +1350,7 @@ class TestHintHandSubtype3PGui(unittest.TestCase):
         player = HintHandSubtype3P(0)
         settings = create_standard_game_settings(3)
         player.set_game_settings(settings)
-        player._inferred_card_kind[1][2] = CardKind.PLAYABLE
+        _set_legacy_row(player, 1, [None, None, CardKind.PLAYABLE, None, None])
         self.assertEqual({2: CardKind.PLAYABLE}, player.get_gui_inferred_kind_by_slot(1))
 
 

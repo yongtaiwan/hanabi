@@ -2177,33 +2177,38 @@ class GUIDisplay:
     def _draw_convention_slot_overlay(
         self, x: int, y: int, card_height: int, overlay: ConventionSlotOverlay
     ) -> None:
-        """Chop axe badge on the left; inferred kind badge to its right (magenta outline if mismatch)."""
+        """Chop, unplayable pause, kind, then recommended — left to right (magenta outline if kind mismatch)."""
         box_height = 18
         kind_width = 22
         chop_width = 16
+        pause_width = 16
+        rec_width = 16
         gap = 2
         top_y = y - card_height // 2 - 2 - box_height
 
-        has_kind = overlay.kind is not None
-        has_chop = overlay.is_chop
-        if not has_kind and not has_chop:
+        badges = []
+        if overlay.is_chop:
+            badges.append((chop_width, lambda cx: self._draw_chop_axe_badge(cx, top_y, box_height, chop_width)))
+        if overlay.is_unplayable:
+            badges.append(
+                (pause_width, lambda cx: self._draw_convention_unplayable_badge(cx, top_y, box_height, pause_width))
+            )
+        if overlay.kind is not None:
+            badges.append(
+                (kind_width, lambda cx: self._draw_convention_kind_badge(cx, top_y, box_height, kind_width, overlay))
+            )
+        if overlay.is_recommended:
+            badges.append(
+                (rec_width, lambda cx: self._draw_convention_recommended_badge(cx, top_y, box_height, rec_width))
+            )
+        if not badges:
             return
 
-        if has_chop and has_kind:
-            group_width = chop_width + gap + kind_width
-            chop_cx = x - group_width // 2 + chop_width // 2
-            kind_cx = x - group_width // 2 + chop_width + gap + kind_width // 2
-        elif has_chop:
-            chop_cx = x
-            kind_cx = x
-        else:
-            chop_cx = x
-            kind_cx = x
-
-        if has_chop:
-            self._draw_chop_axe_badge(chop_cx, top_y, box_height, chop_width)
-        if has_kind:
-            self._draw_convention_kind_badge(kind_cx, top_y, box_height, kind_width, overlay)
+        group_width = sum(width for width, _ in badges) + gap * (len(badges) - 1)
+        cursor = x - group_width // 2
+        for width, draw in badges:
+            draw(cursor + width // 2)
+            cursor += width + gap
 
     def _draw_convention_kind_badge(
         self,
@@ -2243,6 +2248,70 @@ class GUIDisplay:
             text=label,
             fill="white",
             font=("Arial", 11, "bold"),
+            tags=("card",),
+        )
+
+    def _draw_convention_unplayable_badge(
+        self, center_x: int, top_y: int, box_height: int, box_width: int
+    ) -> None:
+        """Red pause badge for convention ``playability == unplayable`` (pairs with green ▶)."""
+        left = center_x - box_width // 2
+        right = center_x + box_width // 2
+        bottom = top_y + box_height
+        self._canvas.create_rectangle(
+            left,
+            top_y,
+            right,
+            bottom,
+            fill=self.REC_DISCARD_COLOR,
+            outline="#000000",
+            width=1,
+            tags=("card",),
+        )
+        bar_top = top_y + 4
+        bar_bottom = bottom - 4
+        bar_width = 2
+        gap = 3
+        bar_left = center_x - gap // 2 - bar_width
+        bar_right = center_x + gap // 2
+        self._canvas.create_rectangle(
+            bar_left,
+            bar_top,
+            bar_left + bar_width,
+            bar_bottom,
+            fill="white",
+            outline="",
+            tags=("card",),
+        )
+        self._canvas.create_rectangle(
+            bar_right,
+            bar_top,
+            bar_right + bar_width,
+            bar_bottom,
+            fill="white",
+            outline="",
+            tags=("card",),
+        )
+
+    def _draw_convention_recommended_badge(
+        self, center_x: int, top_y: int, box_height: int, box_width: int
+    ) -> None:
+        """Trash-can badge for convention ``recommended`` discard belief."""
+        self._canvas.create_rectangle(
+            center_x - box_width // 2,
+            top_y,
+            center_x + box_width // 2,
+            top_y + box_height,
+            fill=self.REC_DISCARD_COLOR,
+            outline="#000000",
+            width=1,
+            tags=("card",),
+        )
+        self._canvas.create_text(
+            center_x,
+            top_y + box_height // 2,
+            text="🗑",
+            font=("Arial", 10),
             tags=("card",),
         )
 

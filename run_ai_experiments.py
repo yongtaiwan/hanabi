@@ -460,12 +460,16 @@ def run_experiments(
                     )
                     lines.append("")
                     for row in body["outcomes"]:
-                        nums = row.get("game_numbers")
-                        if not nums:
+                        by_score = row.get("games_by_score")
+                        if not by_score:
                             continue
                         desc = str(row["description"])
-                        games_fmt = ", ".join(str(int(n)) for n in nums)
-                        lines.append(f"- {desc} — **games:** {games_fmt}")
+                        lines.append(f"- {desc} — **games by score:**")
+                        for bucket in by_score:
+                            score = int(bucket["score"])
+                            nums = bucket["game_numbers"]
+                            games_fmt = ", ".join(str(int(n)) for n in nums)
+                            lines.append(f"  - {score}: {games_fmt}")
                     lines.append("")
 
         lines.append("")

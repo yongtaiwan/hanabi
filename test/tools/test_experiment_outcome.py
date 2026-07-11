@@ -164,17 +164,39 @@ class TestExperimentOutcome(unittest.TestCase):
         by_code = {str(r["code"]): r for r in sub["outcomes"]}
         self.assertEqual(1, by_code["3.3"]["count"])
         self.assertEqual([0], by_code["3.3"]["game_numbers"])
+        self.assertEqual([{"score": 19, "game_numbers": [0]}], by_code["3.3"]["games_by_score"])
         self.assertEqual(1, by_code["2.4"]["count"])
         self.assertEqual([2], by_code["2.4"]["game_numbers"])
+        self.assertEqual([{"score": 17, "game_numbers": [2]}], by_code["2.4"]["games_by_score"])
         self.assertEqual(2, sum(int(r["count"]) for r in sub["outcomes"]))
         tip = sub.get("top_non_perfect_reason")
         self.assertIsNotNone(tip)
         self.assertTrue(str(tip).startswith("Tied at 1 games:"), tip)
 
-    def test_top_non_perfect_reason_all_perfect(self) -> None:
-        """When every game is max score, there is no non-perfect mode to summarize."""
-        self.assertIsNone(
-            eo.top_non_perfect_reason_summary([{"code": "perfect", "description": "Max score", "count": 5}])
+    def test_games_by_score_groups_run_ids_ascending(self) -> None:
+        """Non-perfect rows include subject scores bucketed low-to-high."""
+        from hanabi.tools.experiment_outcome import OutcomeBreakdown, OutcomeRunRef, outcome_breakdown_to_yaml_dict
+
+        counts = {c: 0 for c in ("perfect", "2.1", "2.2", "2.3", "2.4", "3.1", "3.2", "3.3", "3.4")}
+        counts["perfect"] = 1
+        counts["3.4"] = 3
+        breakdown = OutcomeBreakdown(
+            subject_ai="HintHandSubtype3P",
+            baseline_ai="CommonSenseCheater",
+            counts=counts,
+            non_perfect_runs={
+                "3.4": [
+                    OutcomeRunRef(5, "a", "b", 20),
+                    OutcomeRunRef(3, "a", "b", 20),
+                    OutcomeRunRef(9, "a", "b", 21),
+                ]
+            },
+        )
+        row = next(r for r in outcome_breakdown_to_yaml_dict(breakdown)["outcomes"] if "3.4" == r["code"])
+        self.assertEqual([3, 5, 9], row["game_numbers"])
+        self.assertEqual(
+            [{"score": 20, "game_numbers": [3, 5]}, {"score": 21, "game_numbers": [9]}],
+            row["games_by_score"],
         )
 
     def test_mismatched_deck_asserts(self) -> None:

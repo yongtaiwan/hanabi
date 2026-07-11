@@ -1794,7 +1794,13 @@ class GUIGame:
             if recomputed_why:
                 class_label = players_list[current_player] if current_player < len(players_list) else "?"
                 if recomputed_diverges:
-                    class_label = f"{class_label} (recomputed ≠ saved)"
+                    # Same class name as the recording, but current play() disagrees with the
+                    # saved move — usually a code/heuristic change, or a deterministic bug.
+                    # The why text below is for the recomputed move, not the applied saved one.
+                    class_label = (
+                        f"{class_label} (inconsistent player: recomputed ≠ saved; "
+                        f"why is for recomputed)"
+                    )
                 self._display.display_ai_rationale(class_label, recomputed_why)
 
         # Update display with the reconstructed game state

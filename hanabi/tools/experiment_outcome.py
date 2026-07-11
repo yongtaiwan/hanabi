@@ -247,6 +247,7 @@ class OutcomeRunRef:
     run_id: int
     subject_record_path: str
     baseline_record_path: str
+    subject_score: int
 
 
 @dataclass(frozen=True)
@@ -291,7 +292,9 @@ def outcome_breakdown_vs_baseline(
         code: OutcomeCode = classify_pair_from_history_files(sp, bp)
         counts[code] += 1
         if "perfect" != code:
-            non_perfect.setdefault(code, []).append(OutcomeRunRef(run.run_id, sp, bp))
+            non_perfect.setdefault(code, []).append(
+                OutcomeRunRef(run.run_id, sp, bp, sub.score)
+            )
 
     return OutcomeBreakdown(
         subject_ai=subject_ai,
@@ -341,6 +344,12 @@ def outcome_breakdown_to_yaml_dict(breakdown: OutcomeBreakdown) -> Dict[str, Any
         if "perfect" != code:
             refs = breakdown.non_perfect_runs.get(code, [])
             row["game_numbers"] = sorted(r.run_id for r in refs)
+            by_score: Dict[int, List[int]] = {}
+            for ref in refs:
+                by_score.setdefault(ref.subject_score, []).append(ref.run_id)
+            row["games_by_score"] = [
+                {"score": score, "game_numbers": sorted(ids)} for score, ids in sorted(by_score.items())
+            ]
         rows.append(row)
     return {
         "subject_ai": breakdown.subject_ai,
