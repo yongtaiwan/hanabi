@@ -12,6 +12,8 @@ from .three_player_recommendation import ThreePlayerRecommendationPlayer
 from .four_player_recommendation import FourPlayerRecommendationPlayer
 from .five_player_recommendation import FivePlayerRecommendationPlayer
 from .hint_hand_subtype_3p import HintHandSubtype3P
+from .dynamic_hand_type_3p import DynamicHandType3P
+from .dynamic_recommendation_3p import DynamicRecommendation3P
 from .common_sense_cheater import CommonSenseCheater
 from .paper_cheater import PaperCheater
 
@@ -30,6 +32,8 @@ PLAYER_CLASSES: Dict[str, Type] = {
         FourPlayerRecommendationPlayer,
         FivePlayerRecommendationPlayer,
         HintHandSubtype3P,
+        DynamicHandType3P,
+        DynamicRecommendation3P,
         CommonSenseCheater,
         PaperCheater,
     )
@@ -45,6 +49,8 @@ __all__ = [
     "FourPlayerRecommendationPlayer",
     "FivePlayerRecommendationPlayer",
     "HintHandSubtype3P",
+    "DynamicHandType3P",
+    "DynamicRecommendation3P",
     "CommonSenseCheater",
     "PaperCheater",
     "PLAYER_CLASSES",

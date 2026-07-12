@@ -64,11 +64,9 @@ class GUIGame:
         self._is_replay_mode: bool = False
         self._replay_history: Optional[dict] = None
         self._replay_move_index: int = 0
-        # Debug-replay opt-in: when True, _update_replay_display instantiates the
-        # real bot classes from replay_history["players"] (instead of HumanPlayer
-        # placeholders) and surfaces each move's HasWhy rationale under the move
-        # in the event history. Recomputed move may diverge from the saved move
-        # for non-deterministic bots; the saved move is still what gets applied.
+        # Debug-replay opt-in: when True, _update_replay_display also re-runs each bot's
+        # play() to surface move.why() in the event log. Saved bots are always resurrected
+        # so belief overlays and recommendation indicators stay in sync during replay.
         self._replay_debug_mode: bool = False
         self._suppress_dialogs: bool = False  # Set to True to disable messageboxes (for testing)
         self._game_ended: bool = False  # Track if game has ended to prevent duplicate end screens
@@ -261,6 +259,9 @@ class GUIGame:
             ThreePlayerRecommendationPlayer,
             FourPlayerRecommendationPlayer,
             FivePlayerRecommendationPlayer,
+            HintHandSubtype3P,
+            DynamicHandType3P,
+            DynamicRecommendation3P,
         )
         from hanabi.ai.monte_carlo_player import MonteCarloPlayer, MonteCarloConfig
 
@@ -285,6 +286,9 @@ class GUIGame:
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
             ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
+            ("3p Hint Hand Type", HintHandSubtype3P, HintHandSubtype3P),
+            ("3p Dynamic Hand Type", DynamicHandType3P, DynamicHandType3P),
+            ("3p Dynamic Rec", DynamicRecommendation3P, DynamicRecommendation3P),
             ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
             ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
@@ -1702,19 +1706,18 @@ class GUIGame:
         num_players = settings_dict.get("num_players", 3)
         players_list = self._replay_history.get("players", [])
 
-        # In debug mode, resurrect the bots saved alongside the replay so we can
-        # call play() per turn and surface their why() rationale. Otherwise (default),
-        # use HumanPlayer placeholders for a fast pure-state replay (today's behavior).
+        # Resurrect saved bots so observers maintain belief overlays (and rec indicators).
+        # Debug mode additionally re-runs play() per turn to surface move.why() rationale.
         settings = GameHistory.settings_from_history_dict(self._replay_history)
         replay_players = []
         debug_active = self._replay_debug_mode and bool(players_list)
         for i in range(num_players):
             inst = None
-            if debug_active:
+            if players_list:
                 class_name = players_list[i] if i < len(players_list) else ""
                 inst = self._instantiate_replay_player(class_name, i, settings)
             if inst is None:
-                inst = HumanPlayer(i)  # placeholder seat — no rationale shown
+                inst = HumanPlayer(i)
             replay_players.append(inst)
         team = PlayerTeam(replay_players)
 
@@ -1797,7 +1800,13 @@ class GUIGame:
             if recomputed_why:
                 class_label = players_list[current_player] if current_player < len(players_list) else "?"
                 if recomputed_diverges:
-                    class_label = f"{class_label} (recomputed ≠ saved)"
+                    # Same class name as the recording, but current play() disagrees with the
+                    # saved move — usually a code/heuristic change, or a deterministic bug.
+                    # The why text below is for the recomputed move, not the applied saved one.
+                    class_label = (
+                        f"{class_label} (inconsistent player: recomputed ≠ saved; "
+                        f"why is for recomputed)"
+                    )
                 self._display.display_ai_rationale(class_label, recomputed_why)
 
         # Update display with the reconstructed game state

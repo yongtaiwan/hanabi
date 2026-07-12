@@ -584,6 +584,47 @@ class TestPlaySmoke(unittest.TestCase):
         move = player.play(view)
         self.assertTrue(player.is_move_legal(view, move))
 
+    def test_max_tokens_unbuildable_type_falls_back_to_legal_hint(self) -> None:
+        """At max tokens, discard is illegal; unbuildable convention type must not discard."""
+        settings = create_standard_game_settings(3)
+        # Type 1 targets prev (seat 2); all-1s makes OLD/MID number shapes unbuildable.
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.BLUE, Number.THREE),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.WHITE, Number.FIVE),
+                        Card(Color.YELLOW, Number.TWO),
+                    ]
+                ),
+                2: Hand([Card(Color.RED, Number.ONE)] * 5),
+            },
+            own_hand_size=5,
+        )
+        player = HintHandSubtype3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(_common(settings))
+        player._inferred_card_kind[0] = [None] * 5
+
+        real_channel = h3p._channel_encoded_type
+
+        def _force_type_1(*args, **kwargs):
+            return 1, "forced"
+
+        h3p._channel_encoded_type = _force_type_1  # type: ignore[assignment]
+        try:
+            move = player._try_hint(view)
+        finally:
+            h3p._channel_encoded_type = real_channel  # type: ignore[assignment]
+
+        self.assertIsInstance(move, (NumberHint, ColorHint))
+        assert move is not None
+        self.assertTrue(player.is_move_legal(view, move))
+        self.assertIn("literal fallback", player._last_decision_summary)
+        self.assertIsNone(h3p._build_hint_for_encoded(0, view, 1))
+
     def test_plays_identified_playable_first(self) -> None:
         settings = create_standard_game_settings(3)
         player = HintHandSubtype3P(0)
