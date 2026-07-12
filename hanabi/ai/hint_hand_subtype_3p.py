@@ -198,7 +198,17 @@ class HintHandSubtype3P(BasePlayer):
         )
         hint_move = _build_hint_for_encoded(self._player_index, player_view, enc_type)
         if hint_move is None:
-            return None
+            hint_move = _build_literal_fallback_hint(self._player_index, player_view)
+            assert hint_move is not None, (
+                f"literal fallback hint must exist when convention type {enc_type} is unbuildable"
+            )
+            assert self.is_move_legal(player_view, hint_move), (
+                f"literal fallback hint is illegal: {hint_move!r}"
+            )
+            self._last_decision_summary = (
+                f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})"
+            )
+            return hint_move
         assert self.is_move_legal(player_view, hint_move), (
             f"built convention hint is illegal: {hint_move!r} enc_type={enc_type}"
         )
@@ -214,7 +224,9 @@ class HintHandSubtype3P(BasePlayer):
         self._last_decision_summary = f"[3p type] Discard chop slot {chop} (fallback)"
         return Discard(chop)
 
-    def _discard_oldest(self, player_view: PlayerView) -> Move:
+    def _discard_oldest(self, player_view: PlayerView) -> Optional[Move]:
+        if not self.is_move_legal(player_view, Discard(0)):
+            return None
         self._last_decision_summary = "[3p type] Discard slot 0 (oldest; no chop)"
         return Discard(0)
 
@@ -646,6 +658,45 @@ def _build_hint_for_encoded(
         f"(old_ok={old_ok}, mid_ok={mid_ok})"
     )
     return None
+
+
+def _hints_match(a: HintMove, b: HintMove) -> bool:
+    if isinstance(a, NumberHint) and isinstance(b, NumberHint):
+        return a.teammate == b.teammate and set(a.cards) == set(b.cards) and a.number == b.number
+    if isinstance(a, ColorHint) and isinstance(b, ColorHint):
+        return a.teammate == b.teammate and set(a.cards) == set(b.cards) and a.color == b.color
+    return False
+
+
+def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Optional[HintMove]:
+    """Any legal color/number hint that is not a canonical convention encoding."""
+    candidates: List[HintMove] = []
+    for offset in (1, 2):
+        target = (hinter + offset) % 3
+        if target not in player_view.teammates:
+            continue
+        hand = player_view.teammates[target].cards
+        if not hand:
+            continue
+        for num in Number:
+            indices = sorted(i for i, c in enumerate(hand) if num == c.number)
+            if indices:
+                candidates.append(NumberHint(target, indices, num))
+        for col in Color:
+            if Color.MULTI == col:
+                continue
+            indices = sorted(i for i, c in enumerate(hand) if col == c.color)
+            if indices:
+                candidates.append(ColorHint(target, indices, col))
+    for hint_move in candidates:
+        inferred = _infer_encoded_type_from_hint(
+            hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
+        )
+        canonical = _build_hint_for_encoded(hinter, player_view, inferred)
+        if canonical is not None and _hints_match(canonical, hint_move):
+            continue
+        return hint_move
+    return candidates[0] if candidates else None
 
 
 def _assert_encoded_hint_round_trip(

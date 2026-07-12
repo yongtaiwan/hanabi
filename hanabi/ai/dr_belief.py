@@ -29,8 +29,8 @@ class HandBelief:
     slots: List[SlotBelief] = field(default_factory=list)
     chop: Optional[int] = None
     chop_confirmed: bool = False
-    # True after any discard-code decode. Cleared on default/reset chop; demoted on reopen
-    # when not confirmed. Used for GUI/analysis; step 3 uses ``chop_confirmed`` only.
+    # True after any discard-code decode. Cleared only when chop resets to default
+    # (opening repair / chop leaves or is play-marked — §8.2 / play decode).
     chop_hinted: bool = False
 
 
@@ -77,14 +77,28 @@ def clear_chop_hint_flags(hand: HandBelief) -> None:
 
 
 def discard_chain(hand: HandBelief) -> List[int]:
+    """Wrapped discard order from chop: newer, then older. Skips identified playables (§5.2)."""
     ensure_default_chop(hand)
     if hand.chop is None:
         return []
-    chain = [hand.chop]
-    for slot in range(hand.chop + 1, len(hand.slots)):
+    chain: List[int] = []
+    for slot in range(hand.chop, len(hand.slots)):
+        if is_discard_candidate(hand.slots[slot]):
+            chain.append(slot)
+    for slot in range(0, hand.chop):
         if is_discard_candidate(hand.slots[slot]):
             chain.append(slot)
     return chain
+
+
+def discard_code_candidates(hand: HandBelief) -> List[int]:
+    """First ``m = 8 - N_play`` discard-chain slots (never identified playables)."""
+    types = discard_types_for_n_play(n_play(hand))
+    candidates = discard_chain(hand)[: len(types)]
+    assert all(is_discard_candidate(hand.slots[slot]) for slot in candidates), (
+        f"discard candidates must skip playables: {candidates}"
+    )
+    return candidates
 
 
 def discard_types_for_n_play(n_play_val: int) -> List[int]:
@@ -121,10 +135,12 @@ def apply_play_decode(hand: HandBelief, k: int) -> None:
     assert 1 <= k <= len(ordering), f"play type {k} out of range for {len(ordering)} unknown slots"
     target = ordering[k - 1]
     assert Playability.UNKNOWN == hand.slots[target].playability
+    # Newer unknowns (ordering[0 : k-1]) are unplayable: encode always picks newest playable.
+    for slot in ordering[: k - 1]:
+        set_playability(hand.slots[slot], Playability.UNPLAYABLE)
     set_playability(hand.slots[target], Playability.PLAYABLE)
     if hand.chop == target:
-        hand.chop = default_chop_slot(hand)
-        clear_chop_hint_flags(hand)
+        _advance_chop_past_slot(hand, target)
 
 
 def apply_discard_decode_with_n_play(hand: HandBelief, decoded: int, n_play_before: int) -> None:
@@ -134,20 +150,14 @@ def apply_discard_decode_with_n_play(hand: HandBelief, decoded: int, n_play_befo
         if Playability.UNKNOWN == belief.playability:
             set_playability(belief, Playability.UNPLAYABLE)
     ensure_default_chop(hand)
-    chain = discard_chain(hand)
-    assert chain, "discard decode requires a non-empty chop chain"
-    index = types.index(decoded)
     m = len(types)
-    if index == m - 1:
-        named_count = m - 1
-        remainder = chain[named_count:]
-        assert remainder, f"catch-all remainder empty: chain={chain} m={m}"
-        hand.chop = remainder[0]
-        hand.chop_confirmed = 1 == len(remainder)
-        hand.chop_hinted = True
-        return
-    assert index < len(chain), f"discard index {index} past chain {chain}"
-    hand.chop = chain[index]
+    candidates = discard_chain(hand)[:m]
+    assert candidates, "discard decode requires a non-empty candidate list"
+    index = types.index(decoded)
+    assert index < len(candidates), (
+        f"discard index {index} past candidates {candidates} (m={m})"
+    )
+    hand.chop = candidates[index]
     hand.chop_confirmed = True
     hand.chop_hinted = True
 
@@ -161,12 +171,19 @@ def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
 
 
 def reset_chop_after_removal(hand: HandBelief, removed: int) -> None:
-    """Update chop after slot ``removed`` leaves the hand (pre-shift indices)."""
+    """Update chop after slot ``removed`` leaves the hand (pre-shift indices).
+
+    When the chop card leaves: prefer the next newer discard candidate (sticky §8.2),
+    adjusting the index for the forthcoming left shift. If none, clear chop and let
+    :func:`finalize_chop_after_shift` / :func:`ensure_default_chop` fall back to leftmost.
+    """
     if hand.chop is None:
         return
     if removed == hand.chop:
-        hand.chop = None
+        next_slot = _next_newer_discard_candidate(hand, removed)
         clear_chop_hint_flags(hand)
+        # ``next_slot`` is pre-shift; after removing ``removed`` it becomes ``next_slot - 1``.
+        hand.chop = next_slot - 1 if next_slot is not None else None
         return
     if removed < hand.chop:
         hand.chop -= 1
@@ -176,14 +193,30 @@ def finalize_chop_after_shift(hand: HandBelief) -> None:
     ensure_default_chop(hand)
 
 
+def _next_newer_discard_candidate(hand: HandBelief, after_slot: int) -> Optional[int]:
+    """First discard candidate strictly newer than ``after_slot``, or ``None``."""
+    for slot in range(after_slot + 1, len(hand.slots)):
+        if is_discard_candidate(hand.slots[slot]):
+            return slot
+    return None
+
+
+def _advance_chop_past_slot(hand: HandBelief, slot: int) -> None:
+    """Move chop past ``slot`` (no hand shift): next newer candidate, else leftmost default."""
+    next_slot = _next_newer_discard_candidate(hand, slot)
+    clear_chop_hint_flags(hand)
+    if next_slot is not None:
+        hand.chop = next_slot
+        return
+    hand.chop = default_chop_slot(hand)
+
+
 def reopen_unplayable(hands: List[HandBelief]) -> None:
-    """Reopen play-closed slots; demote unconfirmed catch-all urgency only."""
+    """Reopen play-closed slots. Chop fields are unchanged (§8.1)."""
     for hand in hands:
         for belief in hand.slots:
             if Playability.UNPLAYABLE == belief.playability:
                 set_playability(belief, Playability.UNKNOWN)
-        if not hand.chop_confirmed:
-            hand.chop_hinted = False
 
 
 def play_reopens_playability(
@@ -232,22 +265,14 @@ def copy_belief_matrix(matrix: List[HandBelief]) -> List[HandBelief]:
 
 
 def indicable_discard_options(hand: HandBelief) -> List[Tuple[int, int, bool]]:
-    """Return ``(code, chop_slot, confirmed)`` for each indicable discard option."""
+    """Return ``(code, chop_slot, confirmed)`` for each of the first ``m`` chain slots."""
     ensure_default_chop(hand)
     types = discard_types_for_n_play(n_play(hand))
-    chain = discard_chain(hand)
-    assert types and chain
+    candidates = discard_code_candidates(hand)
+    assert types and candidates
     options: List[Tuple[int, int, bool]] = []
-    m = len(types)
     for index, code in enumerate(types):
-        if index == m - 1:
-            named_count = m - 1
-            remainder = chain[named_count:]
-            if not remainder:
-                continue
-            options.append((code, remainder[0], 1 == len(remainder)))
+        if index >= len(candidates):
             continue
-        if index >= len(chain):
-            continue
-        options.append((code, chain[index], True))
+        options.append((code, candidates[index], True))
     return options
