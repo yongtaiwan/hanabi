@@ -28,6 +28,16 @@ from .player import PlayerTeam, BasePlayer, Cheater
 from .game_history import GameHistory
 
 
+def _settings_to_dict(settings: GameSettings) -> Dict[str, Any]:
+    return {
+        "num_players": settings.num_players,
+        "max_live_tokens": settings.max_live_tokens,
+        "max_hint_tokens": settings.max_hint_tokens,
+        "max_cards_in_hand": settings.max_cards_in_hand,
+        "auto_end_when_no_points_possible": settings.auto_end_when_no_points_possible,
+    }
+
+
 @dataclass
 class GameResult:
     """Result from a single game."""
@@ -164,12 +174,7 @@ class GameField:
         self.save_settings(experiment_id, self._start_position.settings)
 
         # Convert settings to dict for serialization
-        settings_dict = {
-            "num_players": self._start_position.settings.num_players,
-            "max_live_tokens": self._start_position.settings.max_live_tokens,
-            "max_hint_tokens": self._start_position.settings.max_hint_tokens,
-            "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
-        }
+        settings_dict = _settings_to_dict(self._start_position.settings)
 
         runs: List[RunResult] = []
         all_scores: Dict[str, List[int]] = {ai_name: [] for ai_name in ai_factories.keys()}
@@ -244,12 +249,7 @@ class GameField:
         filepath = os.path.join(experiment_dir, "settings.yaml" if YAML_AVAILABLE else "settings.json")
 
         # Convert settings to dict
-        settings_dict = {
-            "num_players": settings.num_players,
-            "max_live_tokens": settings.max_live_tokens,
-            "max_hint_tokens": settings.max_hint_tokens,
-            "max_cards_in_hand": settings.max_cards_in_hand,
-        }
+        settings_dict = _settings_to_dict(settings)
 
         with open(filepath, "w") as f:
             if YAML_AVAILABLE:
@@ -542,12 +542,7 @@ class GameField:
         history = None
         if save_record:
             # Convert settings to dict for GameHistory
-            settings_dict = {
-                "num_players": self._start_position.settings.num_players,
-                "max_live_tokens": self._start_position.settings.max_live_tokens,
-                "max_hint_tokens": self._start_position.settings.max_hint_tokens,
-                "max_cards_in_hand": self._start_position.settings.max_cards_in_hand,
-            }
+            settings_dict = _settings_to_dict(self._start_position.settings)
             history = GameHistory(settings_dict)
 
         # Create game from the shared start position
@@ -579,6 +574,10 @@ class GameField:
             end_reason = "lives_lost"
         elif 25 == final_score:
             end_reason = "perfect_score"
+        elif (
+            game.settings.auto_end_when_no_points_possible and state._is_no_more_points_possible()
+        ):
+            end_reason = "no_points_possible"
         elif 0 == state.turns_left:
             end_reason = "deck_exhausted"
         else:

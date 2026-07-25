@@ -9,7 +9,7 @@ import time
 from typing import Dict, List, Tuple
 
 from hanabi.ai.five_player_recommendation import FivePlayerRecommendationPlayer, HintThresholds
-from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import create_ai_simulation_game_settings
 from hanabi.core.game_field import GameField
 
 
@@ -40,7 +40,7 @@ def _run_batch(
     num_runs: int,
     seed: int,
 ) -> Tuple[float, float, int, int]:
-    settings = create_standard_game_settings(5)
+    settings = create_ai_simulation_game_settings(5)
     field = GameField.create_from_settings(settings)
 
     def factory(player_index: int) -> FivePlayerRecommendationPlayer:

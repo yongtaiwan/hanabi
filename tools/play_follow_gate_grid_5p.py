@@ -8,7 +8,7 @@ import statistics
 import time
 
 from hanabi.ai.five_player_recommendation import FivePlayerRecommendationPlayer, PlayFollowGate
-from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import create_ai_simulation_game_settings
 from hanabi.core.game_field import GameField
 
 
@@ -25,7 +25,7 @@ def _presets() -> dict[str, PlayFollowGate]:
 
 
 def _run(name: str, gate: PlayFollowGate, *, num_runs: int, seed: int) -> tuple[float, int, int]:
-    field = GameField.create_from_settings(create_standard_game_settings(5))
+    field = GameField.create_from_settings(create_ai_simulation_game_settings(5))
 
     def factory(i: int) -> FivePlayerRecommendationPlayer:
         return FivePlayerRecommendationPlayer(i, play_follow_gate=gate)

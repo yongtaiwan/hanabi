@@ -9,7 +9,7 @@ __version__ = "0.1.0"
 # Import main classes for easy access
 from .core.enums import Color, Number
 from .core.card import Card, Suit
-from .core.game import Hand, GameSettings, CommonView, PlayerView, GameState, Game, create_standard_game_settings
+from .core.game import Hand, GameSettings, CommonView, PlayerView, GameState, Game, create_standard_game_settings, create_ai_simulation_game_settings
 from .core.game_field import GameField
 from .core.moves import Move, Hint, CardMove, Play, Discard, ColorHint, NumberHint
 from .core.observer import Observer
@@ -27,6 +27,7 @@ __all__ = [
     "Hand",
     "GameSettings",
     "create_standard_game_settings",
+    "create_ai_simulation_game_settings",
     "CommonView",
     "PlayerView",
     "GameState",

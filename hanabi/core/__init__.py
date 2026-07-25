@@ -31,6 +31,7 @@ from .game import (
     GameState,
     Game,
     create_standard_game_settings,
+    create_ai_simulation_game_settings,
     StartPosition,
     Deck,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "Hand",
     "GameSettings",
     "create_standard_game_settings",
+    "create_ai_simulation_game_settings",
     "CommonView",
     "PlayerView",
     "GameState",

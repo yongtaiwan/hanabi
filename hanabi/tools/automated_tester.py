@@ -5,7 +5,7 @@ Plays games automatically and validates game state consistency.
 
 import random
 from typing import List, Dict, Tuple, Optional
-from hanabi.core.game import create_standard_game_settings, Game
+from hanabi.core.game import create_ai_simulation_game_settings, Game
 from hanabi.ai import RandomPlayer
 from hanabi.core.moves import Play, Discard, ColorHint, NumberHint
 from hanabi.core.enums import Color, Number
@@ -109,7 +109,7 @@ class AutomatedGamePlayer:
         from hanabi.core.game import Game
         from hanabi.core.player import PlayerTeam
 
-        settings = create_standard_game_settings(self.num_players)
+        settings = create_ai_simulation_game_settings(self.num_players)
         players = [RandomPlayer(i) for i in range(self.num_players)]
         team = PlayerTeam(players)
         game = Game.create(team, settings)

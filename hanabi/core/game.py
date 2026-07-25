@@ -200,7 +200,11 @@ def create_deck_from_settings(settings: GameSettings) -> Deck:
     return Deck(draw_deck)
 
 
-def create_standard_game_settings(num_players: int) -> GameSettings:
+def create_standard_game_settings(
+    num_players: int,
+    *,
+    auto_end_when_no_points_possible: bool = False,
+) -> GameSettings:
     """
     Create a GameSettings instance following standard Hanabi rules.
 
@@ -212,8 +216,12 @@ def create_standard_game_settings(num_players: int) -> GameSettings:
     - 3 live tokens (fuse tokens)
     - Cards per hand: 5 for 2-3 players, 4 for 4-5 players
 
+    ``auto_end_when_no_points_possible`` defaults to False (official rules: play continues).
+    AI batch sims should use :func:`create_ai_simulation_game_settings` instead.
+
     Args:
         num_players: Number of players (2-5)
+        auto_end_when_no_points_possible: If True, end when every unfinished color is blocked
 
     Returns:
         A GameSettings instance configured for standard Hanabi rules
@@ -258,8 +266,17 @@ def create_standard_game_settings(num_players: int) -> GameSettings:
         max_hint_tokens=max_hint_tokens,
         max_cards_in_hand=max_cards_in_hand,
         cards=cards,
-        auto_end_when_no_points_possible=False,  # Default: follow standard rules (game continues)
+        auto_end_when_no_points_possible=auto_end_when_no_points_possible,
     )
+
+
+def create_ai_simulation_game_settings(num_players: int) -> GameSettings:
+    """Standard Hanabi settings with early end when no further points are possible.
+
+    For all-AI batch experiments (:class:`~hanabi.core.game_field.GameField`). Human
+    console/GUI games should keep :func:`create_standard_game_settings` (auto-end off).
+    """
+    return create_standard_game_settings(num_players, auto_end_when_no_points_possible=True)
 
 
 class CommonView:
