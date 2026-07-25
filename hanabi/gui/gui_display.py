@@ -1926,9 +1926,14 @@ class GUIDisplay:
             # Recommendation indicators (play/discard) for recommendation AI seats
             seat_recommendations: Dict[int, RecommendationAction] = {}
             seat_convention_overlays: Dict[int, ConventionSlotOverlay] = {}
+            # Show card front if: replay mode OR not current player
+            # Current player's cards always show back (?) with hint boxes outside
+            show_front = self._show_all_cards or not is_current_player
             if self._game:
                 seat_recommendations = recommendations_by_slot_for_seat(self._game, i)
-                seat_convention_overlays = convention_overlays_for_seat(self._game, i)
+                seat_convention_overlays = convention_overlays_for_seat(
+                    self._game, i, compare_to_actual=show_front
+                )
 
             # Draw cards in hand
             total_width = len(hand.cards) * (card_width + spacing) - spacing
@@ -1942,10 +1947,6 @@ class GUIDisplay:
                 # Card and hints are always drawn together as a unit
                 player_hints = self._hints.get(i, {})
                 card_hints = player_hints.get(card_idx, {})
-
-                # Show card front if: replay mode OR not current player
-                # Current player's cards always show back (?) with hint boxes outside
-                show_front = self._show_all_cards or not is_current_player
 
                 # Always pass hints - they will be used when drawing the card
                 # For front-facing cards (other players), hints are shown on the card

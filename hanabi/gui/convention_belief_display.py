@@ -34,12 +34,18 @@ def _convention_bot_for_team(game: Game):
     return None
 
 
-def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, ConventionSlotOverlay]:
+def convention_overlays_for_seat(
+    game: Game,
+    target_seat: int,
+    *,
+    compare_to_actual: bool = True,
+) -> Dict[int, ConventionSlotOverlay]:
     """
     Return overlays for each hand slot on ``target_seat`` that has a known kind and/or is chop.
 
-    ``kind_mismatch`` is set when inferred kind is known and differs from full-information
-    :meth:`~hanabi.core.game.CommonView.card_kind` for that card.
+    When ``compare_to_actual`` is true, ``kind_mismatch`` is set if inferred kind differs from
+    :meth:`~hanabi.core.game.CommonView.card_kind` for that card. Pass ``False`` for face-down
+    seats so the UI cannot leak private card identities via mismatch outlines.
     """
     bot = _convention_bot_for_team(game)
     if bot is None:
@@ -71,7 +77,7 @@ def convention_overlays_for_seat(game: Game, target_seat: int) -> Dict[int, Conv
         if kind is None and not is_chop and not is_unplayable and not is_recommended:
             continue
         kind_mismatch = False
-        if kind is not None:
+        if compare_to_actual and kind is not None:
             actual = common_view.card_kind(card, settings)
             kind_mismatch = kind != actual
         overlays[slot] = ConventionSlotOverlay(

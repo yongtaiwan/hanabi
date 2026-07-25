@@ -42,6 +42,20 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         overlays = convention_overlays_for_seat(game, 0)
         self.assertTrue(overlays[0].kind_mismatch)
 
+    def test_kind_mismatch_suppressed_when_not_comparing_to_actual(self) -> None:
+        """Face-down seats must not leak private identities via mismatch outlines."""
+        settings = create_standard_game_settings(3)
+        players = [DynamicHandType3P(i) for i in range(3)]
+        for player in players:
+            player.set_game_settings(settings)
+        game = Game.create(team=PlayerTeam(players), settings=settings)
+        card = game.state.player_hands[0].cards[0]
+        actual = game.state.common_view.card_kind(card, settings)
+        wrong = next(k for k in CardKind if k != actual)
+        players[0]._slot_belief[0][0] = slot_belief_from_legacy_kind(wrong)
+        overlays = convention_overlays_for_seat(game, 0, compare_to_actual=False)
+        self.assertFalse(overlays[0].kind_mismatch)
+
     def test_recommended_overlay_without_kind(self) -> None:
         """Recommended discard belief shows trash-can overlay even when legacy kind is unknown."""
         settings = create_standard_game_settings(3)

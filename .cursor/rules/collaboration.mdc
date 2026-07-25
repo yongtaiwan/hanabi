@@ -11,7 +11,12 @@ alwaysApply: true
 - **Documentation**: Do not create or edit markdown docs unless the user requests it.
 - **When citing code** in chat, use Cursor-style fenced blocks with line range and path (opening fence on its own line) so the user can jump to the file.
 
-# Architecture: move validity and fail-fast
+# Architecture: honest players and anti-cheat
+
+- For ``BasePlayer`` seats, ``Game._notify_players`` must only call ``observe`` with
+  ``_get_player_view`` — no AI belief sync or ``hand_cards`` oracles in the engine.
+- Convention channel peer codes must be reconstructible from one visible hand + public piles.
+- See ``.cursor/rules/anti-cheat-players.mdc`` and ``test/ai/test_anti_cheat_convention_3p.py``.
 
 - **Core game engine** (`hanabi.core`, etc.) assumes every `Player`—including AI—returns **legal moves only**. Do not design the engine around routinely receiving illegal moves from players.
 - **Illegal moves from AI** are **bugs** (wrong search, wrong move gen, etc.). **Fail fast with `assert`** (optionally with a message)—do not use **`raise`** for those bug conditions, defensive recovery, or silent correction.
