@@ -170,6 +170,30 @@ def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
     apply_discard_decode_with_n_play(hand, decoded, n_play_before)
 
 
+def apply_physical_channel_decode(hand: HandBelief, decoded: int) -> None:
+    """Apply a channel value encoded against :func:`fresh_hand_belief` of the same size.
+
+    Peer codes use a blank hand belief, so play/discard type boundaries follow
+    ``n_play == hand_size``. Interpreting with the seat's current ``n_play`` would
+    desync and can assert.
+    """
+    assert 0 <= decoded <= 7, f"decoded value {decoded} out of range"
+    ref = fresh_hand_belief(len(hand.slots))
+    n_play_encode = n_play(ref)
+    if 1 <= decoded <= n_play_encode:
+        ordering = unknown_slots_newest_first(ref)
+        target = ordering[decoded - 1]
+        for slot in ordering[: decoded - 1]:
+            if Playability.UNKNOWN == hand.slots[slot].playability:
+                set_playability(hand.slots[slot], Playability.UNPLAYABLE)
+        if Playability.UNKNOWN == hand.slots[target].playability:
+            set_playability(hand.slots[target], Playability.PLAYABLE)
+            if hand.chop == target:
+                _advance_chop_past_slot(hand, target)
+        return
+    apply_discard_decode_with_n_play(hand, decoded, n_play_encode)
+
+
 def reset_chop_after_removal(hand: HandBelief, removed: int) -> None:
     """Update chop after slot ``removed`` leaves the hand (pre-shift indices).
 

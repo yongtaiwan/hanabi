@@ -324,6 +324,33 @@ def apply_decoded_value(row: List[SlotBelief], decoded: int) -> None:
     set_recommended(row, slot)
 
 
+def apply_physical_channel_decode(row: List[SlotBelief], decoded: int) -> None:
+    """Apply a channel message encoded with physical/blank peer codes (always legacy meaning).
+
+    Peer codes use a fresh all-unknown row, so the conveyed type is always a legacy
+    ``0``–``7`` hand type. Interpreting it with recommendation-mode discard mapping
+    would desync seats and can assert.
+    """
+    assert 0 <= decoded <= 7, f"decoded value {decoded} out of range"
+    if 1 <= decoded <= 5:
+        # Physical encode maps type ``k`` to newest-first index ``k-1`` on a blank row.
+        # On an evolved row, prefer the same absolute slot when it is still unknown;
+        # otherwise skip (already informed).
+        blank = [fresh_slot_belief() for _ in range(len(row))]
+        blank_ordering = unknown_slots_newest_first(blank)
+        if decoded > len(blank_ordering):
+            return
+        target = blank_ordering[decoded - 1]
+        if Playability.UNKNOWN != row[target].playability:
+            return
+        for slot in blank_ordering[: decoded - 1]:
+            if Playability.UNKNOWN == row[slot].playability:
+                set_playability(row[slot], Playability.UNPLAYABLE)
+        set_playability(row[target], Playability.PLAYABLE)
+        return
+    apply_legacy_no_playable_decode(row, decoded)
+
+
 def clear_legacy_safe(matrix: List[List[SlotBelief]]) -> None:
     for row in matrix:
         for belief in row:

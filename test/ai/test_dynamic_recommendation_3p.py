@@ -8,6 +8,7 @@ from hanabi.ai import dynamic_recommendation_3p as dr
 from hanabi.ai.dr_belief import (
     Playability,
     apply_decoded_value,
+    copy_hand_belief,
     discard_chain,
     discard_types_for_n_play,
     finalize_chop_after_shift,
@@ -27,7 +28,7 @@ from hanabi.ai.dynamic_recommendation_3p import (
 from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
-from hanabi.core.moves import Discard, Play
+from hanabi.core.moves import Discard, NumberHint, Play
 
 
 def _common(settings=None) -> CommonView:
@@ -542,7 +543,8 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         self.assertEqual(alt, prot_card)
         self.assertNotEqual(_unprotected, _protected)
 
-    def test_peer_codes_next_then_prev_applies_protect(self) -> None:
+    def test_peer_codes_are_independent_per_hand(self) -> None:
+        """Channel peer codes use only that hand + public state (no cross-hand protect)."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         dup = Card(Color.YELLOW, Number.FOUR)
@@ -567,16 +569,18 @@ class TestDoubleDiscardGuard(unittest.TestCase):
             own_hand_size=5,
         )
         codes = dr._peer_codes_next_then_prev(0, view, common, settings, beliefs)
-        prev_code, prev_card = dr._encode_peer_code(
-            prev_hand,
-            beliefs[2],
-            common,
-            settings,
-            almost_critical={dup},
-            other_hands=[next_hand],
+        self.assertEqual(
+            dr._peer_code_for_hand(next_hand, common, settings),
+            codes[1],
         )
-        self.assertEqual(alt, prev_card)
-        self.assertEqual(prev_code, codes[2])
+        self.assertEqual(
+            dr._peer_code_for_hand(prev_hand, common, settings),
+            codes[2],
+        )
+        # Without cross-hand protect, prev prefers the higher-rank dispensable at chop.
+        _code, prev_card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
+        self.assertEqual(dup, prev_card)
+        self.assertEqual(_code, codes[2])
 
 
     def test_almost_critical_outranks_true_critical(self) -> None:
@@ -907,8 +911,8 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         self.assertEqual(b4, card)
         self.assertEqual(7, code)
 
-    def test_protects_existing_next_chop_when_this_hint_is_play(self) -> None:
-        """Standing chop on next still protects prev even if this hint plays next."""
+    def test_standing_chop_does_not_cross_protect_in_peer_codes(self) -> None:
+        """Peer codes ignore the other seat's chop (local encode only)."""
         settings = create_standard_game_settings(3)
         dup = Card(Color.BLUE, Number.FOUR)
         alt = Card(Color.YELLOW, Number.FOUR)
@@ -943,27 +947,43 @@ class TestDoubleDiscardGuard(unittest.TestCase):
             own_hand_size=5,
         )
         codes = dr._peer_codes_next_then_prev(0, view, common, settings, beliefs)
-        # Next gets a play code for R4 (newest playable → type 1).
         self.assertEqual(1, codes[1])
-        # Prev must not confirm B4; standing next chop protects → Y4 (type 7).
-        self.assertEqual(7, codes[2])
-        _code, card = dr._encode_peer_code(
-            prev_hand, beliefs[2], common, settings, almost_critical={dup}
-        )
-        self.assertEqual(alt, card)
+        _code, card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
+        self.assertEqual(dup, card)
         self.assertEqual(_code, codes[2])
 
 
-class TestBeliefAlign(unittest.TestCase):
-    def test_align_after_hint(self) -> None:
+class TestIndependentOwnDecode(unittest.TestCase):
+    def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
+        """Non-hinters update own belief; hinter updates teammate hands from public cards."""
         settings = create_standard_game_settings(3)
+        common = _common(settings)
         players = [DynamicRecommendation3P(i) for i in range(3)]
         for p in players:
             p.set_game_settings(settings)
-        apply_decoded_value(players[0]._hand_belief[1], 0)
-        dr.propagate_convention_belief_from_hinter(players, 0)
-        dr.assert_convention_beliefs_in_sync(players)
-        self.assertTrue(players[1]._hand_belief[1].chop_confirmed)
+            p.set_common_view(common)
+        hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
+        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        views = [
+            PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.FOUR)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.FOUR)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        own_before = [copy_hand_belief(players[seat]._hand_belief[seat]) for seat in range(3)]
+        hinter_own_before = copy_hand_belief(players[0]._hand_belief[0])
+        for player, view in zip(players, views):
+            player.observe_number_hint_move(0, hint, view)
+        self.assertEqual(hinter_own_before, players[0]._hand_belief[0])
+        dr.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        self.assertEqual(players[0]._hand_belief[1], players[1]._hand_belief[1])
+        self.assertEqual(players[0]._hand_belief[2], players[2]._hand_belief[2])
 
     def test_reopen_keeps_chop_fields(self) -> None:
         """Reopen restores playability only; chop flags stay (§8.1)."""

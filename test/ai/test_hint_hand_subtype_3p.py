@@ -643,8 +643,9 @@ class TestPlaySmoke(unittest.TestCase):
         self.assertEqual(1, move.card)
 
 
-class TestBeliefSyncAfterHint(unittest.TestCase):
-    def test_all_seats_share_belief_after_hint(self) -> None:
+class TestIndependentOwnDecode(unittest.TestCase):
+    def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
+        """Non-hinters update own rows; hinter updates teammate rows from public cards."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         players = [HintHandSubtype3P(i) for i in range(3)]
@@ -666,13 +667,16 @@ class TestBeliefSyncAfterHint(unittest.TestCase):
             ),
         ]
         hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        own_before = [list(players[seat]._inferred_card_kind[seat]) for seat in range(3)]
+        hinter_own_before = list(players[0]._inferred_card_kind[0])
         for player, view in zip(players, views):
             player.observe_number_hint_move(0, hint, view)
-        h3p.align_convention_beliefs_after_move(players, 0, hint)
-        self.assertEqual(players[0]._inferred_card_kind, players[1]._inferred_card_kind)
-        self.assertTrue(any(kind is not None for kind in players[0]._inferred_card_kind[1]))
+        self.assertEqual(hinter_own_before, players[0]._inferred_card_kind[0])
+        h3p.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        self.assertEqual(players[0]._inferred_card_kind[1], players[1]._inferred_card_kind[1])
+        self.assertEqual(players[0]._inferred_card_kind[2], players[2]._inferred_card_kind[2])
 
-    def test_hinter_updates_both_non_hinter_rows(self) -> None:
+    def test_hinter_does_not_update_own_row(self) -> None:
         settings = create_standard_game_settings(3)
         common = _common(settings)
         hinter = HintHandSubtype3P(0)
@@ -682,41 +686,11 @@ class TestBeliefSyncAfterHint(unittest.TestCase):
         hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
         view = PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5)
         hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        own_before = list(hinter._inferred_card_kind[0])
         hinter.observe_number_hint_move(0, hint, view)
-        self.assertTrue(
-            any(kind is not None for kind in hinter._inferred_card_kind[1]),
-            "hinter should update hint target row from channel decode",
-        )
-        self.assertTrue(
-            any(kind is not None for kind in hinter._inferred_card_kind[2]),
-            "hinter should update other non-hinter row from channel decode",
-        )
-
-    def test_hinter_second_decode_uses_pre_decode_peer_type(self) -> None:
-        """Hinter must snapshot peer types before applying both non-hinter decodes."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
-        beliefs_before = [[None for _ in range(5)] for _ in range(3)]
-        view = PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
-
-        encoded_type = h3p._infer_encoded_type_from_hint(0, 1, hint, 5)
-        peer_p1_before = h3p._encode_hand_type(hand_p1, 5, common, settings, beliefs_before[1])
-        peer_p2 = h3p._encode_hand_type(hand_p2, 5, common, settings, beliefs_before[2])
-        decoded_p2 = (encoded_type - peer_p1_before) % 8
-
-        expected = [[None for _ in range(5)] for _ in range(3)]
-        expected[2] = beliefs_before[2][:]
-        h3p._apply_decoded_hand_type(expected, 2, decoded_p2)
-        self.assertTrue(any(kind is not None for kind in expected[2]), "expected decode should assign on P2")
-
-        hinter = HintHandSubtype3P(0)
-        hinter.set_game_settings(settings)
-        hinter.set_common_view(common)
-        hinter.observe_number_hint_move(0, hint, view)
-        self.assertEqual(expected[2], hinter._inferred_card_kind[2])
+        self.assertEqual(own_before, hinter._inferred_card_kind[0])
+        self.assertTrue(any(kind is not None for kind in hinter._inferred_card_kind[1]))
+        self.assertTrue(any(kind is not None for kind in hinter._inferred_card_kind[2]))
 
 
 class TestSafeDoublePlay(unittest.TestCase):
@@ -755,123 +729,6 @@ class TestSafeDoublePlay(unittest.TestCase):
             Card(Color.YELLOW, Number.THREE),
         ]
         self.assertEqual(3, h3p._encode_hand_type(hand, 5, common, settings, _unknown_belief(5)))
-
-    def test_invalidate_playable_on_teammates_when_one_life_left(self) -> None:
-        settings = create_standard_game_settings(3)
-        player = HintHandSubtype3P(0, safe_double_play=True)
-        player.set_game_settings(settings)
-        common = CommonView(
-            live_tokens=1,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={Color.RED: Number.ONE},
-        )
-        player.set_common_view(common)
-        player._inferred_card_kind = [
-            [None] * 5,
-            [CardKind.PLAYABLE, None, None, None, None],
-            [None, CardKind.PLAYABLE, None, None, None],
-        ]
-        h3p._invalidate_playable_matching_card_on_other_players(
-            player._inferred_card_kind,
-            mover_index=0,
-            hand_cards=[
-                [Card(Color.WHITE, Number.FOUR)] * 5,
-                [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.TWO)] * 2 + [Card(Color.GREEN, Number.THREE)],
-                [Card(Color.YELLOW, Number.ONE), Card(Color.RED, Number.ONE)] + [Card(Color.WHITE, Number.FOUR)] * 3,
-            ],
-            played_card=Card(Color.RED, Number.ONE),
-        )
-        self.assertIsNone(player._inferred_card_kind[1][0])
-        self.assertIsNone(player._inferred_card_kind[2][1])
-
-    def test_no_invalidate_when_mover_is_teammate_row(self) -> None:
-        matrix: List[List[Optional[CardKind]]] = [
-            [None] * 2,
-            [CardKind.PLAYABLE, None],
-            [None] * 2,
-        ]
-        h3p._invalidate_playable_matching_card_on_other_players(
-            matrix,
-            mover_index=1,
-            hand_cards=[
-                [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.TWO)],
-                [Card(Color.RED, Number.ONE), Card(Color.BLUE, Number.TWO)],
-                [Card(Color.GREEN, Number.THREE), Card(Color.WHITE, Number.FOUR)],
-            ],
-            played_card=Card(Color.RED, Number.ONE),
-        )
-        self.assertEqual(CardKind.PLAYABLE, matrix[1][0])
-
-    def test_align_clears_stale_playable_at_one_life(self) -> None:
-        settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i, safe_double_play=True) for i in range(3)]
-        for player in players:
-            player.set_game_settings(settings)
-            player.set_common_view(
-                CommonView(
-                    live_tokens=1,
-                    hint_tokens=8,
-                    cards_to_draw=39,
-                    cards_discarded={},
-                    cards_played={Color.RED: Number.ONE},
-                )
-            )
-        for player in players:
-            player._inferred_card_kind = [
-                [None] * 3,
-                [None] * 3,
-                [CardKind.PLAYABLE, None, None],
-            ]
-        move = Play(0)
-        hand_cards = [
-            [Card(Color.BLUE, Number.TWO), Card(Color.GREEN, Number.THREE), Card(Color.WHITE, Number.FOUR)],
-            [Card(Color.BLUE, Number.TWO), Card(Color.GREEN, Number.THREE), Card(Color.WHITE, Number.FOUR)],
-            [Card(Color.RED, Number.ONE), Card(Color.YELLOW, Number.TWO), Card(Color.WHITE, Number.FOUR)],
-        ]
-        h3p.align_convention_beliefs_after_move(
-            players,
-            1,
-            move,
-            cards_played_before={},
-            hand_cards=hand_cards,
-        )
-        self.assertIsNone(players[0]._inferred_card_kind[2][0])
-
-    def test_safe_double_play_disabled_skips_align_invalidation(self) -> None:
-        settings = create_standard_game_settings(3)
-        players = [HintHandSubtype3P(i, safe_double_play=False) for i in range(3)]
-        for player in players:
-            player.set_game_settings(settings)
-            player.set_common_view(
-                CommonView(
-                    live_tokens=1,
-                    hint_tokens=8,
-                    cards_to_draw=39,
-                    cards_discarded={},
-                    cards_played={Color.RED: Number.ONE},
-                )
-            )
-            player._inferred_card_kind = [
-                [None] * 3,
-                [None] * 3,
-                [CardKind.PLAYABLE, None, None],
-            ]
-        move = Play(0)
-        hand_cards = [
-            [Card(Color.BLUE, Number.TWO), Card(Color.GREEN, Number.THREE), Card(Color.WHITE, Number.FOUR)],
-            [Card(Color.BLUE, Number.TWO), Card(Color.GREEN, Number.THREE), Card(Color.WHITE, Number.FOUR)],
-            [Card(Color.RED, Number.ONE), Card(Color.YELLOW, Number.TWO), Card(Color.WHITE, Number.FOUR)],
-        ]
-        h3p.align_convention_beliefs_after_move(
-            players,
-            1,
-            move,
-            cards_played_before={},
-            hand_cards=hand_cards,
-        )
-        self.assertEqual(CardKind.PLAYABLE, players[0]._inferred_card_kind[2][0])
 
 
 if __name__ == "__main__":
