@@ -540,55 +540,9 @@ def _in_hand_copy_count(hand: Sequence[Card], card: Card) -> int:
     return sum(1 for c in hand if c == card)
 
 
-def _has_cross_hand_copy(card: Card, other_hands: Optional[Sequence[Sequence[Card]]]) -> bool:
-    if not other_hands:
-        return False
+def _has_cross_hand_copy(card: Card, other_hands: Sequence[Sequence[Card]]) -> bool:
+    """True when ``card`` appears in another visible hand (hinter hint-quality only)."""
     return any(card == c for other in other_hands for c in other)
-
-
-def _visible_hands_for_path(
-    hand: List[Card],
-    other_hands: Optional[Sequence[Sequence[Card]]],
-) -> List[Sequence[Card]]:
-    visible: List[Sequence[Card]] = [hand]
-    if other_hands:
-        visible.extend(other_hands)
-    return visible
-
-
-def _played_top_value(common_view: CommonView, color: Color) -> int:
-    top = common_view.cards_played.get(color)
-    return top.value if top is not None else 0
-
-
-def _has_visible_play_path(
-    card: Card,
-    common_view: CommonView,
-    settings: GameSettings,
-    visible_hands: Sequence[Sequence[Card]],
-) -> bool:
-    """True if ranks from pile+1 through ``card`` are all present in ``visible_hands``.
-
-    Encoder-only: uses cards the hinter can see (the scored hand plus other visible hands).
-    If those cards are never misdiscarded, ``card`` can be played in sequence soon.
-    """
-    if CardKind.USELESS == common_view.card_kind(card, settings):
-        return False
-    if CardKind.PLAYABLE == common_view.card_kind(card, settings):
-        return True
-    played_top = _played_top_value(common_view, card.color)
-    if card.number.value <= played_top:
-        return False
-    available: Dict[int, int] = {}
-    for visible in visible_hands:
-        for c in visible:
-            if c.color != card.color:
-                continue
-            available[c.number.value] = available.get(c.number.value, 0) + 1
-    for rank_value in range(played_top + 1, card.number.value + 1):
-        if available.get(rank_value, 0) < 1:
-            return False
-    return True
 
 
 def _critical_points_lost(card: Card, common_view: CommonView, settings: GameSettings) -> int:
@@ -611,22 +565,11 @@ def _discard_option_score(
     chop_slot: int,
     common_view: CommonView,
     settings: GameSettings,
-    *,
-    almost_critical: Optional[Set[Card]] = None,
-    other_hands: Optional[Sequence[Sequence[Card]]] = None,
 ) -> Tuple[int, int, int, int]:
     """Lower is better.
 
-    Ranking: useless > in-hand duplicate > cross-hand duplicate > dispensable >
-    soon-playable > almost-critical > critical > playable.
-
-    ``almost_critical``: identity already discard-recommended on another seat (this hint or
-    standing hinted/confirmed chop). That overrides cross-hand-dup preference — the remaining
-    copy is treated as almost-critical, not as safe trash.
-
-    ``soon-playable``: not yet playable, but every rank from pile+1 through this card is
-    present in the hinter's visible hands (scored hand + ``other_hands``), so it can be
-    played soon if those cards are not misdiscarded.
+    Ranking (single hand + public piles only — channel-safe):
+    useless > in-hand duplicate > dispensable > critical > playable.
 
     Among criticals: fewest fireworks points lost, then lower rank (keep 5s for hint bonus),
     then older slot.
@@ -636,49 +579,26 @@ def _discard_option_score(
     """
     card = hand[chop_slot]
     kind = common_view.card_kind(card, settings)
-    protected = almost_critical is not None and card in almost_critical
     in_hand_dup = 2 <= _in_hand_copy_count(hand, card)
-    cross_hand_dup = (
-        _has_cross_hand_copy(card, other_hands)
-        and CardKind.CRITICAL != kind
-        and CardKind.PLAYABLE != kind
-    )
-    soon_playable = (
-        CardKind.CRITICAL != kind
-        and CardKind.PLAYABLE != kind
-        and CardKind.USELESS != kind
-        and _has_visible_play_path(
-            card,
-            common_view,
-            settings,
-            _visible_hands_for_path(hand, other_hands),
-        )
-    )
     if CardKind.PLAYABLE == kind:
-        tier = 7
-    elif protected:
-        tier = 5
+        tier = 4
     elif CardKind.USELESS == kind:
         tier = 0
     elif in_hand_dup:
         tier = 1
-    elif cross_hand_dup:
-        tier = 2
     elif CardKind.CRITICAL == kind:
-        tier = 6
-    elif soon_playable:
-        tier = 4
+        tier = 3
     else:
         assert CardKind.DISPENSABLE == kind, f"unexpected card kind for discard rank: {kind}"
-        tier = 3
-    if CardKind.CRITICAL == kind and not protected:
+        tier = 2
+    if CardKind.CRITICAL == kind:
         return (
             tier,
             _critical_points_lost(card, common_view, settings),
             card.number.value,
             chop_slot,
         )
-    prefer_high_rank = tier in (1, 2, 3, 4)
+    prefer_high_rank = tier in (1, 2)
     rank_key = -card.number.value if prefer_high_rank else card.number.value
     # In-hand dups: newest first; otherwise older slot wins residual ties.
     slot_key = -chop_slot if in_hand_dup else chop_slot
@@ -690,9 +610,6 @@ def _pick_discard_code(
     belief: HandBelief,
     common_view: CommonView,
     settings: GameSettings,
-    *,
-    almost_critical: Optional[Set[Card]] = None,
-    other_hands: Optional[Sequence[Sequence[Card]]] = None,
 ) -> Tuple[int, int]:
     """Return ``(code, chop_slot)`` for the best indicable discard option."""
     options = indicable_discard_options(belief)
@@ -706,14 +623,7 @@ def _pick_discard_code(
     pool = non_playable if non_playable else options
     best = min(
         pool,
-        key=lambda opt: _discard_option_score(
-            hand,
-            opt[1],
-            common_view,
-            settings,
-            almost_critical=almost_critical,
-            other_hands=other_hands,
-        ),
+        key=lambda opt: _discard_option_score(hand, opt[1], common_view, settings),
     )
     return best[0], best[1]
 
@@ -723,9 +633,6 @@ def _encode_peer_code(
     belief: HandBelief,
     common_view: CommonView,
     settings: GameSettings,
-    *,
-    almost_critical: Optional[Set[Card]] = None,
-    other_hands: Optional[Sequence[Sequence[Card]]] = None,
 ) -> Tuple[int, Optional[Card]]:
     """Return ``(peer_code, discard_card_or_none)`` for one visible hand."""
     play_slot = _pick_play_slot_for_encoding(hand, belief, common_view, settings)
@@ -733,14 +640,7 @@ def _encode_peer_code(
         code = play_type_for_slot(belief, play_slot)
         assert code is not None, f"play slot {play_slot} must map to a play type"
         return code, None
-    code, chop_slot = _pick_discard_code(
-        hand,
-        belief,
-        common_view,
-        settings,
-        almost_critical=almost_critical,
-        other_hands=other_hands,
-    )
+    code, chop_slot = _pick_discard_code(hand, belief, common_view, settings)
     return code, hand[chop_slot]
 
 

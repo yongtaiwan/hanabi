@@ -498,51 +498,6 @@ class TestGuiChopConfirmed(unittest.TestCase):
 
 
 class TestDoubleDiscardGuard(unittest.TestCase):
-    def test_prev_avoids_card_already_discard_recommended_on_next(self) -> None:
-        """Prev encoding treats next's discard identity as almost-critical."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        # Higher-rank dispensable at chop is preferred unprotected; protect it → fall to Y2.
-        dup = Card(Color.YELLOW, Number.FOUR)
-        alt = Card(Color.YELLOW, Number.TWO)
-        next_hand = [
-            dup,
-            Card(Color.RED, Number.FIVE),
-            Card(Color.WHITE, Number.FOUR),
-            Card(Color.BLUE, Number.FIVE),
-            Card(Color.GREEN, Number.FIVE),
-        ]
-        prev_hand = [
-            dup,
-            alt,
-            Card(Color.WHITE, Number.FIVE),
-            Card(Color.BLUE, Number.THREE),
-            Card(Color.GREEN, Number.THREE),
-        ]
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(dup, settings))
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(alt, settings))
-
-        next_belief = fresh_hand_belief(5)
-        prev_belief = fresh_hand_belief(5)
-        _next_code, next_card = dr._encode_peer_code(
-            next_hand, next_belief, common, settings, other_hands=[prev_hand]
-        )
-        self.assertEqual(dup, next_card)
-        _unprotected, unprot_card = dr._encode_peer_code(
-            prev_hand, prev_belief, common, settings, other_hands=[next_hand]
-        )
-        self.assertEqual(dup, unprot_card)
-        _protected, prot_card = dr._encode_peer_code(
-            prev_hand,
-            prev_belief,
-            common,
-            settings,
-            almost_critical={dup},
-            other_hands=[next_hand],
-        )
-        self.assertEqual(alt, prot_card)
-        self.assertNotEqual(_unprotected, _protected)
-
     def test_peer_codes_are_independent_per_hand(self) -> None:
         """Channel peer codes use only that hand + public state (no cross-hand protect)."""
         settings = create_standard_game_settings(3)
@@ -581,28 +536,6 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         _code, prev_card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
         self.assertEqual(dup, prev_card)
         self.assertEqual(_code, codes[2])
-
-
-    def test_almost_critical_outranks_true_critical(self) -> None:
-        """Protected duplicate must not lose to a true critical (game 56 T23 style)."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        # Force B4 critical: discard all other blue 4s... easier: use a 5 as critical
-        # and protect a dispensable Y4. Options: confirm crit 5 vs named dispensable protected.
-        # Simpler unit check on score only:
-        hand = [
-            Card(Color.BLUE, Number.FIVE),  # critical
-            Card(Color.YELLOW, Number.FOUR),  # dispensable, protected
-            Card(Color.WHITE, Number.FIVE),
-            Card(Color.RED, Number.FIVE),
-            Card(Color.GREEN, Number.FIVE),
-        ]
-        protect = {hand[1]}
-        s_crit = dr._discard_option_score(hand, 0, common, settings, almost_critical=protect)
-        s_prot = dr._discard_option_score(hand, 1, common, settings, almost_critical=protect)
-        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[0], settings))
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[1], settings))
-        self.assertLess(s_prot, s_crit)
 
     def test_critical_tiebreak_prefers_fewest_points_lost(self) -> None:
         """Game 95 T19 style: last B2 loses 4 points; B5/G5 lose 1 — prefer a 5."""
@@ -736,52 +669,6 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         self.assertEqual(hand[4], Card(Color.WHITE, Number.ONE))
         self.assertEqual(6, code)
 
-    def test_soon_playable_worse_than_ordinary_dispensable(self) -> None:
-        """W3 with visible W2 is soon-playable; prefer discarding R4 (game 40 T15 style)."""
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={Color.WHITE: Number.ONE, Color.GREEN: Number.ONE, Color.BLUE: Number.THREE},
-        )
-        hand = [
-            Card(Color.RED, Number.FOUR),
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.WHITE, Number.THREE),
-            Card(Color.GREEN, Number.FOUR),
-        ]
-        other = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.WHITE, Number.ONE),
-            Card(Color.YELLOW, Number.FIVE),
-        ]
-        self.assertTrue(
-            dr._has_visible_play_path(
-                hand[3], common, settings, [hand, other]
-            )
-        )
-        self.assertFalse(
-            dr._has_visible_play_path(
-                hand[0], common, settings, [hand, other]
-            )
-        )
-        s_w3 = dr._discard_option_score(hand, 3, common, settings, other_hands=[other])
-        s_r4 = dr._discard_option_score(hand, 0, common, settings, other_hands=[other])
-        self.assertEqual(4, s_w3[0])  # soon-playable
-        self.assertEqual(3, s_r4[0])  # dispensable
-        self.assertLess(s_r4, s_w3)
-        belief = fresh_hand_belief(5)
-        belief.chop = 3
-        code, slot = dr._pick_discard_code(hand, belief, common, settings, other_hands=[other])
-        self.assertEqual(0, slot)
-        self.assertEqual(hand[0], Card(Color.RED, Number.FOUR))
-        self.assertEqual(6, code)  # D[2] → 3rd candidate R4 (chain [3,4,0])
-
     def test_in_hand_duplicate_beats_lone_dispensable(self) -> None:
         settings = create_standard_game_settings(3)
         common = _common(settings)
@@ -837,79 +724,6 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         s_useless = dr._discard_option_score(hand, 0, common, settings)
         s_dup = dr._discard_option_score(hand, 1, common, settings)
         self.assertLess(s_useless, s_dup)
-
-    def test_cross_hand_dup_beats_lone_dispensable(self) -> None:
-        """Game 40 T09 style: W2 also on other seat (not discard-recommended) beats B4."""
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={Color.BLUE: Number.TWO, Color.GREEN: Number.ONE},
-        )
-        hand = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.BLUE, Number.FOUR),
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.GREEN, Number.FOUR),
-        ]
-        other = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.WHITE, Number.ONE),
-            Card(Color.RED, Number.TWO),
-            Card(Color.BLUE, Number.THREE),
-        ]
-        s_w2 = dr._discard_option_score(hand, 0, common, settings, other_hands=[other])
-        s_b4 = dr._discard_option_score(hand, 1, common, settings, other_hands=[other])
-        self.assertLess(s_w2, s_b4)
-        code, card = dr._encode_peer_code(
-            hand, fresh_hand_belief(5), common, settings, other_hands=[other]
-        )
-        self.assertEqual(0, code)
-        self.assertEqual(Card(Color.WHITE, Number.TWO), card)
-
-    def test_cross_hand_dup_almost_critical_when_other_recommended(self) -> None:
-        """If the other seat was told to discard the dup, remaining copy is almost-critical."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        w2 = Card(Color.WHITE, Number.TWO)
-        b4 = Card(Color.BLUE, Number.FOUR)
-        hand = [
-            w2,
-            b4,
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.RED, Number.FIVE),
-        ]
-        other = [w2, Card(Color.YELLOW, Number.FOUR), Card(Color.RED, Number.FOUR),
-                 Card(Color.WHITE, Number.FIVE), Card(Color.BLUE, Number.FIVE)]
-        # Without protect: cross-hand W2 beats B4.
-        self.assertLess(
-            dr._discard_option_score(hand, 0, common, settings, other_hands=[other]),
-            dr._discard_option_score(hand, 1, common, settings, other_hands=[other]),
-        )
-        # With protect: W2 is almost-critical → prefer B4.
-        protect = {w2}
-        s_w2 = dr._discard_option_score(
-            hand, 0, common, settings, almost_critical=protect, other_hands=[other]
-        )
-        s_b4 = dr._discard_option_score(
-            hand, 1, common, settings, almost_critical=protect, other_hands=[other]
-        )
-        self.assertLess(s_b4, s_w2)
-        code, card = dr._encode_peer_code(
-            hand,
-            fresh_hand_belief(5),
-            common,
-            settings,
-            almost_critical=protect,
-            other_hands=[other],
-        )
-        self.assertEqual(b4, card)
-        self.assertEqual(7, code)
 
     def test_standing_chop_does_not_cross_protect_in_peer_codes(self) -> None:
         """Peer codes ignore the other seat's chop (local encode only)."""

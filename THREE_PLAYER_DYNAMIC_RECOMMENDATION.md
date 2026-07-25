@@ -186,7 +186,9 @@ Exactly the first `m` wrapped-chain slots (§5.2). A card past position `m - 1` 
 
 Computed per visible teammate hand, then summed mod 8.
 
-**Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Belief snapshot is still taken before either decode mutates state (§4.2); only the **encoder’s ranking** for prev may depend on next’s chosen discard identity (§6.4).
+**Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Each peer code
+uses only that hand’s cards plus public piles (independently reconstructible). Belief snapshot
+is still taken before either decode mutates state (§4.2).
 
 ### 6.1 Prefer play
 
@@ -212,37 +214,25 @@ If the preferred physical discard is not in the indicable set, pick the best **i
 
 Each convention hint **freshly** computes both peer codes from the current snapshot. Do not re-apply a stored relative discard instruction between hints beyond ordinary chop maintenance (§8).
 
-### 6.4 Double-discard guard
+### 6.4 Discard ranking (channel-safe)
 
-When encoding a peer, treat these physical card identities as **almost-critical** on the
-**other** peer (do not treat them as safe cross-hand trash):
-
-1. If that peer’s code on **this** hint is a discard recommendation — the card at that implied chop.
-2. If that peer already has a convention chop with `chop_hinted` or `chop_confirmed` from an
-   **earlier** discard decode — that chop card, even when this hint gives them a **play** code.
-
-Apply (2) in **both** directions (next↔prev). Apply (1) for prev after next is encoded (next is
-encoded first).
+Each peer’s discard code is chosen from that hand alone (plus public piles). Do **not** use the
+other teammate’s cards or standing chop when picking the code — those inputs are not shared by
+every observer who must recompute the same peer code.
 
 Encoder discard ranking (lower = better to recommend):
 
-`useless > in-hand duplicate > cross-hand duplicate > dispensable > soon-playable > almost-critical > critical > playable`
+`useless > in-hand duplicate > dispensable > critical > playable`
 
 - **In-hand duplicate:** same identity ≥2 times in that hand. Among tied in-hand dups, prefer the
   **newest** copy (sticky chop then advances into later candidates).
-- **Cross-hand duplicate:** same identity also appears in the other visible teammate hand, **and**
-  that identity is **not** almost-critical (the other seat was not already told to discard it).
-- **Soon-playable:** not yet playable, but every rank from the pile top+1 through this card appears
-  somewhere in the hinter’s **visible** hands (the scored hand plus the other teammate). If those
-  cards are never misdiscarded, this card can be played in sequence soon — prefer not discarding it
-  vs ordinary dispensable trash.
-- **Almost-critical** overrides cross-hand preference: if the other seat holds a recommended
-  discard of that identity, the remaining copy is protected (worse than normal dispensable, better
-  than a true singleton critical).
 - **Critical tie-break:** among true criticals, prefer fewest fireworks points lost (still-reachable
   ranks from that card up to 5; already-dead higher ranks do not count — e.g. both 4s gone ⇒
   discarding a 3 loses 1). If equal loss, prefer **lower rank** (keep 5s for the play hint-token
   bonus), then older slot.
+
+Hinter-only hint **quality** (whether to hint vs discard chop, §9) may still look at both visible
+hands; that does not change the encoded peer codes.
 ---
 
 ## 7. Decoding
@@ -373,7 +363,7 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 | Discard candidates | First `m = 8 - N` slots of wrapped chain; each `D[i]` names candidate `[i]`, confirmed |
 | Type `0` | Candidate `[0]` = current chop |
 | Chop after chop leaves | Next newer discard candidate if any, else leftmost; unconfirmed / unhinted |
-| Encode discard choice | Best among **indicable** (first `m`) options only; prev sees next’s discard id as almost-critical |
+| Encode discard choice | Best among **indicable** (first `m`) options; single hand + public piles only |
 | Encode order | Next peer code, then previous |
 | Recompute | Fresh peer codes on each convention hint |
 | Dispatch | Play leftmost playable, then hint×chop matrix (§9) |
