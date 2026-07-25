@@ -325,11 +325,9 @@ def apply_decoded_value(row: List[SlotBelief], decoded: int) -> None:
 
 
 def apply_physical_channel_decode(row: List[SlotBelief], decoded: int) -> None:
-    """Apply a channel message encoded with physical/blank peer codes (always legacy meaning).
+    """Legacy helper: interpret ``decoded`` against a blank all-unknown row.
 
-    Peer codes use a fresh all-unknown row, so the conveyed type is always a legacy
-    ``0``–``7`` hand type. Interpreting it with recommendation-mode discard mapping
-    would desync seats and can assert.
+    Live convention encode/decode uses the seat's shared belief via :func:`apply_decoded_value`.
     """
     assert 0 <= decoded <= 7, f"decoded value {decoded} out of range"
     if 1 <= decoded <= 5:

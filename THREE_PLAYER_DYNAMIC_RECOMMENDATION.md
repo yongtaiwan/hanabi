@@ -187,8 +187,10 @@ Exactly the first `m` wrapped-chain slots (§5.2). A card past position `m - 1` 
 Computed per visible teammate hand, then summed mod 8.
 
 **Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Each peer code
-uses only that hand’s cards plus public piles (independently reconstructible). Belief snapshot
-is still taken before either decode mutates state (§4.2).
+uses that hand’s cards, **that seat’s current shared public belief** (chop / playability), and
+public piles — independently reconstructible by every observer who sees the hand. Do **not**
+wipe belief to a blank row when encoding (sticky chop must remain). Snapshot both peer codes
+before either decode mutates state (§4.2).
 
 ### 6.1 Prefer play
 
@@ -212,7 +214,10 @@ If the preferred physical discard is not in the indicable set, pick the best **i
 
 ### 6.3 Recompute on each convention hint
 
-Each convention hint **freshly** computes both peer codes from the current snapshot. Do not re-apply a stored relative discard instruction between hints beyond ordinary chop maintenance (§8).
+Each convention hint **freshly** computes both peer codes from the **current** shared belief
+snapshot (same chop / playability everyone already shares). “Freshly” means re-rank with
+current cards + belief — not reset belief to blank. Do not re-apply a stored relative discard
+instruction between hints beyond ordinary chop maintenance (§8).
 
 ### 6.4 Discard ranking (channel-safe)
 
@@ -290,13 +295,15 @@ With no legacy `safe` kind, middle-rank discard-pile invalidation of “safe” 
 
 ### 9.2 Hint quality (would-be convention channel)
 
-Evaluated only when a convention hint is **buildable**. If the type is unbuildable, treat quality as `mediocre` and use literal fallback when the matrix says hint.
+Evaluated only when a convention hint is **buildable**. If the type is unbuildable, treat quality as `fine` and use literal fallback when the matrix says hint.
 
 | Class | Definition |
 |-------|------------|
 | `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions) |
-| `bad` | Channel would newly mark the **same** playable identity on both peers (**double-play**) |
-| `mediocre` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal) |
+| `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels (same playable newly marked on both peers). |
+| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard). Ones are excluded. |
+
+Precedence when classifying: `good` → `bad` → `fine`.
 
 ### 9.3 Decision matrix
 
@@ -305,19 +312,20 @@ When **both** hint and discard are legal:
 | hint \\ chop | confirmed | default |
 |--------------|-----------|---------|
 | **good** | Hint | Hint |
-| **mediocre** | Discard | Hint |
-| **bad** | Discard | Hint |
+| **fine** | Discard | Hint |
+| **bad** | Discard | Discard |
 
 Guards outside the matrix:
 
 - No hint tokens → discard (by chop / oldest)
-- Discard illegal (max hints) → hint anyway (even `bad`)
+- Discard illegal (max hints) → hint anyway (including `bad`; literal escape for `bad` deferred)
 
 Reading the matrix:
 
 - `good` always beats chop (tempo: playable for next, or trash for next + playable for prev).
-- `confirmed` beats non-good hints (trust prior discard recommendation).
-- `bad` / `mediocre` with `default` still hint (avoid burning criticals / playables on unhinted chop).
+- `confirmed` beats non-good / non-bad hints (trust prior discard recommendation).
+- `bad` always discards when discard is legal (never schedule both copies of a mid-rank).
+- `fine` with `default` still hint (avoid burning criticals / playables on unhinted chop).
 
 ---
 
@@ -365,7 +373,7 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 | Chop after chop leaves | Next newer discard candidate if any, else leftmost; unconfirmed / unhinted |
 | Encode discard choice | Best among **indicable** (first `m`) options; single hand + public piles only |
 | Encode order | Next peer code, then previous |
-| Recompute | Fresh peer codes on each convention hint |
+| Recompute | Fresh peer codes from current shared belief on each convention hint |
 | Dispatch | Play leftmost playable, then hint×chop matrix (§9) |
 | Mod-8 wire | Unchanged |
 | Bot name | `DynamicRecommendation3P` (leave `DynamicHandType3P` untouched) |

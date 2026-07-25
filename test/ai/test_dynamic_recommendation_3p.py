@@ -25,10 +25,10 @@ from hanabi.ai.dynamic_recommendation_3p import (
     HintSlotShape,
     _HINT_CHOP_MATRIX,
 )
-from hanabi.core.card import Card
+from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
-from hanabi.core.moves import Discard, NumberHint, Play
+from hanabi.core.moves import ColorHint, Discard, NumberHint, Play
 
 
 def _common(settings=None) -> CommonView:
@@ -282,7 +282,7 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(0, move.card)
 
     def test_double_play_hint_kept_when_chop_default(self) -> None:
-        """Default/unhinted chop: still give the double-play convention hint."""
+        """Default chop: double-play is fine, so still hint."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -319,7 +319,7 @@ class TestDispatch(unittest.TestCase):
         self.assertNotIsInstance(move, Discard)
 
     def test_double_play_hint_prefers_confirmed_chop(self) -> None:
-        """Confirmed chop: skip double-play hint and discard that chop."""
+        """Confirmed chop: double-play is fine, so discard that chop."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -352,8 +352,8 @@ class TestDispatch(unittest.TestCase):
         self.assertIsInstance(move, Discard)
         self.assertEqual(2, move.card)
 
-    def test_confirmed_chop_before_mediocre_hint(self) -> None:
-        """Confirmed chop: mediocre hint loses to discard."""
+    def test_confirmed_chop_before_fine_hint(self) -> None:
+        """Confirmed chop: fine hint loses to discard."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -378,7 +378,7 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(2, move.card)
 
     def test_default_unhinted_chop_after_hint(self) -> None:
-        """Opening/default chop: mediocre hint before default discard."""
+        """Opening/default chop: fine hint before default discard."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -462,12 +462,12 @@ class TestHintChopMatrix(unittest.TestCase):
                 self.assertIn((quality, chop), _HINT_CHOP_MATRIX)
 
     def test_matrix_prefers_hint_iff_expected(self) -> None:
-        # Spec §9.3: good always hints; confirmed beats non-good; default still hints.
+        # Spec §9.3: good always hints; bad always discards; confirmed beats fine;
+        # default still hints for fine.
         expect_hint = {
             (HintQuality.GOOD, ChopClass.CONFIRMED),
             (HintQuality.GOOD, ChopClass.DEFAULT),
-            (HintQuality.MEDIOCRE, ChopClass.DEFAULT),
-            (HintQuality.BAD, ChopClass.DEFAULT),
+            (HintQuality.FINE, ChopClass.DEFAULT),
         }
         for key, prefer_hint in _HINT_CHOP_MATRIX.items():
             self.assertEqual(key in expect_hint, prefer_hint, msg=key)
@@ -484,6 +484,76 @@ class TestHintChopMatrix(unittest.TestCase):
         hinted_unconfirmed.chop_confirmed = False
         with self.assertRaises(AssertionError):
             dr._chop_class(hinted_unconfirmed)
+
+
+class TestHintQualityBadDoubleMidrankDiscard(unittest.TestCase):
+    def test_same_g3_discard_on_both_peers_is_bad(self) -> None:
+        """Channel recommending both copies of a 3 for discard is bad (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        # Match game 33 T13 board shape: both peers' discard decode lands on G3.
+        # Use opening blank belief so encode+decode stay on the same n_play boundary.
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={
+                Color.RED: Suit({Number.ONE: 1}),
+                Color.GREEN: Suit({Number.FOUR: 1}),
+                Color.BLUE: Suit({Number.TWO: 1, Number.THREE: 1}),
+            },
+            cards_played={Color.WHITE: Number.TWO, Color.RED: Number.ONE, Color.GREEN: Number.ONE},
+        )
+        player.set_common_view(common)
+        next_hand = [
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.RED, Number.THREE),
+            Card(Color.WHITE, Number.TWO),
+        ]
+        prev_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.YELLOW, Number.TWO),
+            Card(Color.YELLOW, Number.FIVE),
+        ]
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        self.assertTrue(
+            dr._convention_hint_would_cause_double_midrank_discard(
+                0, view, common, settings, player._hand_belief
+            )
+        )
+        self.assertEqual(
+            HintQuality.BAD,
+            dr._hint_quality(0, view, common, settings, player._hand_belief),
+        )
+        self.assertFalse(_HINT_CHOP_MATRIX[(HintQuality.BAD, ChopClass.DEFAULT)])
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+
+    def test_same_one_discard_is_not_bad(self) -> None:
+        """Double discard of 1s is outside the mid-rank bad tier."""
+        from unittest import mock
+
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        beliefs = [fresh_hand_belief(5) for _ in range(3)]
+        filler = [Card(Color.BLUE, Number.FIVE)] * 5
+        view = PlayerView(teammates={1: Hand(filler), 2: Hand(filler)}, own_hand_size=5)
+        one = Card(Color.RED, Number.ONE)
+        with mock.patch.object(
+            dr,
+            "_newly_decoded_discard_card_from_codes",
+            side_effect=[one, one],
+        ):
+            self.assertFalse(
+                dr._convention_hint_would_cause_double_midrank_discard(
+                    0, view, common, settings, beliefs
+                )
+            )
 
 
 class TestGuiChopConfirmed(unittest.TestCase):
@@ -525,17 +595,51 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         )
         codes = dr._peer_codes_next_then_prev(0, view, common, settings, beliefs)
         self.assertEqual(
-            dr._peer_code_for_hand(next_hand, common, settings),
+            dr._peer_code_for_hand(next_hand, beliefs[1], common, settings),
             codes[1],
         )
         self.assertEqual(
-            dr._peer_code_for_hand(prev_hand, common, settings),
+            dr._peer_code_for_hand(prev_hand, beliefs[2], common, settings),
             codes[2],
         )
         # Without cross-hand protect, prev prefers the higher-rank dispensable at chop.
         _code, prev_card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
         self.assertEqual(dup, prev_card)
         self.assertEqual(_code, codes[2])
+
+    def test_sticky_chop_encode_can_name_useless_beyond_leftmost_window(self) -> None:
+        """Game 38 T04 shape: shared chop at slot 2 makes Y1 indicable; blank would not."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.BLUE: Suit({Number.FOUR: 1})},
+            cards_played={Color.YELLOW: Number.ONE},
+        )
+        hand = [
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.WHITE, Number.FIVE),
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.RED, Number.THREE),
+            Card(Color.YELLOW, Number.ONE),
+        ]
+        sticky = fresh_hand_belief(5)
+        sticky.chop = 2
+        sticky.chop_confirmed = True
+        sticky.chop_hinted = True
+        code, discard_card = dr._encode_peer_code(hand, sticky, common, settings)
+        self.assertEqual(Card(Color.YELLOW, Number.ONE), discard_card)
+        self.assertEqual(6, code)
+        blank_code, blank_discard = dr._encode_peer_code(
+            hand, fresh_hand_belief(5), common, settings
+        )
+        self.assertNotEqual(Card(Color.YELLOW, Number.ONE), blank_discard)
+        self.assertNotEqual(code, blank_code)
+        self.assertEqual(
+            code,
+            dr._peer_code_for_hand(hand, sticky, common, settings),
+        )
 
     def test_critical_tiebreak_prefers_fewest_points_lost(self) -> None:
         """Game 95 T19 style: last B2 loses 4 points; B5/G5 lose 1 — prefer a 5."""
@@ -769,7 +873,9 @@ class TestDoubleDiscardGuard(unittest.TestCase):
 
 class TestIndependentOwnDecode(unittest.TestCase):
     def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
-        """Non-hinters update own belief; hinter updates teammate hands from public cards."""
+        """Every observer updates both non-hinter hands; hinter never writes own hand."""
+        from hanabi.core.moves import ColorHint
+
         settings = create_standard_game_settings(3)
         common = _common(settings)
         players = [DynamicRecommendation3P(i) for i in range(3)]
@@ -777,7 +883,7 @@ class TestIndependentOwnDecode(unittest.TestCase):
             p.set_game_settings(settings)
             p.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = [
             PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
             PlayerView(
@@ -789,15 +895,23 @@ class TestIndependentOwnDecode(unittest.TestCase):
                 own_hand_size=5,
             ),
         ]
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        enc = (
+            dr._peer_code_for_hand(hand_p1, players[0]._hand_belief[1], common, settings)
+            + dr._peer_code_for_hand(hand_p2, players[0]._hand_belief[2], common, settings)
+        ) % 8
+        hint = dr._build_hint_for_encoded(0, views[0], enc)
+        self.assertIsNotNone(hint)
         own_before = [copy_hand_belief(players[seat]._hand_belief[seat]) for seat in range(3)]
         hinter_own_before = copy_hand_belief(players[0]._hand_belief[0])
         for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+            if isinstance(hint, NumberHint):
+                player.observe_number_hint_move(0, hint, view)
+            else:
+                assert isinstance(hint, ColorHint)
+                player.observe_color_hint_move(0, hint, view)
         self.assertEqual(hinter_own_before, players[0]._hand_belief[0])
         dr.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
-        self.assertEqual(players[0]._hand_belief[1], players[1]._hand_belief[1])
-        self.assertEqual(players[0]._hand_belief[2], players[2]._hand_belief[2])
+        dr.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_reopen_keeps_chop_fields(self) -> None:
         """Reopen restores playability only; chop flags stay (§8.1)."""

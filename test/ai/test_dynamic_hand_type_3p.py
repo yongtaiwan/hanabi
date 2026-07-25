@@ -896,7 +896,7 @@ class TestPlaySmoke(unittest.TestCase):
 
 class TestIndependentOwnDecode(unittest.TestCase):
     def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
-        """Non-hinters update own rows; hinter updates teammate rows from public cards."""
+        """Every observer updates both non-hinter rows; hinter never writes own row."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         players = [DynamicHandType3P(i) for i in range(3)]
@@ -905,7 +905,7 @@ class TestIndependentOwnDecode(unittest.TestCase):
             player.set_common_view(common)
 
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = [
             PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
             PlayerView(
@@ -917,7 +917,12 @@ class TestIndependentOwnDecode(unittest.TestCase):
                 own_hand_size=5,
             ),
         ]
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        enc = (
+            h3p._peer_code_for_hand(hand_p1, players[0]._slot_belief[1], common, settings)
+            + h3p._peer_code_for_hand(hand_p2, players[0]._slot_belief[2], common, settings)
+        ) % 8
+        hint = h3p._build_hint_for_encoded(0, views[0], enc)
+        self.assertIsNotNone(hint)
         own_before = [
             [
                 h3p.SlotBelief(b.playability, b.legacy_kind, b.rec_state)
@@ -927,7 +932,11 @@ class TestIndependentOwnDecode(unittest.TestCase):
         ]
         hinter_own_before = _player_legacy_matrix(players[0])[0]
         for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+            if isinstance(hint, NumberHint):
+                player.observe_number_hint_move(0, hint, view)
+            else:
+                assert isinstance(hint, ColorHint)
+                player.observe_color_hint_move(0, hint, view)
         self.assertEqual(hinter_own_before, _player_legacy_matrix(players[0])[0])
         h3p.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
         self.assertTrue(
@@ -938,16 +947,7 @@ class TestIndependentOwnDecode(unittest.TestCase):
             any(kind is not None for kind in _player_legacy_matrix(players[0])[2]),
             "hinter must update other non-hinter row from public decode",
         )
-        self.assertEqual(
-            _player_legacy_matrix(players[0])[1],
-            _player_legacy_matrix(players[1])[1],
-            "hinter and hint-target must agree on target's own row",
-        )
-        self.assertEqual(
-            _player_legacy_matrix(players[0])[2],
-            _player_legacy_matrix(players[2])[2],
-            "hinter and other non-hinter must agree on that seat's own row",
-        )
+        h3p.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_hinter_does_not_update_own_row(self) -> None:
         settings = create_standard_game_settings(3)
@@ -956,11 +956,20 @@ class TestIndependentOwnDecode(unittest.TestCase):
         hinter.set_game_settings(settings)
         hinter.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         view = PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        enc = (
+            h3p._peer_code_for_hand(hand_p1, hinter._slot_belief[1], common, settings)
+            + h3p._peer_code_for_hand(hand_p2, hinter._slot_belief[2], common, settings)
+        ) % 8
+        hint = h3p._build_hint_for_encoded(0, view, enc)
+        self.assertIsNotNone(hint)
         own_before = _player_legacy_matrix(hinter)[0]
-        hinter.observe_number_hint_move(0, hint, view)
+        if isinstance(hint, NumberHint):
+            hinter.observe_number_hint_move(0, hint, view)
+        else:
+            assert isinstance(hint, ColorHint)
+            hinter.observe_color_hint_move(0, hint, view)
         self.assertEqual(own_before, _player_legacy_matrix(hinter)[0])
         self.assertTrue(any(kind is not None for kind in _player_legacy_matrix(hinter)[1]))
         self.assertTrue(any(kind is not None for kind in _player_legacy_matrix(hinter)[2]))
@@ -1096,6 +1105,29 @@ class TestRecommendationMode(unittest.TestCase):
         self.assertEqual(CardKind.USELESS, common.card_kind(hand[0], settings))
         code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
         self.assertEqual(0, code)
+        self.assertEqual(
+            code,
+            h3p._peer_code_for_hand(hand, row, common, settings),
+            "peer code must use recommendation encode when hand is in rec mode",
+        )
+
+    def test_rec_mode_peer_code_is_decodable_on_same_row(self) -> None:
+        """Recommendation peer codes must map under apply_decoded_value (exp run 79 crash)."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.BLUE, Number.FIVE),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+            Card(Color.RED, Number.FIVE),
+        ]
+        row = [slot_belief_from_legacy_kind(None) for _ in range(5)]
+        for belief in row[:-1]:
+            belief.playability = Playability.UNPLAYABLE
+        self.assertEqual(HandEncodingMode.RECOMMENDATION, hand_encoding_mode(row))
+        code = h3p._peer_code_for_hand(hand, row, common, settings)
+        apply_decoded_value(row, code)
 
     def test_rec_encode_skips_physically_playable_chop(self) -> None:
         """Do not recommend discarding a stale-unplayable slot that is physically playable."""

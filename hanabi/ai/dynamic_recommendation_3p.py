@@ -13,7 +13,6 @@ from hanabi.ai.dr_belief import (
     HandBelief,
     Playability,
     apply_decoded_value,
-    apply_physical_channel_decode,
     copy_hand_belief,
     ensure_default_chop,
     finalize_chop_after_shift,
@@ -53,7 +52,7 @@ class HintQuality(Enum):
     """Would-be convention hint quality for the hint×chop matrix (§9)."""
 
     GOOD = "good"
-    MEDIOCRE = "mediocre"
+    FINE = "fine"
     BAD = "bad"
 
 
@@ -61,10 +60,10 @@ class HintQuality(Enum):
 _HINT_CHOP_MATRIX: Dict[Tuple[HintQuality, ChopClass], bool] = {
     (HintQuality.GOOD, ChopClass.CONFIRMED): True,
     (HintQuality.GOOD, ChopClass.DEFAULT): True,
-    (HintQuality.MEDIOCRE, ChopClass.CONFIRMED): False,
-    (HintQuality.MEDIOCRE, ChopClass.DEFAULT): True,
+    (HintQuality.FINE, ChopClass.CONFIRMED): False,
+    (HintQuality.FINE, ChopClass.DEFAULT): True,
     (HintQuality.BAD, ChopClass.CONFIRMED): False,
-    (HintQuality.BAD, ChopClass.DEFAULT): True,
+    (HintQuality.BAD, ChopClass.DEFAULT): False,
 }
 
 
@@ -332,13 +331,19 @@ def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, D
 
 def _peer_code_for_hand(
     hand: List[Card],
+    belief: HandBelief,
     common_view: CommonView,
     settings: GameSettings,
 ) -> int:
-    """Peer code from visible cards + public piles only (fresh hand belief)."""
-    code, _discard_card = _encode_peer_code(
-        hand, fresh_hand_belief(len(hand)), common_view, settings
+    """Peer code from one visible hand + that seat's shared public belief + piles.
+
+    Does not read any other hand. Callers must pass the convention belief row for
+    ``hand`` (chop / playability), not a fresh blank row.
+    """
+    assert len(hand) == len(belief.slots), (
+        f"hand size {len(hand)} != belief slots {len(belief.slots)}"
     )
+    code, _discard_card = _encode_peer_code(hand, belief, common_view, settings)
     return code
 
 
@@ -349,19 +354,20 @@ def _peer_codes_next_then_prev(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> Dict[int, int]:
-    """Encode each visible teammate hand independently (physical + public only)."""
-    del hand_belief
+    """Encode each visible teammate from shared belief + that hand's cards only."""
     next_seat = (hinter + 1) % 3
     prev_seat = (hinter + 2) % 3
     assert next_seat in player_view.teammates and prev_seat in player_view.teammates
     return {
         next_seat: _peer_code_for_hand(
             player_view.teammates[next_seat].cards,
+            hand_belief[next_seat],
             common_view,
             settings,
         ),
         prev_seat: _peer_code_for_hand(
             player_view.teammates[prev_seat].cards,
+            hand_belief[prev_seat],
             common_view,
             settings,
         ),
@@ -377,10 +383,12 @@ def _apply_convention_hint_decodes(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> None:
-    """Update belief from the public channel using only visible cards + public piles.
+    """Update belief from the public channel using shared belief + visible cards.
 
-    - Hinter: updates both non-hinter hands; never own hand.
-    - Non-hinter: updates only their own hand.
+    Every observer applies the public decode to **both** non-hinter hands and never to the
+    hinter's hand. Peer codes are snapshotted before either decode mutates belief (§4.2).
+    When the peer hand is the observer's own (invisible), ``enc = peer_next + peer_prev``
+    implies the other seat's message equals that seat's peer code.
     """
     hint_target = move.teammate
     other_non_hinter = _third_player_index(hinter_index, hint_target)
@@ -397,36 +405,31 @@ def _apply_convention_hint_decodes(
         if canonical is None or not _hints_match(canonical, move):
             return
 
-    if hinter_index == observer_index:
-        assert hint_target in observer_view.teammates
-        assert other_non_hinter in observer_view.teammates
-        for decoder in (hint_target, other_non_hinter):
-            peer_index = other_non_hinter if decoder == hint_target else hint_target
-            peer_code = _peer_code_for_hand(
-                observer_view.teammates[peer_index].cards,
-                common_view,
-                settings,
-            )
-            apply_physical_channel_decode(hand_belief[decoder], (encoded_type - peer_code) % 8)
-        return
-
-    if observer_index == hint_target:
-        peer_index = other_non_hinter
-    elif observer_index == other_non_hinter:
-        peer_index = hint_target
-    else:
-        assert False, (
-            f"observer P{observer_index + 1} must be hinter, hint target, or other non-hinter "
-            f"for hint P{hinter_index + 1} -> P{hint_target + 1}"
+    # Snapshot peer codes for every visible non-hinter before mutating either row.
+    peer_code_by_seat: Dict[int, int] = {}
+    for seat in (hint_target, other_non_hinter):
+        if seat not in observer_view.teammates:
+            continue
+        peer_code_by_seat[seat] = _peer_code_for_hand(
+            observer_view.teammates[seat].cards,
+            hand_belief[seat],
+            common_view,
+            settings,
         )
 
-    assert peer_index in observer_view.teammates
-    peer_code = _peer_code_for_hand(
-        observer_view.teammates[peer_index].cards,
-        common_view,
-        settings,
-    )
-    apply_physical_channel_decode(hand_belief[observer_index], (encoded_type - peer_code) % 8)
+    decoded_by_seat: Dict[int, int] = {}
+    for decoder in (hint_target, other_non_hinter):
+        peer_index = other_non_hinter if decoder == hint_target else hint_target
+        if peer_index in peer_code_by_seat:
+            decoded_by_seat[decoder] = (encoded_type - peer_code_by_seat[peer_index]) % 8
+        else:
+            assert decoder in peer_code_by_seat, (
+                f"P{observer_index + 1} must see decoder P{decoder + 1} to apply public decode"
+            )
+            decoded_by_seat[decoder] = peer_code_by_seat[decoder]
+
+    for decoder, decoded in decoded_by_seat.items():
+        apply_decoded_value(hand_belief[decoder], decoded)
 
 
 def assert_independent_own_decode_matches(
@@ -460,20 +463,42 @@ def assert_independent_own_decode_matches(
                 continue
         peer_code = _peer_code_for_hand(
             view.teammates[peer].cards,
+            own_rows_before[peer],
             players[seat].common_view,
             players[seat].game_settings,
         )
         assert peer_code == _peer_code_for_hand(
             views[hinter_index].teammates[peer].cards,
+            own_rows_before[peer],
             players[hinter_index].common_view,
             players[hinter_index].game_settings,
         ), f"peer code for P{peer + 1} not publicly determined"
         expected = copy_hand_belief(own_rows_before[seat])
-        apply_physical_channel_decode(expected, (enc - peer_code) % 8)
+        apply_decoded_value(expected, (enc - peer_code) % 8)
         assert players[seat]._hand_belief[seat] == expected, (
             f"P{seat + 1} own belief after hint != independent decode: "
             f"actual={players[seat]._hand_belief[seat]!r} expected={expected!r}"
         )
+
+
+def assert_public_non_hinter_rows_agree(
+    players: Sequence[DynamicRecommendation3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+) -> None:
+    """After a convention hint, all seats must share the same next/prev belief rows."""
+    assert 3 == len(players)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        ref = players[0]._hand_belief[seat]
+        for player in players[1:]:
+            assert player._hand_belief[seat] == ref, (
+                f"P{player._player_index + 1} belief for P{seat + 1} != P1 after "
+                f"hint from P{hinter_index + 1}: {player._hand_belief[seat]!r} vs {ref!r}"
+            )
 
 
 def _hints_match(a: HintMove, b: HintMove) -> bool:
@@ -836,11 +861,11 @@ def _hint_quality(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> HintQuality:
-    """Classify the would-be convention channel (§9.2). Unbuildable → mediocre."""
+    """Classify the would-be convention channel (§9.2). Unbuildable → fine."""
     peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
     enc_type = sum(peer_codes.values()) % 8
     if _build_hint_for_encoded(hinter, player_view, enc_type) is None:
-        return HintQuality.MEDIOCRE
+        return HintQuality.FINE
     if _convention_hint_would_identify_new_playable(
         hinter, player_view, common_view, settings, hand_belief
     ):
@@ -849,11 +874,48 @@ def _hint_quality(
         hinter, player_view, common_view, settings, hand_belief
     ):
         return HintQuality.GOOD
-    if _convention_hint_would_cause_double_play(
+    if _convention_hint_would_cause_double_midrank_discard(
         hinter, player_view, common_view, settings, hand_belief
     ):
         return HintQuality.BAD
-    return HintQuality.MEDIOCRE
+    return HintQuality.FINE
+
+
+def _convention_hint_would_cause_double_midrank_discard(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    hand_belief: List[HandBelief],
+) -> bool:
+    """True when both peers' discard decodes recommend the same 2/3/4 identity (§9.2 ``bad``).
+
+    Ones are excluded (three copies; double-chop is not suit-killing the same way).
+    Fives cannot appear twice. Forced-hint (max tokens) still emits the channel for now.
+    """
+    next_player = (hinter + 1) % 3
+    prev_player = (hinter + 2) % 3
+    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
+    enc_type = sum(peer_codes.values()) % 8
+    next_card = _newly_decoded_discard_card_from_codes(
+        next_player,
+        peer_codes[prev_player],
+        enc_type,
+        player_view,
+        hand_belief,
+    )
+    if next_card is None:
+        return False
+    if next_card.number not in (Number.TWO, Number.THREE, Number.FOUR):
+        return False
+    prev_card = _newly_decoded_discard_card_from_codes(
+        prev_player,
+        peer_codes[next_player],
+        enc_type,
+        player_view,
+        hand_belief,
+    )
+    return prev_card is not None and next_card == prev_card
 
 
 def _convention_hint_would_cause_double_play(
@@ -1050,10 +1112,11 @@ def _newly_decoded_playable_card(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> Optional[Card]:
-    """Legacy helper: peer code from physical cards only (tests / single-hand)."""
+    """Peer code from visible peer hand + shared belief for that seat."""
     assert peer_index in player_view.teammates
     peer_type = _peer_code_for_hand(
         player_view.teammates[peer_index].cards,
+        hand_belief[peer_index],
         common_view,
         settings,
     )

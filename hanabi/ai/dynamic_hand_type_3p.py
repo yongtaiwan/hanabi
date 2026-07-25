@@ -16,7 +16,6 @@ from hanabi.ai.dht_belief import (
     RecState,
     SlotBelief,
     apply_decoded_value,
-    apply_physical_channel_decode,
     chop_chain_newer_from_chop,
     chop_slot,
     clear_legacy_safe,
@@ -342,16 +341,18 @@ def _card_from_successful_play(
 
 def _peer_code_for_hand(
     hand: List[Card],
+    belief: List[SlotBelief],
     common_view: CommonView,
     settings: GameSettings,
 ) -> int:
-    """Peer code from visible cards + public piles only (no stored convention belief).
+    """Peer code from one visible hand + that seat's shared public belief + piles.
 
-    Using a fresh belief row makes the code identical for every observer who sees
-    ``hand``, so each seat can decode their own message without a hinter oracle.
+    Uses legacy hand-type encoding or recommendation encoding per that hand's mode (§5).
     """
-    blank = [fresh_slot_belief() for _ in range(len(hand))]
-    return _encode_hand_type(hand, len(hand), common_view, settings, blank)
+    assert len(hand) == len(belief), f"hand size {len(hand)} != belief slots {len(belief)}"
+    if HandEncodingMode.RECOMMENDATION == hand_encoding_mode(belief):
+        return _encode_recommendation_peer_code(hand, belief, common_view, settings)
+    return _encode_hand_type(hand, len(hand), common_view, settings, belief)
 
 
 def _apply_convention_hint_decodes(
@@ -363,11 +364,10 @@ def _apply_convention_hint_decodes(
     settings: GameSettings,
     slot_belief: List[List[SlotBelief]],
 ) -> None:
-    """Update belief from the public channel using only visible cards + public piles.
+    """Update belief from the public channel using shared belief + visible cards.
 
-    - Hinter (sees both hands): updates both non-hinter rows; never own row.
-    - Non-hinter: updates only their own row (peer hand is visible).
-    Peer codes are physical-only (:func:`_peer_code_for_hand`).
+    Every observer applies the public decode to **both** non-hinter rows and never to the
+    hinter's row. Peer codes are snapshotted before either decode mutates belief.
     """
     hint_target = move.teammate
     other_non_hinter = _third_player_index(hinter_index, hint_target)
@@ -384,38 +384,30 @@ def _apply_convention_hint_decodes(
         if canonical is None or not _hints_match(canonical, move):
             return
 
-    if hinter_index == observer_index:
-        assert hint_target in observer_view.teammates
-        assert other_non_hinter in observer_view.teammates
-        for decoder in (hint_target, other_non_hinter):
-            peer_index = other_non_hinter if decoder == hint_target else hint_target
-            peer_code = _peer_code_for_hand(
-                observer_view.teammates[peer_index].cards,
-                common_view,
-                settings,
-            )
-            apply_physical_channel_decode(slot_belief[decoder], (encoded_type - peer_code) % 8)
-        return
-
-    if observer_index == hint_target:
-        peer_index = other_non_hinter
-    elif observer_index == other_non_hinter:
-        peer_index = hint_target
-    else:
-        assert False, (
-            f"observer P{observer_index + 1} must be hinter, hint target, or other non-hinter "
-            f"for hint P{hinter_index + 1} -> P{hint_target + 1}"
+    peer_code_by_seat: Dict[int, int] = {}
+    for seat in (hint_target, other_non_hinter):
+        if seat not in observer_view.teammates:
+            continue
+        peer_code_by_seat[seat] = _peer_code_for_hand(
+            observer_view.teammates[seat].cards,
+            slot_belief[seat],
+            common_view,
+            settings,
         )
 
-    assert peer_index in observer_view.teammates, (
-        f"P{observer_index + 1} must see peer P{peer_index + 1} to decode own hand"
-    )
-    peer_code = _peer_code_for_hand(
-        observer_view.teammates[peer_index].cards,
-        common_view,
-        settings,
-    )
-    apply_physical_channel_decode(slot_belief[observer_index], (encoded_type - peer_code) % 8)
+    decoded_by_seat: Dict[int, int] = {}
+    for decoder in (hint_target, other_non_hinter):
+        peer_index = other_non_hinter if decoder == hint_target else hint_target
+        if peer_index in peer_code_by_seat:
+            decoded_by_seat[decoder] = (encoded_type - peer_code_by_seat[peer_index]) % 8
+        else:
+            assert decoder in peer_code_by_seat, (
+                f"P{observer_index + 1} must see decoder P{decoder + 1} to apply public decode"
+            )
+            decoded_by_seat[decoder] = peer_code_by_seat[decoder]
+
+    for decoder, decoded in decoded_by_seat.items():
+        apply_decoded_value(slot_belief[decoder], decoded)
 
 
 def _hints_match(a: HintMove, b: HintMove) -> bool:
@@ -901,14 +893,15 @@ def _channel_encoded_type(
     settings: GameSettings,
     slot_belief: List[List[SlotBelief]],
 ) -> Tuple[int, str]:
-    del slot_belief  # peer codes are physical-only; belief is unused for the channel
     teammate_types: List[int] = []
     for teammate in ((hinter + 1) % 3, (hinter + 2) % 3):
         assert teammate in player_view.teammates, (
             f"hinter P{hinter + 1} must see both teammates to encode convention channel"
         )
         hand = player_view.teammates[teammate].cards
-        teammate_types.append(_peer_code_for_hand(hand, common_view, settings))
+        teammate_types.append(
+            _peer_code_for_hand(hand, slot_belief[teammate], common_view, settings)
+        )
     type_sum = "+".join(str(t) for t in teammate_types)
     return sum(teammate_types) % 8, type_sum
 
@@ -929,8 +922,7 @@ def _convention_hint_would_identify_new_playable(
 ) -> bool:
     """True when the convention hint is step-2-urgent for the **next** player.
 
-    Peer codes are physical-only. ``slot_belief`` is the hinter's independently
-    maintained matrix (teammate rows updated only from public info).
+    Peer codes use each teammate's shared public belief row plus that hand's cards.
     """
     next_player = (hinter + 1) % 3
     prev_player = (hinter + 2) % 3
@@ -984,6 +976,7 @@ def _newly_decoded_playable_card(
     assert decoder in player_view.teammates
     peer_type = _peer_code_for_hand(
         player_view.teammates[peer_index].cards,
+        slot_belief[peer_index],
         common_view,
         settings,
     )
@@ -1054,6 +1047,7 @@ def assert_independent_own_decode_matches(
                 continue
         peer_code = _peer_code_for_hand(
             view.teammates[peer].cards,
+            list(own_rows_before[peer]),
             players[seat].common_view,
             players[seat].game_settings,
         )
@@ -1061,15 +1055,36 @@ def assert_independent_own_decode_matches(
         assert peer in views[hinter_index].teammates
         assert peer_code == _peer_code_for_hand(
             views[hinter_index].teammates[peer].cards,
+            list(own_rows_before[peer]),
             players[hinter_index].common_view,
             players[hinter_index].game_settings,
         ), f"peer code for P{peer + 1} not publicly determined"
         expected_row = [
             SlotBelief(b.playability, b.legacy_kind, b.rec_state) for b in own_rows_before[seat]
         ]
-        apply_physical_channel_decode(expected_row, (enc - peer_code) % 8)
+        apply_decoded_value(expected_row, (enc - peer_code) % 8)
         actual = players[seat]._slot_belief[seat]
         assert actual == expected_row, (
             f"P{seat + 1} own belief after hint != independent decode: "
             f"actual={actual!r} expected={expected_row!r}"
         )
+
+
+def assert_public_non_hinter_rows_agree(
+    players: Sequence[DynamicHandType3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+) -> None:
+    """After a convention hint, all seats must share the same next/prev belief rows."""
+    assert 3 == len(players)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        ref = players[0]._slot_belief[seat]
+        for player in players[1:]:
+            assert player._slot_belief[seat] == ref, (
+                f"P{player._player_index + 1} belief for P{seat + 1} != P1 after "
+                f"hint from P{hinter_index + 1}"
+            )

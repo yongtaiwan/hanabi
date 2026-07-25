@@ -645,7 +645,7 @@ class TestPlaySmoke(unittest.TestCase):
 
 class TestIndependentOwnDecode(unittest.TestCase):
     def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
-        """Non-hinters update own rows; hinter updates teammate rows from public cards."""
+        """Every observer updates both non-hinter rows; hinter never writes own row."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         players = [HintHandSubtype3P(i) for i in range(3)]
@@ -654,7 +654,7 @@ class TestIndependentOwnDecode(unittest.TestCase):
             player.set_common_view(common)
 
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = [
             PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
             PlayerView(
@@ -666,15 +666,23 @@ class TestIndependentOwnDecode(unittest.TestCase):
                 own_hand_size=5,
             ),
         ]
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        enc = (
+            h3p._peer_code_for_hand(hand_p1, players[0]._inferred_card_kind[1], common, settings)
+            + h3p._peer_code_for_hand(hand_p2, players[0]._inferred_card_kind[2], common, settings)
+        ) % 8
+        hint = h3p._build_hint_for_encoded(0, views[0], enc)
+        self.assertIsNotNone(hint)
         own_before = [list(players[seat]._inferred_card_kind[seat]) for seat in range(3)]
         hinter_own_before = list(players[0]._inferred_card_kind[0])
         for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+            if isinstance(hint, NumberHint):
+                player.observe_number_hint_move(0, hint, view)
+            else:
+                assert isinstance(hint, ColorHint)
+                player.observe_color_hint_move(0, hint, view)
         self.assertEqual(hinter_own_before, players[0]._inferred_card_kind[0])
         h3p.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
-        self.assertEqual(players[0]._inferred_card_kind[1], players[1]._inferred_card_kind[1])
-        self.assertEqual(players[0]._inferred_card_kind[2], players[2]._inferred_card_kind[2])
+        h3p.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_hinter_does_not_update_own_row(self) -> None:
         settings = create_standard_game_settings(3)
@@ -683,11 +691,20 @@ class TestIndependentOwnDecode(unittest.TestCase):
         hinter.set_game_settings(settings)
         hinter.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         view = PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
+        enc = (
+            h3p._peer_code_for_hand(hand_p1, hinter._inferred_card_kind[1], common, settings)
+            + h3p._peer_code_for_hand(hand_p2, hinter._inferred_card_kind[2], common, settings)
+        ) % 8
+        hint = h3p._build_hint_for_encoded(0, view, enc)
+        self.assertIsNotNone(hint)
         own_before = list(hinter._inferred_card_kind[0])
-        hinter.observe_number_hint_move(0, hint, view)
+        if isinstance(hint, NumberHint):
+            hinter.observe_number_hint_move(0, hint, view)
+        else:
+            assert isinstance(hint, ColorHint)
+            hinter.observe_color_hint_move(0, hint, view)
         self.assertEqual(own_before, hinter._inferred_card_kind[0])
         self.assertTrue(any(kind is not None for kind in hinter._inferred_card_kind[1]))
         self.assertTrue(any(kind is not None for kind in hinter._inferred_card_kind[2]))

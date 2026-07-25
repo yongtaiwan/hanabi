@@ -171,11 +171,9 @@ def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
 
 
 def apply_physical_channel_decode(hand: HandBelief, decoded: int) -> None:
-    """Apply a channel value encoded against :func:`fresh_hand_belief` of the same size.
+    """Legacy helper: interpret ``decoded`` against a blank ``n_play == hand_size`` boundary.
 
-    Peer codes use a blank hand belief, so play/discard type boundaries follow
-    ``n_play == hand_size``. Interpreting with the seat's current ``n_play`` would
-    desync and can assert.
+    Live convention encode/decode uses the seat's shared belief via :func:`apply_decoded_value`.
     """
     assert 0 <= decoded <= 7, f"decoded value {decoded} out of range"
     ref = fresh_hand_belief(len(hand.slots))

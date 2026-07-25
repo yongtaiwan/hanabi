@@ -110,6 +110,23 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         overlays = convention_overlays_for_seat(game, 0)
         self.assertTrue(overlays[0].chop_confirmed)
 
+    def test_overlays_use_target_seat_own_belief(self) -> None:
+        """Seat overlays come from that seat's bot, not always seat 0's matrix."""
+        from hanabi.ai.dr_belief import Playability as DrPlayability
+        from hanabi.ai.dynamic_recommendation_3p import DynamicRecommendation3P
+
+        settings = create_standard_game_settings(3)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for player in players:
+            player.set_game_settings(settings)
+        game = Game.create(team=PlayerTeam(players), settings=settings)
+        # Only seat 1 knows slot 0 is playable (as after decoding own hint message).
+        players[1]._hand_belief[1].slots[0].playability = DrPlayability.PLAYABLE
+        players[1]._hand_belief[1].chop = 1
+        overlays = convention_overlays_for_seat(game, 1)
+        self.assertEqual(CardKind.PLAYABLE, overlays[0].kind)
+        self.assertFalse(overlays[0].is_chop)
+
 
 if __name__ == "__main__":
     unittest.main()

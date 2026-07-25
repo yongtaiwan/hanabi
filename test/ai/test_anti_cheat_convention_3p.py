@@ -10,7 +10,8 @@ from pathlib import Path
 from hanabi.ai import dynamic_hand_type_3p as dht
 from hanabi.ai import dynamic_recommendation_3p as dr
 from hanabi.ai import hint_hand_subtype_3p as hhs
-from hanabi.ai.dr_belief import copy_hand_belief
+from hanabi.ai.dht_belief import fresh_slot_belief
+from hanabi.ai.dr_belief import copy_hand_belief, fresh_hand_belief
 from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P
 from hanabi.ai.dynamic_recommendation_3p import DynamicRecommendation3P
 from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P
@@ -117,35 +118,40 @@ class TestPeerCodesPubliclyDetermined(unittest.TestCase):
         settings = create_standard_game_settings(3)
         common = _common(settings)
         next_hand, prev_hand = self._hands()
+        next_belief = fresh_hand_belief(5)
+        prev_belief = fresh_hand_belief(5)
         self.assertEqual(
-            dr._peer_code_for_hand(next_hand, common, settings),
-            dr._peer_code_for_hand(list(next_hand), common, settings),
+            dr._peer_code_for_hand(next_hand, next_belief, common, settings),
+            dr._peer_code_for_hand(list(next_hand), next_belief, common, settings),
         )
         self.assertEqual(
-            dr._peer_code_for_hand(prev_hand, common, settings),
-            dr._peer_code_for_hand(list(prev_hand), common, settings),
+            dr._peer_code_for_hand(prev_hand, prev_belief, common, settings),
+            dr._peer_code_for_hand(list(prev_hand), prev_belief, common, settings),
         )
 
     def test_dht_peer_code_same_for_any_observer_seeing_the_hand(self) -> None:
         settings = create_standard_game_settings(3)
         common = _common(settings)
         next_hand, prev_hand = self._hands()
+        next_belief = [fresh_slot_belief() for _ in range(5)]
+        prev_belief = [fresh_slot_belief() for _ in range(5)]
         self.assertEqual(
-            dht._peer_code_for_hand(next_hand, common, settings),
-            dht._peer_code_for_hand(list(next_hand), common, settings),
+            dht._peer_code_for_hand(next_hand, next_belief, common, settings),
+            dht._peer_code_for_hand(list(next_hand), next_belief, common, settings),
         )
         self.assertEqual(
-            dht._peer_code_for_hand(prev_hand, common, settings),
-            dht._peer_code_for_hand(list(prev_hand), common, settings),
+            dht._peer_code_for_hand(prev_hand, prev_belief, common, settings),
+            dht._peer_code_for_hand(list(prev_hand), prev_belief, common, settings),
         )
 
     def test_hhs_peer_code_same_for_any_observer_seeing_the_hand(self) -> None:
         settings = create_standard_game_settings(3)
         common = _common(settings)
         next_hand, prev_hand = self._hands()
+        blank = [None] * 5
         self.assertEqual(
-            hhs._peer_code_for_hand(next_hand, common, settings),
-            hhs._peer_code_for_hand(list(next_hand), common, settings),
+            hhs._peer_code_for_hand(next_hand, blank, common, settings),
+            hhs._peer_code_for_hand(list(next_hand), blank, common, settings),
         )
 
 
@@ -158,6 +164,27 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
             PlayerView(teammates={0: Hand(filler), 1: Hand(hand_p1)}, own_hand_size=5),
         ]
 
+    def _observe_convention_hint(self, players, views, common, settings, hand_p1, hand_p2, mod):
+        # Opening deal: shared blank belief rows (same for every seat).
+        if isinstance(players[0], DynamicRecommendation3P):
+            b1, b2 = players[0]._hand_belief[1], players[0]._hand_belief[2]
+        elif isinstance(players[0], DynamicHandType3P):
+            b1, b2 = players[0]._slot_belief[1], players[0]._slot_belief[2]
+        else:
+            b1, b2 = players[0]._inferred_card_kind[1], players[0]._inferred_card_kind[2]
+        enc = (
+            mod._peer_code_for_hand(hand_p1, b1, common, settings)
+            + mod._peer_code_for_hand(hand_p2, b2, common, settings)
+        ) % 8
+        hint = mod._build_hint_for_encoded(0, views[0], enc)
+        self.assertIsNotNone(hint)
+        for player, view in zip(players, views):
+            if isinstance(hint, NumberHint):
+                player.observe_number_hint_move(0, hint, view)
+            else:
+                player.observe_color_hint_move(0, hint, view)
+        return hint
+
     def test_dr_independent_own_decode(self) -> None:
         settings = create_standard_game_settings(3)
         common = _common(settings)
@@ -166,13 +193,12 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
             p.set_game_settings(settings)
             p.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = self._views(hand_p1, hand_p2)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
         own_before = [copy_hand_belief(players[s]._hand_belief[s]) for s in range(3)]
-        for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+        hint = self._observe_convention_hint(players, views, common, settings, hand_p1, hand_p2, dr)
         dr.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        dr.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_dht_independent_own_decode(self) -> None:
         settings = create_standard_game_settings(3)
@@ -182,9 +208,8 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
             p.set_game_settings(settings)
             p.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = self._views(hand_p1, hand_p2)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
         own_before = [
             [
                 dht.SlotBelief(b.playability, b.legacy_kind, b.rec_state)
@@ -192,9 +217,9 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
             ]
             for s in range(3)
         ]
-        for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+        hint = self._observe_convention_hint(players, views, common, settings, hand_p1, hand_p2, dht)
         dht.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        dht.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_hhs_independent_own_decode(self) -> None:
         settings = create_standard_game_settings(3)
@@ -204,18 +229,17 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
             p.set_game_settings(settings)
             p.set_common_view(common)
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
-        hand_p2 = [Card(Color.BLUE, Number.THREE)] * 5
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = self._views(hand_p1, hand_p2)
-        hint = NumberHint(teammate=1, cards=[4], number=Number.ONE)
         own_before = [list(players[s]._inferred_card_kind[s]) for s in range(3)]
-        for player, view in zip(players, views):
-            player.observe_number_hint_move(0, hint, view)
+        hint = self._observe_convention_hint(players, views, common, settings, hand_p1, hand_p2, hhs)
         hhs.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        hhs.assert_public_non_hinter_rows_agree(players, 0, hint)
 
 
 class TestLiveGamesStayConsistent(unittest.TestCase):
     def test_short_dr_games_complete(self) -> None:
-        """Smoke: physical peer codes + local decode finish without assert failures."""
+        """Smoke: shared-belief peer codes + local decode finish without assert failures."""
         settings = create_standard_game_settings(3)
         for seed in range(42, 47):
             from hanabi.core.game_field import GameField
@@ -225,6 +249,54 @@ class TestLiveGamesStayConsistent(unittest.TestCase):
             team = PlayerTeam(players)
             result = field._play_game_with_team(team, save_record=False)
             self.assertIsNotNone(result.score)
+
+    def test_replay_t10_marks_reach_all_seats_so_t11_discards(self) -> None:
+        """Non-hinter must absorb public decode of both hands (game 12 T10→T11)."""
+        from hanabi.ai.dr_belief import Playability
+        from hanabi.ai.dynamic_recommendation_3p import (
+            ChopClass,
+            HintQuality,
+            _HINT_CHOP_MATRIX,
+            _chop_class,
+            _hint_quality,
+        )
+        from hanabi.core.game_history import GameHistory
+        from hanabi.core.moves import Discard
+
+        path = (
+            Path(__file__).resolve().parents[2]
+            / "game_records"
+            / "exp_ai_comparison"
+            / "20260725_174417"
+            / "3p"
+            / "games"
+            / "012"
+            / "run_012_ai_DynamicRecommendation3P.yaml"
+        )
+        data = GameHistory({}).load_from_file(str(path))
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        game = GameHistory.create_game_from_history(data, PlayerTeam(players))
+        for p in players:
+            p.set_game_settings(game.settings)
+        game._set_common_view_for_players()
+        for ms in data["moves"][:10]:
+            mover = game.state.current_player
+            game.process_move(mover, GameHistory._short_to_move(ms, mover, game))
+            game._advance_turn()
+        # After T10, every seat knows P3 slot 4 is playable.
+        for bot in players:
+            self.assertEqual(Playability.PLAYABLE, bot._hand_belief[2].slots[4].playability)
+        p2 = players[1]
+        own = p2._hand_belief[1]
+        pv = game.get_player_view(1)
+        hq = _hint_quality(1, pv, game.state.common_view, game.settings, p2._hand_belief)
+        chop_class = _chop_class(own)
+        self.assertEqual(ChopClass.CONFIRMED, chop_class)
+        self.assertNotEqual(HintQuality.GOOD, hq)
+        self.assertFalse(_HINT_CHOP_MATRIX[(hq, chop_class)])
+        move = p2.play(pv)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(2, move.card)
 
 
 if __name__ == "__main__":

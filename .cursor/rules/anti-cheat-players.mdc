@@ -15,11 +15,12 @@ alwaysApply: false
 
 ## Convention channel encode / decode (`hanabi/ai/*`)
 
-- Peer / hand codes used in the mod-8 channel must be functions of **one visible hand + public piles** only (physical / blank belief). Same inputs ⇒ same code for every observer who sees that hand.
+- Peer / hand codes used in the mod-8 channel must be functions of **one visible hand + that seat’s shared public belief row + public piles** only. Same inputs ⇒ same code for every observer who sees that hand. Do **not** reset encode to a blank / fresh belief row (chop and playability are public).
 - Do not add encode kwargs like `other_hands` / `almost_critical` that make peer codes hinter-asymmetric.
-- Each seat updates only rows it can derive from its `PlayerView`: hinter may update teammate rows; non-hinters update **own** row only; hinter never writes own row from their own hint.
+- Do not read the encoder’s own cards or any other hand when computing a peer code.
+- On each convention hint, **every** observer updates **both** non-hinter belief rows from the public decode and **never** the hinter's row. When the peer hand is the observer's own (invisible), use that the channel is ``enc = (peer_next + peer_prev) % 8`` so the other seat's message equals that seat's visible peer code.
 - Hinter-only hint **quality** may use both visible hands; keep that in separately named helpers — never feed it into peer codes.
-- Prefer `assert_independent_own_decode_matches` (or equivalent) in tests after multi-seat `observe` of a convention hint.
+- Prefer `assert_independent_own_decode_matches` and `assert_public_non_hinter_rows_agree` (or equivalent) in tests after multi-seat `observe` of a convention hint.
 
 ## GUI
 
