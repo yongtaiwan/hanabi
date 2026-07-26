@@ -579,21 +579,6 @@ def _has_cross_hand_copy(card: Card, other_hands: Sequence[Sequence[Card]]) -> b
     return any(card == c for other in other_hands for c in other)
 
 
-def _critical_points_lost(card: Card, common_view: CommonView, settings: GameSettings) -> int:
-    """Fireworks points that become unreachable if this last copy is discarded.
-
-    Counts still-reachable ranks from ``card.number`` up through 5 (already-dead higher
-    ranks, e.g. both 4s gone, are skipped — discarding a 3 then loses only 1).
-    """
-    lost = 0
-    for rank_value in range(card.number.value, Number.FIVE.value + 1):
-        probe = Card(card.color, Number(rank_value))
-        if CardKind.USELESS == common_view.card_kind(probe, settings):
-            continue
-        lost += 1
-    return lost
-
-
 def _discard_option_score(
     hand: List[Card],
     chop_slot: int,
@@ -605,8 +590,8 @@ def _discard_option_score(
     Ranking (single hand + public piles only — channel-safe):
     useless > in-hand duplicate > dispensable > critical > playable.
 
-    Among criticals: fewest fireworks points lost, then lower rank (keep 5s for hint bonus),
-    then older slot.
+    Among criticals: any critical already costs a perfect score, so only prefer the **newest**
+    slot (sticky chop can pivot to later non-criticals on a later hint).
 
     Among in-hand duplicates that otherwise tie: prefer the **newest** copy so sticky chop
     advances into later candidates after that discard.
@@ -626,12 +611,7 @@ def _discard_option_score(
         assert CardKind.DISPENSABLE == kind, f"unexpected card kind for discard rank: {kind}"
         tier = 2
     if CardKind.CRITICAL == kind:
-        return (
-            tier,
-            _critical_points_lost(card, common_view, settings),
-            card.number.value,
-            chop_slot,
-        )
+        return (tier, -chop_slot, 0, 0)
     prefer_high_rank = tier in (1, 2)
     rank_key = -card.number.value if prefer_high_rank else card.number.value
     # In-hand dups: newest first; otherwise older slot wins residual ties.

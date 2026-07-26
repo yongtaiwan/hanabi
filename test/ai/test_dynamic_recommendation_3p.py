@@ -631,18 +631,18 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         code, discard_card = dr._encode_peer_code(hand, sticky, common, settings)
         self.assertEqual(Card(Color.YELLOW, Number.ONE), discard_card)
         self.assertEqual(6, code)
-        blank_code, blank_discard = dr._encode_peer_code(
+        _blank_code, blank_discard = dr._encode_peer_code(
             hand, fresh_hand_belief(5), common, settings
         )
         self.assertNotEqual(Card(Color.YELLOW, Number.ONE), blank_discard)
-        self.assertNotEqual(code, blank_code)
+        # Sticky and blank may share a discard *code* while naming different slots.
         self.assertEqual(
             code,
             dr._peer_code_for_hand(hand, sticky, common, settings),
         )
 
-    def test_critical_tiebreak_prefers_fewest_points_lost(self) -> None:
-        """Game 95 T19 style: last B2 loses 4 points; B5/G5 lose 1 — prefer a 5."""
+    def test_critical_discard_prefers_newest_only(self) -> None:
+        """Among criticals, newest wins even if an older critical loses fewer points."""
         from hanabi.core.card import Suit
 
         settings = create_standard_game_settings(3)
@@ -663,65 +663,66 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[2], settings))
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[3], settings))
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[4], settings))
-        self.assertEqual(4, dr._critical_points_lost(hand[3], common, settings))
-        self.assertEqual(1, dr._critical_points_lost(hand[2], common, settings))
-        self.assertEqual(1, dr._critical_points_lost(hand[4], common, settings))
         s_b5 = dr._discard_option_score(hand, 2, common, settings)
         s_b2 = dr._discard_option_score(hand, 3, common, settings)
         s_g5 = dr._discard_option_score(hand, 4, common, settings)
-        self.assertLess(s_b5, s_b2)
+        # Newest critical first (ignore points-lost / rank).
         self.assertLess(s_g5, s_b2)
-        self.assertLess(s_b5, s_g5)  # same points + rank → older slot
+        self.assertLess(s_b2, s_b5)
         belief = fresh_hand_belief(5)
-        # Keep only the three criticals on the discard chain (skip older trash via playable).
         set_playability(belief.slots[0], Playability.PLAYABLE)
         set_playability(belief.slots[1], Playability.PLAYABLE)
         belief.chop = 2
         code, slot = dr._pick_discard_code(hand, belief, common, settings)
-        self.assertEqual(2, slot)
-        self.assertEqual(0, code)
+        self.assertEqual(4, slot)
+        self.assertEqual(6, code)
 
-    def test_critical_points_lost_skips_already_dead_higher_ranks(self) -> None:
-        """Both 4s gone ⇒ discarding last 3 loses only 1 (not 3+4+5)."""
-        from hanabi.core.card import Suit
-
+    def test_critical_window_of_fives_picks_newest(self) -> None:
+        """Game 16 style: indicable all critical 5s → recommend rightmost."""
         settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
-            cards_played={},
-        )
-        g3 = Card(Color.GREEN, Number.THREE)
-        self.assertEqual(CardKind.CRITICAL, common.card_kind(g3, settings))
-        self.assertEqual(1, dr._critical_points_lost(g3, common, settings))
-
-    def test_critical_same_points_prefers_lower_rank(self) -> None:
-        """Equal loss ⇒ discard lower rank to keep a 5 for hint-token bonus."""
-        from hanabi.core.card import Suit
-
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
-            cards_played={},
-        )
-        # G3 loses 1 (4/5 dead); B5 loses 1. Prefer G3 even if it is newer.
+        common = _common(settings)
         hand = [
             Card(Color.BLUE, Number.FIVE),
+            Card(Color.GREEN, Number.FIVE),
             Card(Color.RED, Number.FIVE),
-            Card(Color.YELLOW, Number.FIVE),
-            Card(Color.WHITE, Number.FIVE),
-            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
         ]
-        s_b5 = dr._discard_option_score(hand, 0, common, settings)
-        s_g3 = dr._discard_option_score(hand, 4, common, settings)
-        self.assertEqual(1, s_b5[1])
-        self.assertEqual(1, s_g3[1])
-        self.assertLess(s_g3, s_b5)
+        for slot in range(3):
+            self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[slot], settings))
+        belief = fresh_hand_belief(5)
+        code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
+        self.assertEqual(6, code)
+
+    def test_critical_newest_beats_lower_rank_older(self) -> None:
+        """A newer critical 5 beats an older critical 3 (perfect already impossible)."""
+        from hanabi.core.card import Suit
+
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
+            cards_played={},
+        )
+        hand = [
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.BLUE, Number.FIVE),
+            Card(Color.WHITE, Number.TWO),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[2], settings))
+        belief = fresh_hand_belief(5)
+        set_playability(belief.slots[1], Playability.PLAYABLE)
+        set_playability(belief.slots[3], Playability.PLAYABLE)
+        set_playability(belief.slots[4], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
 
     def test_discard_chain_wraps_older_than_chop(self) -> None:
         hand = fresh_hand_belief(5)

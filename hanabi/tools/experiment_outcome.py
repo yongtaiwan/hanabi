@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from hanabi.core.enums import CardKind, Number
+from hanabi.core.enums import Number
 from hanabi.core.game import Game, GameSettings
 from hanabi.core.game_field import ExperimentResults
 from hanabi.core.game_history import GameHistory
@@ -100,20 +100,23 @@ def _play_would_succeed(game: Game, player_index: int, card_index: int) -> bool:
 
 def _maybe_mark_lost_critical_before_move(game: Game, player_index: int, move: Move) -> bool:
     """
-    Return True if this discard or failing play removes a card that was CRITICAL
-    (per :meth:`CommonView.card_kind`) immediately before the move.
+    Return True if this discard or failing play removes the last remaining copy of that card.
+
+    Covers classic :attr:`~hanabi.core.enums.CardKind.CRITICAL` losses and discarding a unique
+    :attr:`~hanabi.core.enums.CardKind.PLAYABLE` (e.g. the only 5 after the 4 is down) — both
+    make a perfect score impossible / can trigger ``no_points_possible``.
     """
     state = game.state
     settings = game.settings
     cv = state.common_view
     if isinstance(move, Discard):
         card = state.player_hands[player_index].cards[move.card]
-        return CardKind.CRITICAL == cv.card_kind(card, settings)
+        return 1 == cv._rank_copies_remaining_for_fireworks(card.color, card.number, settings)
     if isinstance(move, Play):
         if _play_would_succeed(game, player_index, move.card):
             return False
         card = state.player_hands[player_index].cards[move.card]
-        return CardKind.CRITICAL == cv.card_kind(card, settings)
+        return 1 == cv._rank_copies_remaining_for_fireworks(card.color, card.number, settings)
     return False
 
 
@@ -137,7 +140,8 @@ def replay_summary(history_data: Dict[str, Any]) -> ReplaySummary:
     """
     Reconstruct a game from ``history_data`` and apply recorded moves with a HumanPlayer team.
 
-    Tracks whether the team ever discarded (or misplayed) a CRITICAL card and how the game ended.
+    Tracks whether the team ever discarded (or misplayed) the last remaining copy of a card
+    (critical or unique playable) and how the game ended.
     """
     moves: List[str] = history_data.get("moves", [])
     settings = GameHistory.settings_from_history_dict(history_data)
@@ -165,7 +169,10 @@ def replay_summary(history_data: Dict[str, Any]) -> ReplaySummary:
 
     if "no_points_possible" == end_reason:
         assert 0 < state.common_view.live_tokens, "auto-end implies lives remain"
-        assert lost_critical, "no_points_possible implies critical loss on the path"
+        assert lost_critical, (
+            "no_points_possible implies a last-copy discard/bomb on the path "
+            "(critical or unique playable)"
+        )
 
     recorded = history_data.get("final_score")
     if recorded is not None:

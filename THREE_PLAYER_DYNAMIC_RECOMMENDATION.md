@@ -231,10 +231,9 @@ Encoder discard ranking (lower = better to recommend):
 
 - **In-hand duplicate:** same identity ≥2 times in that hand. Among tied in-hand dups, prefer the
   **newest** copy (sticky chop then advances into later candidates).
-- **Critical tie-break:** among true criticals, prefer fewest fireworks points lost (still-reachable
-  ranks from that card up to 5; already-dead higher ranks do not count — e.g. both 4s gone ⇒
-  discarding a 3 loses 1). If equal loss, prefer **lower rank** (keep 5s for the play hint-token
-  bonus), then older slot.
+- **Critical tie-break:** any critical discard already rules out a perfect score, so among
+  criticals prefer only the **newest** slot (sticky chop can pivot to later non-criticals on a
+  following hint). Do not rank by points lost or by rank.
 
 Hinter-only hint **quality** (whether to hint vs discard chop, §9) may still look at both visible
 hands; that does not change the encoded peer codes.
