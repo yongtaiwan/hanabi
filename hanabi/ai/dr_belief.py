@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from hanabi.core.card import Card
 from hanabi.core.enums import Number
@@ -22,6 +22,8 @@ class InferredSlot:
     """Convention inference for one hand slot (not card identity)."""
 
     playability: Playability = Playability.UNKNOWN
+    # Set when a public number-5 hint touches this slot (all observers agree).
+    known_five: bool = False
 
 
 @dataclass
@@ -51,7 +53,8 @@ def n_play(hand: InferredHand) -> int:
 
 
 def is_discard_candidate(belief: InferredSlot) -> bool:
-    return Playability.PLAYABLE != belief.playability
+    """Playables and known 5s are never discard-chain / chop candidates."""
+    return Playability.PLAYABLE != belief.playability and not belief.known_five
 
 
 def default_chop_slot(hand: InferredHand) -> Optional[int]:
@@ -74,7 +77,7 @@ def clear_chop_confirmation(hand: InferredHand) -> None:
 
 
 def discard_chain(hand: InferredHand) -> List[int]:
-    """Wrapped discard order from chop: newer, then older. Skips identified playables (§5.2)."""
+    """Wrapped discard order from chop: newer, then older. Skips playables and known 5s (§5.2)."""
     ensure_default_chop(hand)
     if hand.chop is None:
         return []
@@ -89,11 +92,11 @@ def discard_chain(hand: InferredHand) -> List[int]:
 
 
 def discard_code_candidates(hand: InferredHand) -> List[int]:
-    """First ``m = 8 - N_play`` discard-chain slots (never identified playables)."""
+    """First ``m = 8 - N_play`` discard-chain slots (never identified playables / known 5s)."""
     types = discard_types_for_n_play(n_play(hand))
     candidates = discard_chain(hand)[: len(types)]
     assert all(is_discard_candidate(hand.cards[slot]) for slot in candidates), (
-        f"discard candidates must skip playables: {candidates}"
+        f"discard candidates must skip playables and known 5s: {candidates}"
     )
     return candidates
 
@@ -268,10 +271,20 @@ def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSe
 
 def copy_inferred_hand(hand: InferredHand) -> InferredHand:
     return InferredHand(
-        cards=[InferredSlot(b.playability) for b in hand.cards],
+        cards=[InferredSlot(b.playability, b.known_five) for b in hand.cards],
         chop=hand.chop,
         chop_confirmed=hand.chop_confirmed,
     )
+
+
+def mark_known_fives(hand: InferredHand, slots: Sequence[int]) -> None:
+    """Record public number-5 touches; known 5s leave the discard chain."""
+    for slot in slots:
+        assert 0 <= slot < len(hand.cards), f"known-five slot {slot} out of hand"
+        hand.cards[slot].known_five = True
+        if hand.chop == slot:
+            _advance_chop_past_slot(hand, slot)
+    ensure_default_chop(hand)
 
 
 def indicable_discard_options(hand: InferredHand) -> List[Tuple[int, int, bool]]:

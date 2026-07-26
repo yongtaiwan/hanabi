@@ -21,6 +21,7 @@ from hanabi.ai.dr_belief import (
     fresh_inferred_hand,
     fresh_inferred_slot,
     indicable_discard_options,
+    mark_known_fives,
     n_play,
     play_reopens_playability,
     play_type_for_slot,
@@ -150,11 +151,20 @@ class DynamicRecommendation3P(BasePlayer):
             self.game_settings,
             self._inferred_hands,
         )
+        # After convention decode: literal 5 touches are public for every seat.
+        _apply_known_five_marks_from_number_hint(move, self._inferred_hands)
 
     def play(self, player_view: PlayerView) -> Move:
         assert player_view.own_hand_size > 0
         own = self._inferred_hands[self._player_index]
         ensure_default_chop(own)
+        # Final round: score attempts beat chop/protect; see ``_play_final_round``.
+        if _in_final_round_score_mode(self.common_view):
+            move = self._play_final_round(player_view)
+            assert move is not None, "final-round policy must return a legal move"
+            assert self.is_move_legal(player_view, move)
+            assert isinstance(move, HasWhy), "every DR move branch must attach a why via move_with_why"
+            return move
         # TODO(hint-bank): At max-1 tokens, playing a 5 refunds to max and discard-locks the
         # next seat — consider deferring that 5 when a safe discard exists and the would-be
         # forced hint is not good (see §9 token-banking notes).
@@ -255,6 +265,46 @@ class DynamicRecommendation3P(BasePlayer):
         hand.cards = shifted
         finalize_chop_after_shift(hand)
 
+    def _play_final_round(self, player_view: PlayerView) -> Optional[Move]:
+        """Deck empty + lives left: maximize score; skip protect and non-good hints.
+
+        Order: known playable / safe known-5 → good hint → newest unknown →
+        any remaining hint → chop / oldest discard (last resort only).
+        """
+        move = self._try_play_leftmost_playable(player_view)
+        if move is not None:
+            return move
+        can_hint = 0 < self.common_view.hint_tokens
+        if can_hint:
+            channel = _project_channel(
+                self._player_index,
+                player_view,
+                self.common_view,
+                self.game_settings,
+                self._inferred_hands,
+            )
+            if HintQuality.GOOD == channel.quality:
+                why_prefix = (
+                    "[3p DR] Endgame hint (identifies playable for next)"
+                    if channel.identifies_new_playable_for_next
+                    else "[3p DR] Endgame hint (trash for next + playable for prev)"
+                )
+                return self._give_convention_hint(player_view, why_prefix=why_prefix)
+        move = self._try_play_newest_unknown(player_view)
+        if move is not None:
+            return move
+        if can_hint:
+            return self._give_convention_hint(
+                player_view, why_prefix="[3p DR] Endgame hint (no play candidate)"
+            )
+        own = self._inferred_hands[self._player_index]
+        chop_class = _chop_class(own) if own.chop is not None else None
+        if chop_class is not None:
+            move = self._discard_chop(player_view, chop_class)
+            if move is not None:
+                return move
+        return self._discard_oldest(player_view)
+
     def _try_protect_next_player(self, player_view: PlayerView) -> Optional[Move]:
         """Save next from discarding a last-copy critical/playable before own tempo (§9.0)."""
         if not _next_would_discard_danger(
@@ -299,12 +349,47 @@ class DynamicRecommendation3P(BasePlayer):
             f"[3p DR] Protect next (token gift; discard confirmed chop slot {own.chop})",
         )
 
+    def _try_play_known_five(
+        self,
+        player_view: PlayerView,
+        *,
+        why: str,
+    ) -> Optional[Move]:
+        """Play leftmost known-5 when every incomplete color awaits a 5 (guaranteed)."""
+        if not _known_five_is_guaranteed_playable(self.common_view, self.game_settings):
+            return None
+        for slot, belief in enumerate(self._inferred_hands[self._player_index].cards):
+            if not belief.known_five:
+                continue
+            if Playability.PLAYABLE == belief.playability:
+                continue  # already handled by convention-playable branch
+            assert self.is_move_legal(player_view, Play(slot))
+            return move_with_why(Play(slot), f"{why} slot {slot}")
+        return None
+
     def _try_play_leftmost_playable(self, player_view: PlayerView) -> Optional[Move]:
         for slot, belief in enumerate(self._inferred_hands[self._player_index].cards):
             if Playability.PLAYABLE != belief.playability:
                 continue
             assert self.is_move_legal(player_view, Play(slot))
             return move_with_why(Play(slot), f"[3p DR] Play slot {slot} (identified playable)")
+        return self._try_play_known_five(
+            player_view,
+            why="[3p DR] Play known 5 (all incomplete colors await a 5)",
+        )
+
+    def _try_play_newest_unknown(self, player_view: PlayerView) -> Optional[Move]:
+        """Play newest ``UNKNOWN`` slot (convention play order); endgame score attempt."""
+        own = self._inferred_hands[self._player_index]
+        for slot in range(len(own.cards) - 1, -1, -1):
+            if Playability.UNKNOWN != own.cards[slot].playability:
+                continue
+            if own.cards[slot].known_five:
+                continue
+            assert self.is_move_legal(player_view, Play(slot))
+            return move_with_why(
+                Play(slot), f"[3p DR] Endgame play slot {slot} (unknown; score attempt)"
+            )
         return None
 
     def _give_convention_hint(
@@ -357,6 +442,37 @@ class DynamicRecommendation3P(BasePlayer):
         if not self.is_move_legal(player_view, Discard(0)):
             return None
         return move_with_why(Discard(0), "[3p DR] Discard slot 0 (oldest; no chop)")
+
+
+def _in_final_round_score_mode(common_view: CommonView) -> bool:
+    """True when the deck is empty and at least one life remains (score > chop)."""
+    return 0 == common_view.cards_to_draw and 0 < common_view.live_tokens
+
+
+def _apply_known_five_marks_from_number_hint(
+    move: NumberHint,
+    inferred_hands: List[InferredHand],
+) -> None:
+    """Public number-5 touches: every observer marks the same slots on the target seat."""
+    if Number.FIVE != move.number:
+        return
+    mark_known_fives(inferred_hands[move.teammate], move.cards)
+
+
+def _colors_awaiting_five(common_view: CommonView, settings: GameSettings) -> List[Color]:
+    return [
+        color
+        for color in settings.cards
+        if Number.FIVE != common_view.cards_played.get(color)
+    ]
+
+
+def _known_five_is_guaranteed_playable(common_view: CommonView, settings: GameSettings) -> bool:
+    """True when every incomplete color is at 4, so any remaining 5 must play."""
+    awaiting = _colors_awaiting_five(common_view, settings)
+    if not awaiting:
+        return False
+    return all(Number.FOUR == common_view.cards_played.get(color) for color in awaiting)
 
 
 def _peer_code_for_hand(
@@ -656,7 +772,7 @@ def _pick_play_slot_for_encoding(
     common_view: CommonView,
     settings: GameSettings,
 ) -> Optional[int]:
-    """Newest physically playable unknown (§5.1 / §6.1)."""
+    """Newest physically playable unknown (§5.1 / §6.1), including known 5s."""
     kinds = _kinds_for_encoding(hand, common_view, settings, inferred_hand)
     for slot in range(len(hand) - 1, -1, -1):
         if Playability.UNKNOWN != inferred_hand.cards[slot].playability:

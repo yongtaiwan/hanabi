@@ -14,6 +14,8 @@ from hanabi.ai.dr_belief import (
     finalize_chop_after_shift,
     fresh_inferred_hand,
     indicable_discard_options,
+    is_discard_candidate,
+    mark_known_fives,
     n_play,
     reset_chop_after_removal,
     set_playability,
@@ -442,6 +444,139 @@ class TestDispatch(unittest.TestCase):
         player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertNotIsInstance(move, Discard)
+
+
+class TestFinalRoundScoreMode(unittest.TestCase):
+    """Deck empty + lives: play for score; hint only if good; skip chop discard."""
+
+    def _final_common(self, settings, *, hint_tokens: int, live_tokens: int = 2) -> CommonView:
+        return CommonView(
+            live_tokens=live_tokens,
+            hint_tokens=hint_tokens,
+            cards_to_draw=0,
+            cards_discarded={},
+            cards_played={},
+        )
+
+    def test_gate_requires_empty_deck_and_lives(self) -> None:
+        settings = create_standard_game_settings(3)
+        mid = _common(settings)
+        self.assertFalse(dr._in_final_round_score_mode(mid))
+        self.assertTrue(
+            dr._in_final_round_score_mode(
+                CommonView(
+                    live_tokens=1,
+                    hint_tokens=mid.hint_tokens,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={},
+                )
+            )
+        )
+        self.assertFalse(
+            dr._in_final_round_score_mode(
+                CommonView(
+                    live_tokens=0,
+                    hint_tokens=mid.hint_tokens,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={},
+                )
+            )
+        )
+
+    def test_plays_newest_unknown_instead_of_confirmed_chop(self) -> None:
+        """Midgame would discard confirmed chop; final round bombs newest unknown."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=settings.max_hint_tokens - 1))
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[3], Playability.UNKNOWN)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
+
+    def test_known_playable_before_unknown(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=4))
+        set_playability(player._inferred_hands[0].cards[1], Playability.PLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(1, move.card)
+
+    def test_skips_protect_to_play_own_playable(self) -> None:
+        """Dangerous next chop must not burn the final-round tempo play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=2,
+            hint_tokens=7,
+            cards_to_draw=0,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        set_playability(player._inferred_hands[0].cards[2], Playability.PLAYABLE)
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.ONE),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
+
+    def test_good_hint_before_unknown_play(self) -> None:
+        """When channel is good for next, spend the hint before bombing unknowns."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=4))
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNKNOWN)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
+        junk = Card(Color.BLUE, Number.FOUR)
+        r1 = Card(Color.RED, Number.ONE)
+        view = PlayerView(
+            teammates={
+                1: Hand([junk, junk, junk, junk, r1]),
+                2: Hand([junk, junk, junk, junk, junk]),
+            },
+            own_hand_size=5,
+        )
+        channel = dr._project_channel(0, view, player.common_view, settings, player._inferred_hands)
+        self.assertEqual(HintQuality.GOOD, channel.quality)
+        move = player.play(view)
+        self.assertIsInstance(move, (ColorHint, NumberHint))
 
 
 class TestProtectNext(unittest.TestCase):
@@ -1211,6 +1346,134 @@ class TestIndependentOwnDecode(unittest.TestCase):
         self.assertTrue(confirmed.chop_confirmed)
         reopen_unplayable([confirmed])
         self.assertTrue(confirmed.chop_confirmed)
+
+
+class TestKnownFive(unittest.TestCase):
+    """Literal number-5 touches are public; known 5s skip discard and can be played."""
+
+    def test_mark_excludes_from_discard_chain_and_n_play(self) -> None:
+        hand = fresh_inferred_hand(5)
+        self.assertEqual(5, n_play(hand))
+        mark_known_fives(hand, [0, 4])
+        self.assertTrue(hand.cards[0].known_five)
+        self.assertTrue(hand.cards[4].known_five)
+        self.assertFalse(is_discard_candidate(hand.cards[0]))
+        # known_five still counts as unknown for N_play (channel width); only discard skips it.
+        self.assertEqual(5, n_play(hand))
+        self.assertNotIn(0, discard_chain(hand))
+        self.assertNotIn(4, discard_chain(hand))
+        self.assertEqual(1, hand.chop)
+        self.assertFalse(hand.chop_confirmed)
+
+    def test_copy_preserves_known_five(self) -> None:
+        hand = fresh_inferred_hand(5)
+        mark_known_fives(hand, [2])
+        copied = copy_inferred_hand(hand)
+        self.assertTrue(copied.cards[2].known_five)
+        self.assertFalse(copied.cards[1].known_five)
+
+    def test_number_five_hint_marks_all_observers(self) -> None:
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for p in players:
+            p.set_game_settings(settings)
+            p.set_common_view(common)
+        hand_p1 = [Card(Color.BLUE, Number.FOUR)] * 4 + [Card(Color.RED, Number.FIVE)]
+        hand_p2 = [Card(Color.GREEN, Number.THREE)] * 5
+        views = [
+            PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.TWO)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.TWO)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        # Literal non-convention 5 hint on P1 slot 4 (force via direct mark path after observe).
+        hint = NumberHint(teammate=1, cards=[4], number=Number.FIVE)
+        for i, p in enumerate(players):
+            p.observe_number_hint_move(0, hint, views[i])
+        for p in players:
+            self.assertTrue(p._inferred_hands[1].cards[4].known_five)
+            self.assertFalse(p._inferred_hands[1].cards[0].known_five)
+
+    def test_guaranteed_known_five_is_played(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        played = {c: Number.FOUR for c in settings.cards}
+        player.set_common_view(
+            CommonView(
+                live_tokens=3,
+                hint_tokens=4,
+                cards_to_draw=10,
+                cards_discarded={},
+                cards_played=played,
+            )
+        )
+        mark_known_fives(player._inferred_hands[0], [3])
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(3, move.card)
+        self.assertIn("known 5", move.why())
+
+    def test_endgame_holds_unguaranteed_known_five_for_unknown_bomb(self) -> None:
+        """Known 5 with mixed pile heights is not forced; newest unknown still tried."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        # Only red awaits a 5; blue still at 3 — not guaranteed.
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=4,
+                cards_to_draw=0,
+                cards_discarded={},
+                cards_played={
+                    Color.RED: Number.FOUR,
+                    Color.BLUE: Number.THREE,
+                    Color.GREEN: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                },
+            )
+        )
+        mark_known_fives(player._inferred_hands[0], [1])
+        for belief in player._inferred_hands[0].cards:
+            if not belief.known_five:
+                set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
+
+    def test_confirmed_chop_skips_known_five(self) -> None:
+        """Discard path must not chop a known 5; chop advances past it."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = _common(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=common.live_tokens,
+                hint_tokens=common.hint_tokens - 1,
+                cards_to_draw=common.cards_to_draw,
+                cards_discarded=common.cards_discarded,
+                cards_played=common.cards_played,
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        mark_known_fives(player._inferred_hands[0], [0])
+        self.assertEqual(1, player._inferred_hands[0].chop)
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(1, move.card)
 
 
 if __name__ == "__main__":

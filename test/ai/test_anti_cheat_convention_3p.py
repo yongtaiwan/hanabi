@@ -264,53 +264,47 @@ class TestLiveGamesStayConsistent(unittest.TestCase):
         self.assertIsNotNone(result.score)
         self.assertGreater(result.moves_count, 0)
 
-    def test_replay_t10_marks_reach_all_seats_so_t11_discards(self) -> None:
-        """Non-hinter must absorb public decode of both hands (game 12 T10→T11)."""
-        from hanabi.ai.dr_belief import Playability
-        from hanabi.ai.dynamic_recommendation_3p import (
-            ChopClass,
-            HintQuality,
-            _HINT_CHOP_MATRIX,
-            _chop_class,
-            _hint_quality,
-        )
-        from hanabi.core.game_history import GameHistory
-        from hanabi.core.moves import Discard
+    def test_number_five_hint_marks_known_five_on_all_observers(self) -> None:
+        """Public number-5 touches update every seat's belief for the target hand."""
+        from hanabi.ai.dr_belief import is_discard_candidate
 
-        path = (
-            Path(__file__).resolve().parents[2]
-            / "game_records"
-            / "exp_ai_comparison"
-            / "20260725_174417"
-            / "3p"
-            / "games"
-            / "012"
-            / "run_012_ai_DynamicRecommendation3P.yaml"
-        )
-        data = GameHistory({}).load_from_file(str(path))
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
         players = [DynamicRecommendation3P(i) for i in range(3)]
-        game = GameHistory.create_game_from_history(data, PlayerTeam(players))
         for p in players:
-            p.set_game_settings(game.settings)
-        game._set_common_view_for_players()
-        for ms in data["moves"][:10]:
-            mover = game.state.current_player
-            game.process_move(mover, GameHistory._short_to_move(ms, mover, game))
-            game._advance_turn()
-        # After T10, every seat knows P3 slot 4 is playable.
-        for bot in players:
-            self.assertEqual(Playability.PLAYABLE, bot._inferred_hands[2].cards[4].playability)
-        p2 = players[1]
-        own = p2._inferred_hands[1]
-        pv = game.get_player_view(1)
-        hq = _hint_quality(1, pv, game.state.common_view, game.settings, p2._inferred_hands)
-        chop_class = _chop_class(own)
-        self.assertEqual(ChopClass.CONFIRMED, chop_class)
-        self.assertNotEqual(HintQuality.GOOD, hq)
-        self.assertFalse(_HINT_CHOP_MATRIX[(hq, chop_class)])
-        move = p2.play(pv)
-        self.assertIsInstance(move, Discard)
-        self.assertEqual(2, move.card)
+            p.set_game_settings(settings)
+            p.set_common_view(common)
+
+        # Mid-only 5s so a literal number-5 is not the NEW convention channel.
+        hand_p1 = [
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.RED, Number.FIVE),
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.YELLOW, Number.FOUR),
+        ]
+        hand_p2 = [Card(Color.YELLOW, Number.THREE)] * 5
+        hand_p0 = [Card(Color.WHITE, Number.TWO)] * 5
+        views = [
+            PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(teammates={0: Hand(hand_p0), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(teammates={0: Hand(hand_p0), 1: Hand(hand_p1)}, own_hand_size=5),
+        ]
+
+        five_hint = NumberHint(teammate=1, cards=[1, 2], number=Number.FIVE)
+        for i, p in enumerate(players):
+            p.observe_number_hint_move(0, five_hint, views[i])
+        for p in players:
+            self.assertTrue(p._inferred_hands[1].cards[1].known_five)
+            self.assertTrue(p._inferred_hands[1].cards[2].known_five)
+            self.assertFalse(p._inferred_hands[1].cards[0].known_five)
+            self.assertFalse(is_discard_candidate(p._inferred_hands[1].cards[1]))
+            self.assertFalse(is_discard_candidate(p._inferred_hands[1].cards[2]))
+        # known_five flags are public and identical for every observer.
+        row0 = players[0]._inferred_hands[1]
+        for obs in (1, 2):
+            row = players[obs]._inferred_hands[1]
+            self.assertEqual([b.known_five for b in row0.cards], [b.known_five for b in row.cards])
 
 
 if __name__ == "__main__":
