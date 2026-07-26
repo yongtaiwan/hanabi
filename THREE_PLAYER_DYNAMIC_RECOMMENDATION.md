@@ -37,6 +37,10 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
   ``0``–``3``). Those may be played for tempo; they do **not** change convention belief —
   including for the hint target. Bots never emit MID-shaped literals (MID is treated as
   convention by the hint target); OLD/NEW literals are rejected via the touch-set check.
+- **Full-hand touch = abandon convention.** A hint that touches **every** slot in the target
+  hand is never a mod-8 channel (receivers and observers leave belief unchanged). When the
+  would-be type is unbuildable, literal fallback **prefers a full-hand number-1** hint when
+  available (e.g. five 1s) — clear tempo and an unmistakable abandon signal.
 
 ---
 
@@ -111,6 +115,8 @@ Unchanged from classic 3p hint-hand-type.
 
 Types `0`–`3` prefer OLD, then MID, when building the physical hint. Types `4`–`7` always use NEW.
 Literal fallback never uses a MID-shaped hint (so the hint target can treat MID as convention).
+A hint that touches the **entire** target hand is never built as a convention channel (NEW types
+that would touch every slot are treated as unbuildable) and is never decoded as one.
 
 ### 4.2 Channel sum
 
@@ -126,7 +132,9 @@ decoded_self = (channel - code_peer) mod 8
 
 Snapshot rule: when the hinter applies two peer codes, compute **both codes before** either decode mutates belief.
 
-Literal / unbuildable fallbacks: no mod-8 decode (belief unchanged).
+Literal / unbuildable fallbacks: no mod-8 decode (belief unchanged). Full-hand touches are
+always treated as abandon-convention (same: no decode), including when they would otherwise
+match a NEW number/color shape (e.g. hinting five 1s).
 
 ---
 
@@ -284,6 +292,21 @@ Play/discard shifts slots left; drawn cards append as `unknown` playability. Adj
 
 With no legacy `safe` kind, middle-rank discard-pile invalidation of “safe” is **removed**.
 
+### 8.5 Full-hand abandon convention
+
+If a hint’s touch set covers **all** slots of the target hand:
+
+- Encode: do **not** emit that physical hint as a mod-8 channel (the corresponding NEW type is
+  unbuildable when it would touch the whole hand).
+- Decode: every observer (including the hint target) leaves convention belief unchanged.
+- Literal fallback: among true non-convention hints, prefer **full-hand number-1**, then any
+  other full-hand touch, then remaining OLD/NEW literals. If somehow every non-MID hint would
+  still round-trip as convention and no full-hand option exists, a non-MID last resort is
+  still emitted so the bot stays legal at max tokens (receivers may mis-decode — rare).
+
+Rationale: a whole-hand 1s hint is obvious tempo and cannot be mistaken for a selective
+OLD/MID/NEW band once the full-hand rule is shared.
+
 ---
 
 ## 9. Play strategy (`DynamicRecommendation3P`)
@@ -364,8 +387,8 @@ Evaluated only when a convention hint is **buildable**. If the type is unbuildab
 | Class | Definition |
 |-------|------------|
 | `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions) |
-| `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels (same playable newly marked on both peers). |
-| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard). Ones are excluded. |
+| `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels when **more than one life** remains (tempo preferred over bomb risk). |
+| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard; ones excluded), **or** newly mark the **same** playable identity on **both** peers while **only one life** remains (double play would end the game). |
 
 Precedence when classifying: `good` → `bad` → `fine`.
 
@@ -391,7 +414,7 @@ Reading the matrix:
 
 - `good` always beats chop (tempo: playable for next, or trash for next + playable for prev).
 - `confirmed` beats non-good / non-bad hints (trust prior discard recommendation).
-- `bad` always discards when discard is legal (never schedule both copies of a mid-rank).
+- `bad` always discards when discard is legal (never schedule both mid-rank discards; never schedule double play on the last life).
 - `fine` with `default` still hint (avoid burning criticals / playables on unhinted chop).
 
 ---

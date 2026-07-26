@@ -415,10 +415,15 @@ class DynamicRecommendation3P(BasePlayer):
             assert self.is_move_legal(player_view, hint_move), (
                 f"literal fallback hint is illegal: {hint_move!r}"
             )
-            return move_with_why(
-                hint_move,
-                f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})",
-            )
+            hand_size = len(player_view.teammates[hint_move.teammate].cards)
+            if _hint_touches_entire_hand(hint_move.cards, hand_size):
+                why = (
+                    f"{why_prefix} abandon convention (full-hand; "
+                    f"unbuildable type={enc_type}, {type_sum})"
+                )
+            else:
+                why = f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})"
+            return move_with_why(hint_move, why)
         assert self.is_move_legal(player_view, hint_move), (
             f"built convention hint is illegal: {hint_move!r} enc_type={enc_type}"
         )
@@ -565,9 +570,12 @@ def _hint_target_accepts_as_convention(
 ) -> bool:
     """Whether the hint target should treat this hint as convention (§8.4).
 
-    OLD/NEW: recreate the search from the touch set (safe). MID: bots never emit MID-shaped
-    literal fallbacks, so a MID shape with discard/play encoding is convention.
+    Full-hand touches are never convention (abandon signal). OLD/NEW: recreate the search
+    from the touch set (safe). MID: bots never emit MID-shaped literal fallbacks, so a MID
+    shape with discard/play encoding is convention.
     """
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return False
     shape = _hint_slot_shape(move.cards, target_size)
     if HintSlotShape.MID == shape:
         return encoded_type <= 3
@@ -599,6 +607,10 @@ def _apply_convention_hint_decodes(
         target_size = len(observer_view.teammates[hint_target].cards)
     else:
         target_size = observer_view.own_hand_size
+
+    # Full-hand touch = abandon convention (e.g. five 1s); belief unchanged for every seat.
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return
 
     encoded_type = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
 
@@ -886,6 +898,11 @@ def _hint_slot_shape(card_indices: List[int], hand_size: int) -> HintSlotShape:
     return HintSlotShape.MID
 
 
+def _hint_touches_entire_hand(card_indices: List[int], hand_size: int) -> bool:
+    """True when every slot is touched — abandon-convention signal, never a mod-8 channel."""
+    return 0 < hand_size and len(set(card_indices)) == hand_size
+
+
 def _infer_encoded_type_from_hint(
     hinter: int,
     target: int,
@@ -919,6 +936,9 @@ def _build_hint_for_encoded(
         is_number = enc_type in (4, 5)
         hint_move = _build_shape_hint(target, hand, HintSlotShape.NEW, is_number)
         assert hint_move is not None, f"build_shape_hint failed for enc_type={enc_type} shape=NEW"
+        # Full-hand NEW (e.g. five 1s) is the abandon-convention signal, not a channel.
+        if _hint_touches_entire_hand(hint_move.cards, len(hand)):
+            return None
         _assert_encoded_hint_round_trip(hinter, enc_type, hint_move, hand)
         return hint_move
     is_number = enc_type in (0, 1)
@@ -931,13 +951,54 @@ def _build_hint_for_encoded(
     return None
 
 
+def _would_be_read_as_convention(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> bool:
+    """True when every observer who sees the target would apply a mod-8 decode."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    if _hint_touches_entire_hand(hint_move.cards, hand_size):
+        return False
+    inferred = _infer_encoded_type_from_hint(hinter, hint_move.teammate, hint_move, hand_size)
+    canonical = _build_hint_for_encoded(hinter, player_view, inferred)
+    return canonical is not None and _hints_match(canonical, hint_move)
+
+
+def _literal_fallback_sort_key(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+    *,
+    avoid_enc_type: Optional[int],
+) -> Tuple[int, int]:
+    """Lower is better: full-hand ones, then any full-hand, then other true literals."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    full = _hint_touches_entire_hand(hint_move.cards, hand_size)
+    is_ones = isinstance(hint_move, NumberHint) and Number.ONE == hint_move.number
+    if full and is_ones:
+        primary = 0
+    elif full:
+        primary = 1
+    else:
+        primary = 2
+    inferred = _infer_encoded_type_from_hint(hinter, hint_move.teammate, hint_move, hand_size)
+    avoid_penalty = 1 if avoid_enc_type is not None and inferred == avoid_enc_type else 0
+    return (primary, avoid_penalty)
+
+
 def _build_literal_fallback_hint(
     hinter: int,
     player_view: PlayerView,
     *,
     avoid_enc_type: Optional[int] = None,
 ) -> Optional[HintMove]:
-    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention)."""
+    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention).
+
+    Prefers a full-hand number-1 hint when available (clear abandon-convention + tempo).
+    Prefer true non-convention hints; only if none exist, fall back to a non-MID candidate
+    (may still be read as convention — rare when no full-hand abandon signal is available).
+    """
     candidates: List[HintMove] = []
     for offset in (1, 2):
         target = (hinter + offset) % 3
@@ -959,31 +1020,26 @@ def _build_literal_fallback_hint(
     # MID cannot be verified from the touch set alone when OLD was preferred; bots never use
     # MID-shaped literals so the hint target may treat MID as convention (§8.4 / encode).
     non_mid: List[HintMove] = []
+    true_literals: List[HintMove] = []
     for hint_move in candidates:
         hand_size = len(player_view.teammates[hint_move.teammate].cards)
         if HintSlotShape.MID == _hint_slot_shape(hint_move.cards, hand_size):
             continue
         non_mid.append(hint_move)
-    preferred: Optional[HintMove] = None
-    any_literal: Optional[HintMove] = None
-    for hint_move in non_mid:
-        inferred = _infer_encoded_type_from_hint(
-            hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
+        if _would_be_read_as_convention(hinter, player_view, hint_move):
+            continue
+        true_literals.append(hint_move)
+    if not true_literals:
+        # Rare: every non-MID hint round-trips as some channel and no full-hand abandon
+        # signal exists. Last resort keeps the bot legal at max tokens; receivers may
+        # still decode it as convention (same risk as before the full-hand rule).
+        return non_mid[0] if non_mid else None
+    true_literals.sort(
+        key=lambda h: _literal_fallback_sort_key(
+            hinter, player_view, h, avoid_enc_type=avoid_enc_type
         )
-        canonical = _build_hint_for_encoded(hinter, player_view, inferred)
-        if canonical is not None and _hints_match(canonical, hint_move):
-            continue
-        if any_literal is None:
-            any_literal = hint_move
-        if avoid_enc_type is not None and inferred == avoid_enc_type:
-            continue
-        preferred = hint_move
-        break
-    if preferred is not None:
-        return preferred
-    if any_literal is not None:
-        return any_literal
-    return non_mid[0] if non_mid else None
+    )
+    return true_literals[0]
 
 
 def _assert_encoded_hint_round_trip(
@@ -1308,7 +1364,10 @@ def _project_channel(
         quality = HintQuality.FINE
     elif identifies_new_playable_for_next or trash_next_and_play_prev:
         quality = HintQuality.GOOD
-    elif causes_double_midrank_discard:
+    elif causes_double_midrank_discard or (
+        causes_double_play and 1 == common_view.live_tokens
+    ):
+        # Double-play is fine with spare lives (tempo over bomb risk); bad on the last life.
         quality = HintQuality.BAD
     else:
         quality = HintQuality.FINE

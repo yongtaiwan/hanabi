@@ -257,6 +257,100 @@ class TestBuildHintOldThenMid(unittest.TestCase):
         )
 
 
+class TestFullHandAbandonConvention(unittest.TestCase):
+    """Exp run 281: unbuildable type-1 with five 1s must abandon via full-hand ones."""
+
+    def _game_281_opening_view(self) -> PlayerView:
+        # Same deal as exp_ai_comparison/20260726_005529 game 281.
+        return PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.YELLOW, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.YELLOW, Number.FOUR),
+                        Card(Color.BLUE, Number.TWO),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.WHITE, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+
+    def test_new_type_unbuildable_when_it_would_touch_entire_hand(self) -> None:
+        view = self._game_281_opening_view()
+        # Type 5 = NEW number to prev; newest is a 1 and the whole hand is 1s.
+        self.assertIsNone(dr._build_hint_for_encoded(0, view, 5))
+
+    def test_literal_fallback_prefers_full_hand_ones(self) -> None:
+        view = self._game_281_opening_view()
+        self.assertIsNone(dr._build_hint_for_encoded(0, view, 1))  # wanted channel
+        literal = dr._build_literal_fallback_hint(0, view, avoid_enc_type=1)
+        self.assertIsInstance(literal, NumberHint)
+        assert isinstance(literal, NumberHint)
+        self.assertEqual(2, literal.teammate)
+        self.assertEqual(Number.ONE, literal.number)
+        self.assertEqual([0, 1, 2, 3, 4], literal.cards)
+        self.assertFalse(dr._would_be_read_as_convention(0, view, literal))
+
+    def test_full_hand_ones_leaves_belief_unchanged_for_all_observers(self) -> None:
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view0 = self._game_281_opening_view()
+        hand_p1 = list(view0.teammates[1].cards)
+        hand_p2 = list(view0.teammates[2].cards)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for p in players:
+            p.set_game_settings(settings)
+            p.set_common_view(common)
+        views = [
+            view0,
+            PlayerView(
+                teammates={0: Hand([Card(Color.YELLOW, Number.THREE)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.YELLOW, Number.THREE)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        hint = NumberHint(2, [0, 1, 2, 3, 4], Number.ONE)
+        before = [[copy_inferred_hand(h) for h in p._inferred_hands] for p in players]
+        for player, view in zip(players, views):
+            player.observe_number_hint_move(0, hint, view)
+        for pi, player in enumerate(players):
+            for seat in range(3):
+                self.assertEqual(
+                    before[pi][seat],
+                    player._inferred_hands[seat],
+                    f"P{pi} belief for seat {seat} changed on full-hand abandon",
+                )
+
+    def test_opening_play_emits_abandon_full_hand_ones(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(_common(settings))
+        view = self._game_281_opening_view()
+        # Peer codes are 0+1 → type 1, unbuildable on all-1s prev → abandon.
+        move = player.play(view)
+        self.assertIsInstance(move, NumberHint)
+        assert isinstance(move, NumberHint)
+        self.assertEqual(2, move.teammate)
+        self.assertEqual(Number.ONE, move.number)
+        self.assertEqual([0, 1, 2, 3, 4], move.cards)
+        self.assertIn("abandon convention", move.why())
+
+
 class TestEncodePreferPlay(unittest.TestCase):
     def test_encodes_playable_unknown(self) -> None:
         settings = create_standard_game_settings(3)
@@ -330,7 +424,7 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(0, move.card)
 
     def test_double_play_hint_kept_when_chop_default(self) -> None:
-        """Default chop: double-play is fine, so still hint."""
+        """Default chop + spare lives: double-play is fine, so still hint."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -361,6 +455,10 @@ class TestDispatch(unittest.TestCase):
             dr._convention_hint_would_cause_double_play(
                 0, view, player.common_view, settings, player._inferred_hands
             )
+        )
+        self.assertEqual(
+            HintQuality.FINE,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
         )
         move = player.play(view)
         self.assertNotIsInstance(move, Discard)
@@ -394,9 +492,54 @@ class TestDispatch(unittest.TestCase):
             own_hand_size=5,
         )
         self.assertEqual(ChopClass.CONFIRMED, dr._chop_class(player._inferred_hands[0]))
+        self.assertEqual(
+            HintQuality.FINE,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
+        )
         move = player.play(view)
         self.assertIsInstance(move, Discard)
         self.assertEqual(2, move.card)
+
+    def test_double_play_is_bad_on_last_life(self) -> None:
+        """Last life: double-play is bad, so discard default chop when legal."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = _common(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=1,
+                hint_tokens=common.hint_tokens - 1,
+                cards_to_draw=common.cards_to_draw,
+                cards_discarded=common.cards_discarded,
+                cards_played=common.cards_played,
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
+        junk = Card(Color.BLUE, Number.FOUR)
+        r1 = Card(Color.RED, Number.ONE)
+        view = PlayerView(
+            teammates={
+                1: Hand([junk, junk, junk, junk, r1]),
+                2: Hand([junk, junk, junk, junk, r1]),
+            },
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._convention_hint_would_cause_double_play(
+                0, view, player.common_view, settings, player._inferred_hands
+            )
+        )
+        self.assertEqual(
+            HintQuality.BAD,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(0, move.card)
 
     def test_confirmed_chop_before_fine_hint(self) -> None:
         """Confirmed chop: fine hint loses to discard."""
@@ -566,10 +709,19 @@ class TestFinalRoundScoreMode(unittest.TestCase):
         player._inferred_hands[0].chop_confirmed = False
         junk = Card(Color.BLUE, Number.FOUR)
         r1 = Card(Color.RED, Number.ONE)
+        # Prev must not be a uniform hand: NEW color/number on five identical cards is
+        # full-hand abandon (unbuildable), which would drop quality from good → fine.
+        prev = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
         view = PlayerView(
             teammates={
                 1: Hand([junk, junk, junk, junk, r1]),
-                2: Hand([junk, junk, junk, junk, junk]),
+                2: Hand(prev),
             },
             own_hand_size=5,
         )
