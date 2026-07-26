@@ -31,7 +31,16 @@ from hanabi.ai.dr_belief import (
 from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
-from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    HasWhy,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.player import BasePlayer
 
 
@@ -80,7 +89,6 @@ class DynamicRecommendation3P(BasePlayer):
         super().__init__(player_index)
         self._hand_belief: List[HandBelief] = []
         self._cards_played_snapshot: Dict[Color, Number] = {}
-        self._last_decision_summary: Optional[str] = None
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
@@ -148,7 +156,6 @@ class DynamicRecommendation3P(BasePlayer):
 
     def play(self, player_view: PlayerView) -> Move:
         assert player_view.own_hand_size > 0
-        self._last_decision_summary = None
         own = self._hand_belief[self._player_index]
         ensure_default_chop(own)
         # TODO(hint-bank): At max-1 tokens, playing a 5 refunds to max and discard-locks the
@@ -199,8 +206,8 @@ class DynamicRecommendation3P(BasePlayer):
             move = self._discard_oldest(player_view)
         assert move is not None, "no legal convention move: play, hint, discard chop/oldest"
         assert self.is_move_legal(player_view, move)
-        assert self._last_decision_summary is not None
-        return move_with_why(move, self._last_decision_summary)
+        assert isinstance(move, HasWhy), "every DR move branch must attach a why via move_with_why"
+        return move
 
     def get_gui_inferred_kind_by_slot(self, target_seat: int) -> Dict[int, CardKind]:
         """Return ``{slot: CardKind.PLAYABLE}`` where convention playability is playable."""
@@ -254,8 +261,7 @@ class DynamicRecommendation3P(BasePlayer):
             if Playability.PLAYABLE != belief.playability:
                 continue
             assert self.is_move_legal(player_view, Play(slot))
-            self._last_decision_summary = f"[3p DR] Play slot {slot} (identified playable)"
-            return Play(slot)
+            return move_with_why(Play(slot), f"[3p DR] Play slot {slot} (identified playable)")
         return None
 
     def _give_convention_hint(
@@ -281,15 +287,14 @@ class DynamicRecommendation3P(BasePlayer):
             assert self.is_move_legal(player_view, hint_move), (
                 f"literal fallback hint is illegal: {hint_move!r}"
             )
-            self._last_decision_summary = (
-                f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})"
+            return move_with_why(
+                hint_move,
+                f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})",
             )
-            return hint_move
         assert self.is_move_legal(player_view, hint_move), (
             f"built convention hint is illegal: {hint_move!r} enc_type={enc_type}"
         )
-        self._last_decision_summary = f"{why_prefix} type={enc_type} ({type_sum})"
-        return hint_move
+        return move_with_why(hint_move, f"{why_prefix} type={enc_type} ({type_sum})")
 
     def _discard_chop(self, player_view: PlayerView, chop_class: Optional[ChopClass]) -> Optional[Move]:
         hand = self._hand_belief[self._player_index]
@@ -301,14 +306,14 @@ class DynamicRecommendation3P(BasePlayer):
         label = chop_class.value if chop_class is not None else (
             "confirmed" if hand.chop_confirmed else "unconfirmed"
         )
-        self._last_decision_summary = f"[3p DR] Discard chop slot {hand.chop} ({label})"
-        return Discard(hand.chop)
+        return move_with_why(
+            Discard(hand.chop), f"[3p DR] Discard chop slot {hand.chop} ({label})"
+        )
 
     def _discard_oldest(self, player_view: PlayerView) -> Optional[Move]:
         if not self.is_move_legal(player_view, Discard(0)):
             return None
-        self._last_decision_summary = "[3p DR] Discard slot 0 (oldest; no chop)"
-        return Discard(0)
+        return move_with_why(Discard(0), "[3p DR] Discard slot 0 (oldest; no chop)")
 
 
 def _card_from_successful_play(
