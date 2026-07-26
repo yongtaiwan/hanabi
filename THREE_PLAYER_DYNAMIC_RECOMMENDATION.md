@@ -65,7 +65,6 @@ Each **seat** carries:
 
 - `chop` = **leftmost** discard candidate
 - `chop_confirmed` = `false`
-- `chop_hinted` = `false`
 
 After a **recommended** chop leaves the hand, chop advances to the next newer discard candidate when one exists (§8.2), rather than jumping back to leftmost. Older-than-chop cards remain reachable as **later** discard-chain positions via wrap (§5.2).
 
@@ -272,7 +271,7 @@ When the chop slot is discarded or played:
 
 1. Prefer the **next newer** discard candidate (first slot `> chop` with `playability != playable`).
 2. If none exists, fall back to the **leftmost** remaining discard candidate (or `None`).
-3. Set `chop_confirmed = false` and `chop_hinted = false` (chop class `default` — keep position, drop urgency).
+3. Set `chop_confirmed = false` (chop class `default` — keep position, drop urgency).
 
 This keeps chop moving right after a recommended discard is spent. Older-than-chop cards stay
 reachable later in the wrapped discard chain (§5.2), so they remain indicable when `m` allows.

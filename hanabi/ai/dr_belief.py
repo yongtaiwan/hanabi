@@ -29,9 +29,6 @@ class HandBelief:
     slots: List[SlotBelief] = field(default_factory=list)
     chop: Optional[int] = None
     chop_confirmed: bool = False
-    # True after any discard-code decode. Cleared only when chop resets to default
-    # (opening repair / chop leaves or is play-marked — §8.2 / play decode).
-    chop_hinted: bool = False
 
 
 def fresh_slot_belief() -> SlotBelief:
@@ -40,7 +37,7 @@ def fresh_slot_belief() -> SlotBelief:
 
 def fresh_hand_belief(hand_size: int) -> HandBelief:
     slots = [fresh_slot_belief() for _ in range(hand_size)]
-    return HandBelief(slots=slots, chop=0 if hand_size else None, chop_confirmed=False, chop_hinted=False)
+    return HandBelief(slots=slots, chop=0 if hand_size else None, chop_confirmed=False)
 
 
 def set_playability(belief: SlotBelief, playability: Playability) -> None:
@@ -68,12 +65,10 @@ def ensure_default_chop(hand: HandBelief) -> None:
         return
     hand.chop = default_chop_slot(hand)
     hand.chop_confirmed = False
-    hand.chop_hinted = False
 
 
-def clear_chop_hint_flags(hand: HandBelief) -> None:
+def clear_chop_confirmation(hand: HandBelief) -> None:
     hand.chop_confirmed = False
-    hand.chop_hinted = False
 
 
 def discard_chain(hand: HandBelief) -> List[int]:
@@ -159,7 +154,6 @@ def apply_discard_decode_with_n_play(hand: HandBelief, decoded: int, n_play_befo
     )
     hand.chop = candidates[index]
     hand.chop_confirmed = True
-    hand.chop_hinted = True
 
 
 def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
@@ -192,28 +186,6 @@ def decoded_value_is_applicable(hand: HandBelief, decoded: int) -> bool:
     return types.index(decoded) < len(candidates)
 
 
-def apply_physical_channel_decode(hand: HandBelief, decoded: int) -> None:
-    """Legacy helper: interpret ``decoded`` against a blank ``n_play == hand_size`` boundary.
-
-    Live convention encode/decode uses the seat's shared belief via :func:`apply_decoded_value`.
-    """
-    assert 0 <= decoded <= 7, f"decoded value {decoded} out of range"
-    ref = fresh_hand_belief(len(hand.slots))
-    n_play_encode = n_play(ref)
-    if 1 <= decoded <= n_play_encode:
-        ordering = unknown_slots_newest_first(ref)
-        target = ordering[decoded - 1]
-        for slot in ordering[: decoded - 1]:
-            if Playability.UNKNOWN == hand.slots[slot].playability:
-                set_playability(hand.slots[slot], Playability.UNPLAYABLE)
-        if Playability.UNKNOWN == hand.slots[target].playability:
-            set_playability(hand.slots[target], Playability.PLAYABLE)
-            if hand.chop == target:
-                _advance_chop_past_slot(hand, target)
-        return
-    apply_discard_decode_with_n_play(hand, decoded, n_play_encode)
-
-
 def reset_chop_after_removal(hand: HandBelief, removed: int) -> None:
     """Update chop after slot ``removed`` leaves the hand (pre-shift indices).
 
@@ -225,7 +197,7 @@ def reset_chop_after_removal(hand: HandBelief, removed: int) -> None:
         return
     if removed == hand.chop:
         next_slot = _next_newer_discard_candidate(hand, removed)
-        clear_chop_hint_flags(hand)
+        clear_chop_confirmation(hand)
         # ``next_slot`` is pre-shift; after removing ``removed`` it becomes ``next_slot - 1``.
         hand.chop = next_slot - 1 if next_slot is not None else None
         return
@@ -248,7 +220,7 @@ def _next_newer_discard_candidate(hand: HandBelief, after_slot: int) -> Optional
 def _advance_chop_past_slot(hand: HandBelief, slot: int) -> None:
     """Move chop past ``slot`` (no hand shift): next newer candidate, else leftmost default."""
     next_slot = _next_newer_discard_candidate(hand, slot)
-    clear_chop_hint_flags(hand)
+    clear_chop_confirmation(hand)
     if next_slot is not None:
         hand.chop = next_slot
         return
@@ -300,12 +272,7 @@ def copy_hand_belief(hand: HandBelief) -> HandBelief:
         slots=[SlotBelief(b.playability) for b in hand.slots],
         chop=hand.chop,
         chop_confirmed=hand.chop_confirmed,
-        chop_hinted=hand.chop_hinted,
     )
-
-
-def copy_belief_matrix(matrix: List[HandBelief]) -> List[HandBelief]:
-    return [copy_hand_belief(h) for h in matrix]
 
 
 def indicable_discard_options(hand: HandBelief) -> List[Tuple[int, int, bool]]:

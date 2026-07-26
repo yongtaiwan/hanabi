@@ -103,7 +103,6 @@ class TestDiscardDecode(unittest.TestCase):
         apply_decoded_value(hand, 6)  # D[2] when N_play=5 → candidate[2] = slot 2
         self.assertEqual(2, hand.chop)
         self.assertTrue(hand.chop_confirmed)
-        self.assertTrue(hand.chop_hinted)
 
     def test_candidates_are_first_m_of_wrapped_chain(self) -> None:
         """Chop on 3 → chain [3,4,0,1,2]; m=3 candidates are 3/4/0 — not min(remainder)."""
@@ -136,11 +135,9 @@ class TestStickyChop(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         hand.chop = 2
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 2)
         self.assertEqual(2, hand.chop)  # pre-shift: old slot 3 → 2 after removal
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
         hand.slots = hand.slots[:2] + hand.slots[3:]
         finalize_chop_after_shift(hand)
         self.assertEqual(2, hand.chop)
@@ -153,7 +150,6 @@ class TestStickyChop(unittest.TestCase):
         set_playability(hand.slots[3], Playability.PLAYABLE)
         hand.chop = 2
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 2)
         self.assertEqual(3, hand.chop)  # old slot 4 → 3 after removal
         hand.slots = hand.slots[:2] + hand.slots[3:]
@@ -166,25 +162,21 @@ class TestStickyChop(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         hand.chop = 4
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 4)
         self.assertIsNone(hand.chop)
         hand.slots = hand.slots[:4]
         finalize_chop_after_shift(hand)
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
 
     def test_play_decode_on_chop_advances_right(self) -> None:
         hand = fresh_hand_belief(5)
         hand.chop = 4
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         apply_decoded_value(hand, 1)  # marks newest (slot 4) playable
         self.assertEqual(Playability.PLAYABLE, hand.slots[4].playability)
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
 
 
 class TestIndicableOptions(unittest.TestCase):
@@ -329,7 +321,6 @@ class TestDispatch(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 0
         player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
         # Step-2 must not fire: next seat already has a playable.
         player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
@@ -355,7 +346,6 @@ class TestDispatch(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 0
         player._hand_belief[0].chop_confirmed = False
-        player._hand_belief[0].chop_hinted = False
         junk = Card(Color.BLUE, Number.FOUR)
         r1 = Card(Color.RED, Number.ONE)
         view = PlayerView(
@@ -392,7 +382,6 @@ class TestDispatch(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 2
         player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
         junk = Card(Color.BLUE, Number.FOUR)
         r1 = Card(Color.RED, Number.ONE)
         view = PlayerView(
@@ -426,7 +415,6 @@ class TestDispatch(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 2
         player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
         player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertIsInstance(move, Discard)
@@ -451,7 +439,6 @@ class TestDispatch(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 0
         player._hand_belief[0].chop_confirmed = False
-        player._hand_belief[0].chop_hinted = False
         player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertNotIsInstance(move, Discard)
@@ -475,7 +462,6 @@ class TestHintQualityGoodTrashPlusPrevPlay(unittest.TestCase):
             set_playability(belief, Playability.UNPLAYABLE)
         player._hand_belief[0].chop = 0
         player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
         # Next (P2): useless W1 at chop; no playables.
         next_hand = [
             Card(Color.WHITE, Number.ONE),
@@ -530,15 +516,9 @@ class TestHintChopMatrix(unittest.TestCase):
     def test_chop_class_partition(self) -> None:
         confirmed = fresh_hand_belief(5)
         confirmed.chop_confirmed = True
-        confirmed.chop_hinted = True
         self.assertEqual(ChopClass.CONFIRMED, dr._chop_class(confirmed))
         default = fresh_hand_belief(5)
         self.assertEqual(ChopClass.DEFAULT, dr._chop_class(default))
-        hinted_unconfirmed = fresh_hand_belief(5)
-        hinted_unconfirmed.chop_hinted = True
-        hinted_unconfirmed.chop_confirmed = False
-        with self.assertRaises(AssertionError):
-            dr._chop_class(hinted_unconfirmed)
 
 
 class TestHintQualityBadDoubleMidrankDiscard(unittest.TestCase):
@@ -682,7 +662,6 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         sticky = fresh_hand_belief(5)
         sticky.chop = 2
         sticky.chop_confirmed = True
-        sticky.chop_hinted = True
         code, discard_card = dr._encode_peer_code(hand, sticky, common, settings)
         self.assertEqual(Card(Color.YELLOW, Number.ONE), discard_card)
         self.assertEqual(6, code)
@@ -973,7 +952,6 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         beliefs = [fresh_hand_belief(5) for _ in range(3)]
         beliefs[1].chop = 0
         beliefs[1].chop_confirmed = True
-        beliefs[1].chop_hinted = True
         view = PlayerView(
             teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
             own_hand_size=5,
@@ -1033,20 +1011,16 @@ class TestIndependentOwnDecode(unittest.TestCase):
 
         third = fresh_hand_belief(5)
         apply_decoded_value(third, 6)
-        self.assertTrue(third.chop_hinted)
         self.assertTrue(third.chop_confirmed)
         reopen_unplayable([third])
-        self.assertTrue(third.chop_hinted)
         self.assertTrue(third.chop_confirmed)
         self.assertEqual(2, third.chop)
 
         confirmed = fresh_hand_belief(5)
         apply_decoded_value(confirmed, 0)
         self.assertTrue(confirmed.chop_confirmed)
-        self.assertTrue(confirmed.chop_hinted)
         reopen_unplayable([confirmed])
         self.assertTrue(confirmed.chop_confirmed)
-        self.assertTrue(confirmed.chop_hinted)
 
 
 if __name__ == "__main__":

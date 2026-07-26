@@ -6,6 +6,7 @@ Canonical spec: ``THREE_PLAYER_DYNAMIC_RECOMMENDATION.md`` at the repo root.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
@@ -27,7 +28,7 @@ from hanabi.ai.dr_belief import (
     reset_chop_after_removal,
     slot_for_play_type,
 )
-from hanabi.core.card import Card, Suit
+from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
 from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
@@ -78,7 +79,6 @@ class DynamicRecommendation3P(BasePlayer):
     def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
         self._hand_belief: List[HandBelief] = []
-        self._discard_pile_snapshot: Dict[Color, Dict[Number, int]] = {}
         self._cards_played_snapshot: Dict[Color, Number] = {}
         self._last_decision_summary: Optional[str] = None
 
@@ -95,7 +95,6 @@ class DynamicRecommendation3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._hand_belief = [fresh_hand_belief(hand_size) for _ in range(num_players)]
-        self._discard_pile_snapshot = {}
         self._cards_played_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
@@ -116,13 +115,11 @@ class DynamicRecommendation3P(BasePlayer):
         ):
             reopen_unplayable(self._hand_belief)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
         self._cards_played_snapshot = dict(self.common_view.cards_played)
 
     def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
         self._cards_played_snapshot = dict(self.common_view.cards_played)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
@@ -163,32 +160,26 @@ class DynamicRecommendation3P(BasePlayer):
             can_discard = self.common_view.hint_tokens < self.game_settings.max_hint_tokens
             if can_hint and can_discard and own.chop is not None:
                 chop_class = _chop_class(own)
-                hint_quality = _hint_quality(
+                channel = _project_channel(
                     self._player_index,
                     player_view,
                     self.common_view,
                     self.game_settings,
                     self._hand_belief,
                 )
-                prefer_hint = _HINT_CHOP_MATRIX[(hint_quality, chop_class)]
+                prefer_hint = _HINT_CHOP_MATRIX[(channel.quality, chop_class)]
                 # TODO(hint-bank): When tokens == max-1, discard (even default chop) unless
                 # quality is good — avoid filling the bank via discard. Optional later: soft
                 # caution at max-2; endgame/short deck may ignore banking.
                 if prefer_hint:
-                    if HintQuality.GOOD == hint_quality:
+                    if HintQuality.GOOD == channel.quality:
                         why_prefix = (
                             "[3p DR] Hint (identifies playable for next)"
-                            if _convention_hint_would_identify_new_playable(
-                                self._player_index,
-                                player_view,
-                                self.common_view,
-                                self.game_settings,
-                                self._hand_belief,
-                            )
+                            if channel.identifies_new_playable_for_next
                             else "[3p DR] Hint (trash for next + playable for prev)"
                         )
                     else:
-                        why_prefix = f"[3p DR] Hint ({hint_quality.value}/{chop_class.value})"
+                        why_prefix = f"[3p DR] Hint ({channel.quality.value}/{chop_class.value})"
                     move = self._give_convention_hint(player_view, why_prefix=why_prefix)
                 else:
                     move = self._discard_chop(player_view, chop_class)
@@ -335,10 +326,6 @@ def _card_from_successful_play(
         )
         found = Card(color, after_top)
     return found
-
-
-def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, Dict[Number, int]]:
-    return {color: suit.cards.copy() for color, suit in cards_discarded.items()}
 
 
 def _peer_code_for_hand(
@@ -943,8 +930,137 @@ def _chop_class(hand: HandBelief) -> ChopClass:
     assert hand.chop is not None, "chop class requires a chop slot"
     if hand.chop_confirmed:
         return ChopClass.CONFIRMED
-    assert not hand.chop_hinted, "discard decode always sets chop_confirmed with chop_hinted"
     return ChopClass.DEFAULT
+
+
+@dataclass(frozen=True)
+class _ChannelProjection:
+    """Would-be convention channel outcomes for one hinter decision (§9.2)."""
+
+    next_seat: int
+    prev_seat: int
+    peer_codes: Dict[int, int]
+    enc_type: int
+    type_sum: str
+    buildable: bool
+    next_new_playable: Optional[Card]
+    prev_new_playable: Optional[Card]
+    next_discard: Optional[Card]
+    prev_discard: Optional[Card]
+    causes_double_play: bool
+    identifies_new_playable_for_next: bool
+    trash_next_and_play_prev: bool
+    causes_double_midrank_discard: bool
+    quality: HintQuality
+
+
+def _project_channel(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    hand_belief: List[HandBelief],
+) -> _ChannelProjection:
+    """Compute peer codes and projected decode cards once for hint quality / logging."""
+    next_seat = (hinter + 1) % 3
+    prev_seat = (hinter + 2) % 3
+    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
+    enc_type = sum(peer_codes.values()) % 8
+    type_sum = f"{peer_codes[next_seat]}+{peer_codes[prev_seat]}"
+    buildable = _build_hint_for_encoded(hinter, player_view, enc_type) is not None
+    next_new_playable = _newly_decoded_playable_card_from_codes(
+        next_seat,
+        peer_codes[prev_seat],
+        enc_type,
+        player_view,
+        common_view,
+        settings,
+        hand_belief,
+    )
+    prev_new_playable = _newly_decoded_playable_card_from_codes(
+        prev_seat,
+        peer_codes[next_seat],
+        enc_type,
+        player_view,
+        common_view,
+        settings,
+        hand_belief,
+    )
+    next_discard = _newly_decoded_discard_card_from_codes(
+        next_seat,
+        peer_codes[prev_seat],
+        enc_type,
+        player_view,
+        hand_belief,
+    )
+    prev_discard = _newly_decoded_discard_card_from_codes(
+        prev_seat,
+        peer_codes[next_seat],
+        enc_type,
+        player_view,
+        hand_belief,
+    )
+    causes_double_play = (
+        next_new_playable is not None
+        and prev_new_playable is not None
+        and next_new_playable == prev_new_playable
+    )
+    identifies_new_playable_for_next = False
+    if (
+        buildable
+        and not any(Playability.PLAYABLE == b.playability for b in hand_belief[next_seat].slots)
+        and not causes_double_play
+        and next_new_playable is not None
+        and not _card_already_identified_playable_on_visible_seats(
+            next_new_playable, hinter, player_view, hand_belief
+        )
+    ):
+        identifies_new_playable_for_next = True
+    trash_next_and_play_prev = False
+    if (
+        buildable
+        and not any(Playability.PLAYABLE == b.playability for b in hand_belief[prev_seat].slots)
+        and next_discard is not None
+        and prev_new_playable is not None
+    ):
+        next_hand = player_view.teammates[next_seat].cards
+        prev_hand = player_view.teammates[prev_seat].cards
+        if _is_good_discard_trash(next_discard, next_hand, [prev_hand], common_view, settings):
+            if not _card_already_identified_playable_on_visible_seats(
+                prev_new_playable, hinter, player_view, hand_belief
+            ):
+                trash_next_and_play_prev = True
+    causes_double_midrank_discard = (
+        next_discard is not None
+        and next_discard.number in (Number.TWO, Number.THREE, Number.FOUR)
+        and prev_discard is not None
+        and next_discard == prev_discard
+    )
+    if not buildable:
+        quality = HintQuality.FINE
+    elif identifies_new_playable_for_next or trash_next_and_play_prev:
+        quality = HintQuality.GOOD
+    elif causes_double_midrank_discard:
+        quality = HintQuality.BAD
+    else:
+        quality = HintQuality.FINE
+    return _ChannelProjection(
+        next_seat=next_seat,
+        prev_seat=prev_seat,
+        peer_codes=peer_codes,
+        enc_type=enc_type,
+        type_sum=type_sum,
+        buildable=buildable,
+        next_new_playable=next_new_playable,
+        prev_new_playable=prev_new_playable,
+        next_discard=next_discard,
+        prev_discard=prev_discard,
+        causes_double_play=causes_double_play,
+        identifies_new_playable_for_next=identifies_new_playable_for_next,
+        trash_next_and_play_prev=trash_next_and_play_prev,
+        causes_double_midrank_discard=causes_double_midrank_discard,
+        quality=quality,
+    )
 
 
 def _hint_quality(
@@ -955,23 +1071,7 @@ def _hint_quality(
     hand_belief: List[HandBelief],
 ) -> HintQuality:
     """Classify the would-be convention channel (§9.2). Unbuildable → fine."""
-    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
-    enc_type = sum(peer_codes.values()) % 8
-    if _build_hint_for_encoded(hinter, player_view, enc_type) is None:
-        return HintQuality.FINE
-    if _convention_hint_would_identify_new_playable(
-        hinter, player_view, common_view, settings, hand_belief
-    ):
-        return HintQuality.GOOD
-    if _convention_hint_would_trash_next_and_play_prev(
-        hinter, player_view, common_view, settings, hand_belief
-    ):
-        return HintQuality.GOOD
-    if _convention_hint_would_cause_double_midrank_discard(
-        hinter, player_view, common_view, settings, hand_belief
-    ):
-        return HintQuality.BAD
-    return HintQuality.FINE
+    return _project_channel(hinter, player_view, common_view, settings, hand_belief).quality
 
 
 def _convention_hint_would_cause_double_midrank_discard(
@@ -981,34 +1081,10 @@ def _convention_hint_would_cause_double_midrank_discard(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> bool:
-    """True when both peers' discard decodes recommend the same 2/3/4 identity (§9.2 ``bad``).
-
-    Ones are excluded (three copies; double-chop is not suit-killing the same way).
-    Fives cannot appear twice. Forced-hint (max tokens) still emits the channel for now.
-    """
-    next_player = (hinter + 1) % 3
-    prev_player = (hinter + 2) % 3
-    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
-    enc_type = sum(peer_codes.values()) % 8
-    next_card = _newly_decoded_discard_card_from_codes(
-        next_player,
-        peer_codes[prev_player],
-        enc_type,
-        player_view,
-        hand_belief,
-    )
-    if next_card is None:
-        return False
-    if next_card.number not in (Number.TWO, Number.THREE, Number.FOUR):
-        return False
-    prev_card = _newly_decoded_discard_card_from_codes(
-        prev_player,
-        peer_codes[next_player],
-        enc_type,
-        player_view,
-        hand_belief,
-    )
-    return prev_card is not None and next_card == prev_card
+    """True when both peers' discard decodes recommend the same 2/3/4 identity (§9.2 ``bad``)."""
+    return _project_channel(
+        hinter, player_view, common_view, settings, hand_belief
+    ).causes_double_midrank_discard
 
 
 def _convention_hint_would_cause_double_play(
@@ -1019,31 +1095,9 @@ def _convention_hint_would_cause_double_play(
     hand_belief: List[HandBelief],
 ) -> bool:
     """True when next and prev would both newly mark the same playable identity."""
-    next_player = (hinter + 1) % 3
-    prev_player = (hinter + 2) % 3
-    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
-    enc_type = sum(peer_codes.values()) % 8
-    next_card = _newly_decoded_playable_card_from_codes(
-        next_player,
-        peer_codes[prev_player],
-        enc_type,
-        player_view,
-        common_view,
-        settings,
-        hand_belief,
-    )
-    if next_card is None:
-        return False
-    prev_card = _newly_decoded_playable_card_from_codes(
-        prev_player,
-        peer_codes[next_player],
-        enc_type,
-        player_view,
-        common_view,
-        settings,
-        hand_belief,
-    )
-    return prev_card is not None and next_card == prev_card
+    return _project_channel(
+        hinter, player_view, common_view, settings, hand_belief
+    ).causes_double_play
 
 
 def _convention_hint_would_identify_new_playable(
@@ -1053,34 +1107,9 @@ def _convention_hint_would_identify_new_playable(
     settings: GameSettings,
     hand_belief: List[HandBelief],
 ) -> bool:
-    next_player = (hinter + 1) % 3
-    prev_player = (hinter + 2) % 3
-    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
-    enc_type = sum(peer_codes.values()) % 8
-    if _build_hint_for_encoded(hinter, player_view, enc_type) is None:
-        return False
-    if any(Playability.PLAYABLE == b.playability for b in hand_belief[next_player].slots):
-        return False
-    if _convention_hint_would_cause_double_play(
+    return _project_channel(
         hinter, player_view, common_view, settings, hand_belief
-    ):
-        return False
-    next_card = _newly_decoded_playable_card_from_codes(
-        next_player,
-        peer_codes[prev_player],
-        enc_type,
-        player_view,
-        common_view,
-        settings,
-        hand_belief,
-    )
-    if next_card is None:
-        return False
-    if _card_already_identified_playable_on_visible_seats(
-        next_card, hinter, player_view, hand_belief
-    ):
-        return False
-    return True
+    ).identifies_new_playable_for_next
 
 
 def _convention_hint_would_trash_next_and_play_prev(
@@ -1091,43 +1120,9 @@ def _convention_hint_would_trash_next_and_play_prev(
     hand_belief: List[HandBelief],
 ) -> bool:
     """Good: next gets a useless/dup discard recommendation and prev a new playable (§9.2)."""
-    next_player = (hinter + 1) % 3
-    prev_player = (hinter + 2) % 3
-    peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, hand_belief)
-    enc_type = sum(peer_codes.values()) % 8
-    if _build_hint_for_encoded(hinter, player_view, enc_type) is None:
-        return False
-    if any(Playability.PLAYABLE == b.playability for b in hand_belief[prev_player].slots):
-        return False
-    next_hand = player_view.teammates[next_player].cards
-    prev_hand = player_view.teammates[prev_player].cards
-    trash = _newly_decoded_discard_card_from_codes(
-        next_player,
-        peer_codes[prev_player],
-        enc_type,
-        player_view,
-        hand_belief,
-    )
-    if trash is None:
-        return False
-    if not _is_good_discard_trash(trash, next_hand, [prev_hand], common_view, settings):
-        return False
-    prev_card = _newly_decoded_playable_card_from_codes(
-        prev_player,
-        peer_codes[next_player],
-        enc_type,
-        player_view,
-        common_view,
-        settings,
-        hand_belief,
-    )
-    if prev_card is None:
-        return False
-    if _card_already_identified_playable_on_visible_seats(
-        prev_card, hinter, player_view, hand_belief
-    ):
-        return False
-    return True
+    return _project_channel(
+        hinter, player_view, common_view, settings, hand_belief
+    ).trash_next_and_play_prev
 
 
 def _newly_decoded_discard_card_from_codes(
@@ -1194,28 +1189,6 @@ def _newly_decoded_playable_card_from_codes(
     if CardKind.PLAYABLE != common_view.card_kind(card, settings):
         return None
     return card
-
-
-def _newly_decoded_playable_card(
-    decoder: int,
-    peer_index: int,
-    enc_type: int,
-    player_view: PlayerView,
-    common_view: CommonView,
-    settings: GameSettings,
-    hand_belief: List[HandBelief],
-) -> Optional[Card]:
-    """Peer code from visible peer hand + shared belief for that seat."""
-    assert peer_index in player_view.teammates
-    peer_type = _peer_code_for_hand(
-        player_view.teammates[peer_index].cards,
-        hand_belief[peer_index],
-        common_view,
-        settings,
-    )
-    return _newly_decoded_playable_card_from_codes(
-        decoder, peer_type, enc_type, player_view, common_view, settings, hand_belief
-    )
 
 
 def _card_already_identified_playable_on_visible_seats(
