@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 from hanabi.ai.dr_belief import (
     InferredHand,
     Playability,
+    any_five_possibly_playable,
     apply_decoded_value,
     copy_inferred_hand,
     decoded_value_is_applicable,
@@ -21,6 +22,7 @@ from hanabi.ai.dr_belief import (
     fresh_inferred_hand,
     fresh_inferred_slot,
     indicable_discard_options,
+    is_play_unknown,
     mark_known_fives,
     n_play,
     play_reopens_playability,
@@ -189,11 +191,12 @@ class DynamicRecommendation3P(BasePlayer):
                 # caution at max-2; endgame/short deck may ignore banking.
                 if prefer_hint:
                     if HintQuality.GOOD == channel.quality:
-                        why_prefix = (
-                            "[3p DR] Hint (identifies playable for next)"
-                            if channel.identifies_new_playable_for_next
-                            else "[3p DR] Hint (trash for next + playable for prev)"
-                        )
+                        if channel.identifies_new_playable_for_next:
+                            why_prefix = "[3p DR] Hint (identifies playable for next)"
+                        elif channel.trash_next_and_play_prev:
+                            why_prefix = "[3p DR] Hint (trash for next + playable for prev)"
+                        else:
+                            why_prefix = "[3p DR] Hint (known-5 assist with playable/trash)"
                     else:
                         why_prefix = f"[3p DR] Hint ({channel.quality.value}/{chop_class.value})"
                     move = self._give_convention_hint(player_view, why_prefix=why_prefix)
@@ -284,11 +287,12 @@ class DynamicRecommendation3P(BasePlayer):
                 self._inferred_hands,
             )
             if HintQuality.GOOD == channel.quality:
-                why_prefix = (
-                    "[3p DR] Endgame hint (identifies playable for next)"
-                    if channel.identifies_new_playable_for_next
-                    else "[3p DR] Endgame hint (trash for next + playable for prev)"
-                )
+                if channel.identifies_new_playable_for_next:
+                    why_prefix = "[3p DR] Endgame hint (identifies playable for next)"
+                elif channel.trash_next_and_play_prev:
+                    why_prefix = "[3p DR] Endgame hint (trash for next + playable for prev)"
+                else:
+                    why_prefix = "[3p DR] Endgame hint (known-5 assist with playable/trash)"
                 return self._give_convention_hint(player_view, why_prefix=why_prefix)
         move = self._try_play_newest_unknown(player_view)
         if move is not None:
@@ -646,12 +650,13 @@ def _apply_convention_hint_decodes(
             )
             decoded_by_seat[decoder] = peer_code_by_seat[decoder]
 
+    fives_possible = any_five_possibly_playable(common_view, settings)
     for decoder, decoded in decoded_by_seat.items():
-        if not decoded_value_is_applicable(inferred_hands[decoder], decoded):
+        if not decoded_value_is_applicable(inferred_hands[decoder], decoded, fives_possible):
             return
 
     for decoder, decoded in decoded_by_seat.items():
-        apply_decoded_value(inferred_hands[decoder], decoded)
+        apply_decoded_value(inferred_hands[decoder], decoded, fives_possible)
 
 
 def assert_independent_own_decode_matches(
@@ -701,13 +706,16 @@ def assert_independent_own_decode_matches(
             players[hinter_index].game_settings,
         ), f"peer code for P{peer + 1} not publicly determined"
         decoded = (enc - peer_code) % 8
-        if not decoded_value_is_applicable(own_rows_before[seat], decoded):
+        fives_possible = any_five_possibly_playable(
+            players[seat].common_view, players[seat].game_settings
+        )
+        if not decoded_value_is_applicable(own_rows_before[seat], decoded, fives_possible):
             assert players[seat]._inferred_hands[seat] == own_rows_before[seat], (
                 f"P{seat + 1} own belief changed on inapplicable decode"
             )
             continue
         expected = copy_inferred_hand(own_rows_before[seat])
-        apply_decoded_value(expected, decoded)
+        apply_decoded_value(expected, decoded, fives_possible)
         assert players[seat]._inferred_hands[seat] == expected, (
             f"P{seat + 1} own belief after hint != independent decode: "
             f"actual={players[seat]._inferred_hands[seat]!r} expected={expected!r}"
@@ -784,10 +792,15 @@ def _pick_play_slot_for_encoding(
     common_view: CommonView,
     settings: GameSettings,
 ) -> Optional[int]:
-    """Newest physically playable unknown (§5.1 / §6.1), including known 5s."""
+    """Newest physically playable play-unknown (§5.1 / §6.1).
+
+    Known 5s participate only while some pile is at 4 (a 5 can be playable); otherwise
+    they are outside the play-code set and never physically playable anyway.
+    """
+    fives_possible = any_five_possibly_playable(common_view, settings)
     kinds = _kinds_for_encoding(hand, common_view, settings, inferred_hand)
     for slot in range(len(hand) - 1, -1, -1):
-        if Playability.UNKNOWN != inferred_hand.cards[slot].playability:
+        if not is_play_unknown(inferred_hand.cards[slot], fives_possible):
             continue
         if CardKind.PLAYABLE == kinds[slot]:
             return slot
@@ -850,7 +863,7 @@ def _pick_discard_code(
     settings: GameSettings,
 ) -> Tuple[int, int]:
     """Return ``(code, chop_slot)`` for the best indicable discard option."""
-    options = indicable_discard_options(inferred_hand)
+    options = indicable_discard_options(inferred_hand, any_five_possibly_playable(common_view, settings))
     assert options, "discard encoding requires at least one indicable option"
     # Prefer non-playable targets when any exist.
     non_playable = [
@@ -875,7 +888,9 @@ def _encode_peer_code(
     """Return ``(peer_code, discard_card_or_none)`` for one visible hand."""
     play_slot = _pick_play_slot_for_encoding(hand, inferred_hand, common_view, settings)
     if play_slot is not None:
-        code = play_type_for_slot(inferred_hand, play_slot)
+        code = play_type_for_slot(
+            inferred_hand, play_slot, any_five_possibly_playable(common_view, settings)
+        )
         assert code is not None, f"play slot {play_slot} must map to a play type"
         return code, None
     code, chop_slot = _pick_discard_code(hand, inferred_hand, common_view, settings)
@@ -1246,12 +1261,13 @@ def _channel_protects_next(
     hands = [copy_inferred_hand(h) for h in inferred_hands]
     decoded_next = (channel.enc_type - channel.peer_codes[channel.prev_seat]) % 8
     decoded_prev = (channel.enc_type - channel.peer_codes[channel.next_seat]) % 8
-    if not decoded_value_is_applicable(hands[channel.next_seat], decoded_next):
+    fives_possible = any_five_possibly_playable(common_view, settings)
+    if not decoded_value_is_applicable(hands[channel.next_seat], decoded_next, fives_possible):
         return False
-    if not decoded_value_is_applicable(hands[channel.prev_seat], decoded_prev):
+    if not decoded_value_is_applicable(hands[channel.prev_seat], decoded_prev, fives_possible):
         return False
-    apply_decoded_value(hands[channel.next_seat], decoded_next)
-    apply_decoded_value(hands[channel.prev_seat], decoded_prev)
+    apply_decoded_value(hands[channel.next_seat], decoded_next, fives_possible)
+    apply_decoded_value(hands[channel.prev_seat], decoded_prev, fives_possible)
     return not _next_would_discard_danger(
         hinter, player_view, common_view, settings, hands
     )
@@ -1274,6 +1290,7 @@ class _ChannelProjection:
     causes_double_play: bool
     identifies_new_playable_for_next: bool
     trash_next_and_play_prev: bool
+    known_five_assist: bool
     causes_double_midrank_discard: bool
     quality: HintQuality
 
@@ -1291,7 +1308,8 @@ def _project_channel(
     peer_codes = _peer_codes_next_then_prev(hinter, player_view, common_view, settings, inferred_hands)
     enc_type = sum(peer_codes.values()) % 8
     type_sum = f"{peer_codes[next_seat]}+{peer_codes[prev_seat]}"
-    buildable = _build_hint_for_encoded(hinter, player_view, enc_type) is not None
+    physical_hint = _build_hint_for_encoded(hinter, player_view, enc_type)
+    buildable = physical_hint is not None
     next_new_playable = _newly_decoded_playable_card_from_codes(
         next_seat,
         peer_codes[prev_seat],
@@ -1315,6 +1333,8 @@ def _project_channel(
         peer_codes[prev_seat],
         enc_type,
         player_view,
+        common_view,
+        settings,
         inferred_hands,
     )
     prev_discard = _newly_decoded_discard_card_from_codes(
@@ -1322,6 +1342,8 @@ def _project_channel(
         peer_codes[next_seat],
         enc_type,
         player_view,
+        common_view,
+        settings,
         inferred_hands,
     )
     causes_double_play = (
@@ -1354,6 +1376,23 @@ def _project_channel(
                 prev_new_playable, hinter, player_view, inferred_hands
             ):
                 trash_next_and_play_prev = True
+    known_five_assist = False
+    if buildable and physical_hint is not None:
+        known_five_assist = _known_five_assist_is_good(
+            hinter,
+            next_seat,
+            prev_seat,
+            physical_hint,
+            next_new_playable,
+            prev_new_playable,
+            next_discard,
+            prev_discard,
+            causes_double_play,
+            player_view,
+            common_view,
+            settings,
+            inferred_hands,
+        )
     causes_double_midrank_discard = (
         next_discard is not None
         and next_discard.number in (Number.TWO, Number.THREE, Number.FOUR)
@@ -1362,7 +1401,7 @@ def _project_channel(
     )
     if not buildable:
         quality = HintQuality.FINE
-    elif identifies_new_playable_for_next or trash_next_and_play_prev:
+    elif identifies_new_playable_for_next or trash_next_and_play_prev or known_five_assist:
         quality = HintQuality.GOOD
     elif causes_double_midrank_discard or (
         causes_double_play and 1 == common_view.live_tokens
@@ -1385,6 +1424,7 @@ def _project_channel(
         causes_double_play=causes_double_play,
         identifies_new_playable_for_next=identifies_new_playable_for_next,
         trash_next_and_play_prev=trash_next_and_play_prev,
+        known_five_assist=known_five_assist,
         causes_double_midrank_discard=causes_double_midrank_discard,
         quality=quality,
     )
@@ -1452,20 +1492,36 @@ def _convention_hint_would_trash_next_and_play_prev(
     ).trash_next_and_play_prev
 
 
+def _convention_hint_would_known_five_assist(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """Good: number-5 newly marks known_five and decode has playable or useless/dup trash (§9.2)."""
+    return _project_channel(
+        hinter, player_view, common_view, settings, inferred_hands
+    ).known_five_assist
+
+
 def _newly_decoded_discard_card_from_codes(
     decoder: int,
     peer_type: int,
     enc_type: int,
     player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
     inferred_hands: List[InferredHand],
 ) -> Optional[Card]:
     """Card implied by a discard decode for ``decoder``, or ``None`` if play / unusable."""
     assert decoder in player_view.teammates
     decoded_type = (enc_type - peer_type) % 8
-    n = n_play(inferred_hands[decoder])
+    fives_possible = any_five_possibly_playable(common_view, settings)
+    n = n_play(inferred_hands[decoder], fives_possible)
     if 1 <= decoded_type <= n:
         return None
-    for code, slot, _confirmed in indicable_discard_options(inferred_hands[decoder]):
+    for code, slot, _confirmed in indicable_discard_options(inferred_hands[decoder], fives_possible):
         if code == decoded_type:
             return player_view.teammates[decoder].cards[slot]
     return None
@@ -1504,10 +1560,11 @@ def _newly_decoded_playable_card_from_codes(
 ) -> Optional[Card]:
     assert decoder in player_view.teammates
     decoded_type = (enc_type - peer_type) % 8
-    n = n_play(inferred_hands[decoder])
+    fives_possible = any_five_possibly_playable(common_view, settings)
+    n = n_play(inferred_hands[decoder], fives_possible)
     if not 1 <= decoded_type <= n:
         return None
-    play_slot = slot_for_play_type(inferred_hands[decoder], decoded_type)
+    play_slot = slot_for_play_type(inferred_hands[decoder], decoded_type, fives_possible)
     if play_slot is None:
         return None
     if Playability.PLAYABLE == inferred_hands[decoder].cards[play_slot].playability:
@@ -1531,4 +1588,71 @@ def _card_already_identified_playable_on_visible_seats(
                 continue
             if Playability.PLAYABLE == inferred_hands[seat].cards[slot].playability:
                 return True
+    return False
+
+
+def _physical_hint_newly_marks_known_five(
+    hint_move: HintMove,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """True when a number-5 touch would set known_five on a slot that is not already marked."""
+    if not isinstance(hint_move, NumberHint) or Number.FIVE != hint_move.number:
+        return False
+    target = hint_move.teammate
+    return any(not inferred_hands[target].cards[slot].known_five for slot in hint_move.cards)
+
+
+def _assist_qualifying_new_playable(
+    card: Optional[Card],
+    seat: int,
+    hinter: int,
+    causes_double_play: bool,
+    player_view: PlayerView,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """Playable half of known-5 assist: same exclusions as §9.2 playable clauses."""
+    if card is None or causes_double_play:
+        return False
+    if any(Playability.PLAYABLE == b.playability for b in inferred_hands[seat].cards):
+        return False
+    return not _card_already_identified_playable_on_visible_seats(
+        card, hinter, player_view, inferred_hands
+    )
+
+
+def _known_five_assist_is_good(
+    hinter: int,
+    next_seat: int,
+    prev_seat: int,
+    physical_hint: HintMove,
+    next_new_playable: Optional[Card],
+    prev_new_playable: Optional[Card],
+    next_discard: Optional[Card],
+    prev_discard: Optional[Card],
+    causes_double_play: bool,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """§9.2: newly mark known_five on either peer plus playable or useless/dup trash decode."""
+    if not _physical_hint_newly_marks_known_five(physical_hint, inferred_hands):
+        return False
+    next_hand = player_view.teammates[next_seat].cards
+    prev_hand = player_view.teammates[prev_seat].cards
+    has_playable = _assist_qualifying_new_playable(
+        next_new_playable, next_seat, hinter, causes_double_play, player_view, inferred_hands
+    ) or _assist_qualifying_new_playable(
+        prev_new_playable, prev_seat, hinter, causes_double_play, player_view, inferred_hands
+    )
+    if has_playable:
+        return True
+    if next_discard is not None and _is_good_discard_trash(
+        next_discard, next_hand, [prev_hand], common_view, settings
+    ):
+        return True
+    if prev_discard is not None and _is_good_discard_trash(
+        prev_discard, prev_hand, [next_hand], common_view, settings
+    ):
+        return True
     return False

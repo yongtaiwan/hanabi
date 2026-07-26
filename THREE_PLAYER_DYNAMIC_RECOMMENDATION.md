@@ -34,9 +34,11 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 - Not `DynamicHandType3P` (dual legacy↔recommendation) and not classic `HintHandSubtype3P`.
 - Not a full card-identify tracker. No convention-derived `useless` / `safe` / `critical` kinds.
 - Not updated by **literal** hints (including fallback when OLD/MID are unbuildable for types
-  ``0``–``3``). Those may be played for tempo; they do **not** change convention belief —
-  including for the hint target. Bots never emit MID-shaped literals (MID is treated as
-  convention by the hint target); OLD/NEW literals are rejected via the touch-set check.
+  ``0``–``3``), **except** public **number-5** touches which set `known_five` for every
+  observer (§2.1b). Other literal hints may be played for tempo; they do **not** change
+  playability / chop — including for the hint target. Bots never emit MID-shaped literals
+  (MID is treated as convention by the hint target); OLD/NEW literals are rejected via the
+  touch-set check.
 - **Full-hand touch = abandon convention.** A hint that touches **every** slot in the target
   hand is never a mod-8 channel (receivers and observers leave belief unchanged). When the
   would-be type is unbuildable, literal fallback **prefers a full-hand number-1** hint when
@@ -56,6 +58,16 @@ Each **seat** carries:
 | `playable` | Convention-identified playable |
 | `unplayable` | Known not playable |
 
+### 2.1b Per-slot known five
+
+| Field | Meaning |
+|-------|---------|
+| `known_five` | `true` iff a public **number-5** hint has touched this slot (all observers agree) |
+
+`known_five` is independent of playability. It is set for **every** number-5 touch (convention channel or literal), including after mod-8 decode on convention hints. Other ranks/colors are not tracked.
+
+A `known_five` slot never needs a discard mark (see §2.2) and, while **no** color pile is topped by a **4**, also never needs a play mark — no 5 can possibly play, so the slot is a **play-unknown** only when some pile is at 4 (§3). Public piles gate this, so every observer agrees. Playability is **not** eagerly rewritten: when a played 4 reopens 5s (§8.1), the slot naturally rejoins the play-code set.
+
 ### 2.2 Per-hand chop
 
 | Field | Meaning |
@@ -63,7 +75,7 @@ Each **seat** carries:
 | `chop` | Expected discard slot, or `None` if no discard candidate |
 | `chop_confirmed` | `true` iff chop was set by a discard decode (each of the `m` codes names one candidate) |
 
-**Discard candidate:** any slot with `playability != playable`.
+**Discard candidate:** any slot with `playability != playable` **and** not `known_five`.
 
 **Default chop** (deal, and when chop must be chosen with no newer sticky target):
 
@@ -86,8 +98,10 @@ There is **no** legacy discard-kind layer and **no** per-slot `recommended` flag
 ## 3. Counts (no mode switch)
 
 ```
-N_play  = number of slots with playability == unknown
+N_play  = number of play-unknown slots
 ```
+
+A slot is **play-unknown** iff `playability == unknown`, **except** a `known_five` slot while **no** color pile is at **4** (no 5 can play, §2.1b). Both branches read only public piles + public belief, so `N_play` stays channel-safe.
 
 - Play codes use `1 .. N_play` (empty if `N_play = 0`).
 - Discard codes are the remaining values in `{0,1,…,7}` (see §5).
@@ -144,11 +158,11 @@ Let `N = N_play` at decode/encode time for that hand.
 
 ### 5.1 Play types `1 .. N`
 
-Among slots with `playability == unknown`, order **newest first** (rightmost = type `1`). Type `k` marks the `k`-th slot **`playable`**.
+Among **play-unknown** slots (§3 — `unknown` playability, excluding known 5s while no pile is at 4), order **newest first** (rightmost = type `1`). Type `k` marks the `k`-th slot **`playable`**.
 
-**Negative inference:** every **newer** unknown (types `1 .. k-1`, i.e. strictly right of the marked slot) becomes **`unplayable`**. Older unknowns are unchanged. Discard chop fields are unchanged (except §8.2 if the marked slot was chop).
+**Negative inference:** every **newer** play-unknown (types `1 .. k-1`, i.e. strictly right of the marked slot) becomes **`unplayable`**. Older unknowns are unchanged. Discard chop fields are unchanged (except §8.2 if the marked slot was chop). Excluded known-5 slots are skipped by both the ordering and the negative inference.
 
-**Encode:** among physically playable unknowns, always choose the **newest** such card, then emit its from-new index `k`. Receivers may therefore treat “type `k`” as “newest playable is here; nothing newer is playable.”
+**Encode:** among physically playable play-unknowns, always choose the **newest** such card, then emit its from-new index `k`. Receivers may therefore treat “type `k`” as “newest playable is here; nothing newer is playable.”
 
 ### 5.2 Discard types
 
@@ -353,17 +367,17 @@ When `_try_protect_next_player` runs:
 
 #### 9.0.3 Knowing a playable is a 5
 
-Convention belief stores **playability only** — not rank or color. `DynamicRecommendation3P` does **not** track literal number/color touches on its own hand. So a leftmost `playable` mark does **not**, by itself, mean the card is a 5.
+Convention belief stores **playability** plus public **`known_five`** from number-5 touches (§2.1b). It does **not** track other ranks/colors. A leftmost `playable` mark alone does **not** mean the card is a 5 unless that slot is also `known_five` or piles force it.
 
-Honest ways we could know (optional; only the first is in scope if implemented later):
+Honest ways we could know:
 
 | Source | When it works |
 |--------|----------------|
 | **Public piles** | Every incomplete color already has top **4** (the only currently playable identities are 5s). Then any convention-`playable` must be a 5 → playing it refunds a token. |
-| Literal number hint | Touched as 5 **and** marked playable — **out of scope** until/unless DR adopts hint-tracking for own cards. |
+| **`known_five`** | Slot was touched by a public number-5 hint. Play only when piles guarantee the 5 is playable (same as § final-round / known-5 play helpers) — do not assume every known 5 is immediately playable. |
 | Seeing own card | **Forbidden** (anti-cheat). |
 
-**v1 decision:** token gift = **confirmed-chop discard only**. Skip play-5 refund unless public piles make every playable a 5 (implement that check or defer; do not assume rank from playability alone).
+**Token gift:** = **confirmed-chop discard only**, unless public piles make every playable a 5 (then play-5 refund is honest). Do not assume rank from playability alone.
 
 Notes:
 
@@ -386,7 +400,7 @@ Evaluated only when a convention hint is **buildable**. If the type is unbuildab
 
 | Class | Definition |
 |-------|------------|
-| `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions) |
+| `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions), **or** **known-5 assist**: the would-be **buildable** convention channel’s physical hint is a **number-5** that **newly** marks ≥1 `known_five` on **either** peer (slot was not already `known_five`) **and** the projected decode also newly identifies a **playable** on **either** peer (same identity / topping-up / no double-play exclusions) **or** recommends a **useless/duplicate** discard on **either** peer. A number-5 that only marks 5s, with no playable and no useless/dup trash in the decode, stays `fine`. |
 | `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels when **more than one life** remains (tempo preferred over bomb risk). |
 | `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard; ones excluded), **or** newly mark the **same** playable identity on **both** peers while **only one life** remains (double play would end the game). |
 
@@ -412,7 +426,7 @@ Guards outside the matrix:
 
 Reading the matrix:
 
-- `good` always beats chop (tempo: playable for next, or trash for next + playable for prev).
+- `good` always beats chop (tempo: playable for next, trash for next + playable for prev, or known-5 assist with playable/trash content).
 - `confirmed` beats non-good / non-bad hints (trust prior discard recommendation).
 - `bad` always discards when discard is legal (never schedule both mid-rank discards; never schedule double play on the last life).
 - `fine` with `default` still hint (avoid burning criticals / playables on unhinted chop).
@@ -474,7 +488,7 @@ not burn the card.
 |-------|----------|
 | Mode switch | Removed; always §5 partition |
 | Legacy kinds | Removed |
-| `N` | `N_play` = count of `unknown` playability |
+| `N` | `N_play` = count of play-unknowns; known 5s excluded while no pile at 4 (§3) |
 | Play codes | `1..N`; `0` never a play type |
 | Play encode | Newest physically playable unknown; decode marks newer unknowns unplayable |
 | Discard when | Only if no new playable to encode on that hand |
@@ -487,6 +501,7 @@ not burn the card.
 | Recompute | Fresh peer codes from current shared belief on each convention hint |
 | Dispatch | Protect next (§9.0), then play leftmost playable, then hint×chop matrix (§9) |
 | Protect next | Next-seat only; save-hint (bad overridden) before play; “would discard” via confirmed∧¬next-likely-good or 0 tokens (§9.0.1); at 0 tokens gift via confirmed-chop discard only if hypothetical `tokens==1` stops the burn; play-5 only if public piles imply playable≡5 (§9.0.3); no default-chop gift; endgame TODO |
+| Hint quality known-5 | Number-5 newly marking `known_five` is `good` only with decode playable **or** useless/dup trash on either peer (§9.2); bare 5-mark stays `fine` |
 | Mod-8 wire | Unchanged |
 | Bot name | `DynamicRecommendation3P` (leave `DynamicHandType3P` untouched) |
 
@@ -495,7 +510,7 @@ not burn the card.
 ## 12. Implementation checklist
 
 - [x] New module/player `DynamicRecommendation3P` (do **not** modify `DynamicHandType3P`)
-- [x] Belief: playability + `chop` + `chop_confirmed` only
+- [x] Belief: playability + `known_five` + `chop` + `chop_confirmed`
 - [x] Encode/decode per §5–§6 (first `m` wrapped-chain candidates)
 - [x] Dispatch per §9 (play / hint×chop matrix)
 - [x] `_try_protect_next_player` per §9.0
@@ -509,8 +524,9 @@ not burn the card.
 | Term | Meaning |
 |------|---------|
 | **Protect next** | §9.0 emergency: save next from discarding a last-copy critical/playable before own play |
-| **N_play** | Count of `playability == unknown` |
-| **Discard candidate** | `playability != playable` |
+| **N_play** | Count of play-unknowns (`unknown`, excluding known 5s while no pile at 4) |
+| **Known five** | Slot touched by a public number-5 hint (`known_five`) |
+| **Discard candidate** | `playability != playable` and not `known_five` |
 | **Chop** | Expected discard slot |
 | **Chop confirmed** | Chop set by a discard decode (each of `m` codes names one candidate) |
 | **Discard chain** | Chop, then newer, then wrap older; codes use first `m = 8−N` only |
@@ -519,4 +535,4 @@ not burn the card.
 
 ---
 
-*Spec version: 2026-07-25 (`DynamicRecommendation3P`; §9.0 protect next defined, not yet implemented).*
+*Spec version: 2026-07-26 (`DynamicRecommendation3P`; §9.2 known-5 assist; §3 known 5s outside `N_play` while no pile at 4).*

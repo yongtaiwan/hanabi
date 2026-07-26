@@ -48,8 +48,20 @@ def set_playability(belief: InferredSlot, playability: Playability) -> None:
     belief.playability = playability
 
 
-def n_play(hand: InferredHand) -> int:
-    return sum(1 for b in hand.cards if Playability.UNKNOWN == b.playability)
+def any_five_possibly_playable(common_view: CommonView, settings: GameSettings) -> bool:
+    """True iff some color pile has top 4, so a 5 could be playable right now (public)."""
+    return any(Number.FOUR == common_view.cards_played.get(color) for color in settings.cards)
+
+
+def is_play_unknown(belief: InferredSlot, fives_possible: bool) -> bool:
+    """Counts for play codes / ``N_play``. Known 5s are excluded while no pile is at 4."""
+    if Playability.UNKNOWN != belief.playability:
+        return False
+    return fives_possible or not belief.known_five
+
+
+def n_play(hand: InferredHand, fives_possible: bool) -> int:
+    return sum(1 for b in hand.cards if is_play_unknown(b, fives_possible))
 
 
 def is_discard_candidate(belief: InferredSlot) -> bool:
@@ -91,9 +103,9 @@ def discard_chain(hand: InferredHand) -> List[int]:
     return chain
 
 
-def discard_code_candidates(hand: InferredHand) -> List[int]:
+def discard_code_candidates(hand: InferredHand, fives_possible: bool) -> List[int]:
     """First ``m = 8 - N_play`` discard-chain slots (never identified playables / known 5s)."""
-    types = discard_types_for_n_play(n_play(hand))
+    types = discard_types_for_n_play(n_play(hand, fives_possible))
     candidates = discard_chain(hand)[: len(types)]
     assert all(is_discard_candidate(hand.cards[slot]) for slot in candidates), (
         f"discard candidates must skip playables and known 5s: {candidates}"
@@ -106,36 +118,36 @@ def discard_types_for_n_play(n_play_val: int) -> List[int]:
     return [t for t in (0, 7, 6, 5, 4, 3, 2) if t not in skip]
 
 
-def unknown_slots_newest_first(hand: InferredHand) -> List[int]:
+def unknown_slots_newest_first(hand: InferredHand, fives_possible: bool) -> List[int]:
     return [
         slot
         for slot in range(len(hand.cards) - 1, -1, -1)
-        if Playability.UNKNOWN == hand.cards[slot].playability
+        if is_play_unknown(hand.cards[slot], fives_possible)
     ]
 
 
-def play_type_for_slot(hand: InferredHand, slot: int) -> Optional[int]:
-    ordering = unknown_slots_newest_first(hand)
+def play_type_for_slot(hand: InferredHand, slot: int, fives_possible: bool) -> Optional[int]:
+    ordering = unknown_slots_newest_first(hand, fives_possible)
     if slot not in ordering:
         return None
     return ordering.index(slot) + 1
 
 
-def slot_for_play_type(hand: InferredHand, hand_type: int) -> Optional[int]:
+def slot_for_play_type(hand: InferredHand, hand_type: int, fives_possible: bool) -> Optional[int]:
     if hand_type < 1:
         return None
-    ordering = unknown_slots_newest_first(hand)
+    ordering = unknown_slots_newest_first(hand, fives_possible)
     if hand_type > len(ordering):
         return None
     return ordering[hand_type - 1]
 
 
-def apply_play_decode(hand: InferredHand, k: int) -> None:
-    ordering = unknown_slots_newest_first(hand)
+def apply_play_decode(hand: InferredHand, k: int, fives_possible: bool) -> None:
+    ordering = unknown_slots_newest_first(hand, fives_possible)
     assert 1 <= k <= len(ordering), f"play type {k} out of range for {len(ordering)} unknown slots"
     target = ordering[k - 1]
     assert Playability.UNKNOWN == hand.cards[target].playability
-    # Newer unknowns (ordering[0 : k-1]) are unplayable: encode always picks newest playable.
+    # Newer play-unknowns (ordering[0 : k-1]) are unplayable: encode always picks newest playable.
     for slot in ordering[: k - 1]:
         set_playability(hand.cards[slot], Playability.UNPLAYABLE)
     set_playability(hand.cards[target], Playability.PLAYABLE)
@@ -161,21 +173,21 @@ def apply_discard_decode_with_n_play(hand: InferredHand, decoded: int, n_play_be
     hand.chop_confirmed = True
 
 
-def apply_decoded_value(hand: InferredHand, decoded: int) -> None:
-    n_play_before = n_play(hand)
+def apply_decoded_value(hand: InferredHand, decoded: int, fives_possible: bool) -> None:
+    n_play_before = n_play(hand, fives_possible)
     if 1 <= decoded <= n_play_before:
-        apply_play_decode(hand, decoded)
+        apply_play_decode(hand, decoded, fives_possible)
         return
     apply_discard_decode_with_n_play(hand, decoded, n_play_before)
 
 
-def decoded_value_is_applicable(hand: InferredHand, decoded: int) -> bool:
+def decoded_value_is_applicable(hand: InferredHand, decoded: int, fives_possible: bool) -> bool:
     """True when :func:`apply_decoded_value` would not assert on ``decoded`` for ``hand``."""
     if not 0 <= decoded <= 7:
         return False
-    n_play_before = n_play(hand)
+    n_play_before = n_play(hand, fives_possible)
     if 1 <= decoded <= n_play_before:
-        return slot_for_play_type(hand, decoded) is not None
+        return slot_for_play_type(hand, decoded, fives_possible) is not None
     types = discard_types_for_n_play(n_play_before)
     if decoded not in types:
         return False
@@ -287,11 +299,11 @@ def mark_known_fives(hand: InferredHand, slots: Sequence[int]) -> None:
     ensure_default_chop(hand)
 
 
-def indicable_discard_options(hand: InferredHand) -> List[Tuple[int, int, bool]]:
+def indicable_discard_options(hand: InferredHand, fives_possible: bool) -> List[Tuple[int, int, bool]]:
     """Return ``(code, chop_slot, confirmed)`` for each of the first ``m`` chain slots."""
     ensure_default_chop(hand)
-    types = discard_types_for_n_play(n_play(hand))
-    candidates = discard_code_candidates(hand)
+    types = discard_types_for_n_play(n_play(hand, fives_possible))
+    candidates = discard_code_candidates(hand, fives_possible)
     assert types and candidates
     options: List[Tuple[int, int, bool]] = []
     for index, code in enumerate(types):
