@@ -153,6 +153,9 @@ class DynamicRecommendation3P(BasePlayer):
         self._last_decision_summary = None
         own = self._hand_belief[self._player_index]
         ensure_default_chop(own)
+        # TODO(hint-bank): At max-1 tokens, playing a 5 refunds to max and discard-locks the
+        # next seat — consider deferring that 5 when a safe discard exists and the would-be
+        # forced hint is not good (see §9 token-banking notes).
         move = self._try_play_leftmost_playable(player_view)
         if move is None:
             can_hint = 0 < self.common_view.hint_tokens
@@ -167,6 +170,9 @@ class DynamicRecommendation3P(BasePlayer):
                     self._hand_belief,
                 )
                 prefer_hint = _HINT_CHOP_MATRIX[(hint_quality, chop_class)]
+                # TODO(hint-bank): When tokens == max-1, discard (even default chop) unless
+                # quality is good — avoid filling the bank via discard. Optional later: soft
+                # caution at max-2; endgame/short deck may ignore banking.
                 if prefer_hint:
                     if HintQuality.GOOD == hint_quality:
                         why_prefix = (
@@ -186,6 +192,9 @@ class DynamicRecommendation3P(BasePlayer):
                 else:
                     move = self._discard_chop(player_view, chop_class)
             elif can_hint:
+                # TODO(hint-bank): At max tokens discard is illegal. Prefer playable if any
+                # (already tried above). If hinting, avoid harmful convention when quality is
+                # bad — literal escape instead of double mid-rank discard (§9.3 deferred).
                 move = self._give_convention_hint(player_view)
             else:
                 chop_class = _chop_class(own) if own.chop is not None else None

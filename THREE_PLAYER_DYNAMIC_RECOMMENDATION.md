@@ -319,6 +319,9 @@ Guards outside the matrix:
 
 - No hint tokens → discard (by chop / oldest)
 - Discard illegal (max hints) → hint anyway (including `bad`; literal escape for `bad` deferred)
+- **TODO (hint-bank):** Avoid filling the bank — at `max-1` tokens, prefer discard unless hint is
+  `good` (discard or play-5 both refund to max). At max tokens with no playable, prefer literal
+  escape over a `bad` convention channel. Soft caution at `max-2` / endgame exceptions later.
 
 Reading the matrix:
 
