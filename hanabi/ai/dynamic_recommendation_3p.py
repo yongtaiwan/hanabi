@@ -158,7 +158,9 @@ class DynamicRecommendation3P(BasePlayer):
         # TODO(hint-bank): At max-1 tokens, playing a 5 refunds to max and discard-locks the
         # next seat — consider deferring that 5 when a safe discard exists and the would-be
         # forced hint is not good (see §9 token-banking notes).
-        move = self._try_play_leftmost_playable(player_view)
+        move = self._try_protect_next_player(player_view)
+        if move is None:
+            move = self._try_play_leftmost_playable(player_view)
         if move is None:
             can_hint = 0 < self.common_view.hint_tokens
             can_discard = self.common_view.hint_tokens < self.game_settings.max_hint_tokens
@@ -252,6 +254,50 @@ class DynamicRecommendation3P(BasePlayer):
             shifted.append(fresh_inferred_slot())
         hand.cards = shifted
         finalize_chop_after_shift(hand)
+
+    def _try_protect_next_player(self, player_view: PlayerView) -> Optional[Move]:
+        """Save next from discarding a last-copy critical/playable before own tempo (§9.0)."""
+        if not _next_would_discard_danger(
+            self._player_index,
+            player_view,
+            self.common_view,
+            self.game_settings,
+            self._inferred_hands,
+        ):
+            return None
+        tokens = self.common_view.hint_tokens
+        if 0 < tokens:
+            if not _channel_protects_next(
+                self._player_index,
+                player_view,
+                self.common_view,
+                self.game_settings,
+                self._inferred_hands,
+            ):
+                return None
+            return self._give_convention_hint(
+                player_view, why_prefix="[3p DR] Protect next (save-hint)"
+            )
+        # Token gift: only when a single token would stop next burning (§9.0.2).
+        if _next_would_discard_danger(
+            self._player_index,
+            player_view,
+            self.common_view,
+            self.game_settings,
+            self._inferred_hands,
+            hint_tokens=1,
+        ):
+            return None
+        own = self._inferred_hands[self._player_index]
+        ensure_default_chop(own)
+        if own.chop is None or not own.chop_confirmed:
+            return None
+        if not self.is_move_legal(player_view, Discard(own.chop)):
+            return None
+        return move_with_why(
+            Discard(own.chop),
+            f"[3p DR] Protect next (token gift; discard confirmed chop slot {own.chop})",
+        )
 
     def _try_play_leftmost_playable(self, player_view: PlayerView) -> Optional[Move]:
         for slot, belief in enumerate(self._inferred_hands[self._player_index].cards):
@@ -916,6 +962,127 @@ def _chop_class(hand: InferredHand) -> ChopClass:
     if hand.chop_confirmed:
         return ChopClass.CONFIRMED
     return ChopClass.DEFAULT
+
+
+def _seat_has_convention_playable(hand: InferredHand) -> bool:
+    return any(Playability.PLAYABLE == b.playability for b in hand.cards)
+
+
+def _prev_has_unidentified_physical_playable(
+    prev_seat: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """True when prev has an ``unknown`` slot that is physically playable now."""
+    assert prev_seat in player_view.teammates
+    prev_cards = player_view.teammates[prev_seat].cards
+    prev_belief = inferred_hands[prev_seat]
+    assert len(prev_cards) == len(prev_belief.cards)
+    for slot, belief in enumerate(prev_belief.cards):
+        if Playability.UNKNOWN != belief.playability:
+            continue
+        if CardKind.PLAYABLE == common_view.card_kind(prev_cards[slot], settings):
+            return True
+    return False
+
+
+def _next_likely_good(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+    *,
+    hint_tokens: Optional[int] = None,
+) -> bool:
+    """Approx that next would get §9.2 ``good`` via playable-for-prev (§9.0.1)."""
+    tokens = common_view.hint_tokens if hint_tokens is None else hint_tokens
+    if 0 == tokens:
+        return False
+    prev_seat = (hinter + 2) % 3
+    if _seat_has_convention_playable(inferred_hands[prev_seat]):
+        return False
+    return _prev_has_unidentified_physical_playable(
+        prev_seat, player_view, common_view, settings, inferred_hands
+    )
+
+
+def _chop_card_is_dangerous(
+    seat: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    hand = inferred_hands[seat]
+    ensure_default_chop(hand)
+    if hand.chop is None:
+        return False
+    assert seat in player_view.teammates
+    card = player_view.teammates[seat].cards[hand.chop]
+    kind = common_view.card_kind(card, settings)
+    return CardKind.CRITICAL == kind or CardKind.PLAYABLE == kind
+
+
+def _next_would_discard_danger(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+    *,
+    hint_tokens: Optional[int] = None,
+) -> bool:
+    """True when next is about to discard a last-copy critical/playable (§9.0.1)."""
+    tokens = common_view.hint_tokens if hint_tokens is None else hint_tokens
+    next_seat = (hinter + 1) % 3
+    next_hand = inferred_hands[next_seat]
+    if _seat_has_convention_playable(next_hand):
+        return False
+    if not _chop_card_is_dangerous(next_seat, player_view, common_view, settings, inferred_hands):
+        return False
+    if 0 == tokens:
+        return True
+    ensure_default_chop(next_hand)
+    if not next_hand.chop_confirmed:
+        return False
+    if _next_likely_good(
+        hinter,
+        player_view,
+        common_view,
+        settings,
+        inferred_hands,
+        hint_tokens=tokens,
+    ):
+        return False
+    return True
+
+
+def _channel_protects_next(
+    hinter: int,
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+    inferred_hands: List[InferredHand],
+) -> bool:
+    """True when the standard convention channel stops next burning (§9.0.1)."""
+    channel = _project_channel(hinter, player_view, common_view, settings, inferred_hands)
+    if not channel.buildable:
+        return False
+    hands = [copy_inferred_hand(h) for h in inferred_hands]
+    decoded_next = (channel.enc_type - channel.peer_codes[channel.prev_seat]) % 8
+    decoded_prev = (channel.enc_type - channel.peer_codes[channel.next_seat]) % 8
+    if not decoded_value_is_applicable(hands[channel.next_seat], decoded_next):
+        return False
+    if not decoded_value_is_applicable(hands[channel.prev_seat], decoded_prev):
+        return False
+    apply_decoded_value(hands[channel.next_seat], decoded_next)
+    apply_decoded_value(hands[channel.prev_seat], decoded_prev)
+    return not _next_would_discard_danger(
+        hinter, player_view, common_view, settings, hands
+    )
 
 
 @dataclass(frozen=True)

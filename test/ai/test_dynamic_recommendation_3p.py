@@ -444,6 +444,196 @@ class TestDispatch(unittest.TestCase):
         self.assertNotIsInstance(move, Discard)
 
 
+class TestProtectNext(unittest.TestCase):
+    """§9.0 ``_try_protect_next_player``."""
+
+    def test_save_hint_before_own_playable(self) -> None:
+        """Dangerous confirmed chop on next: protect hint beats own playable."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        # Next: R5 critical on confirmed chop; R1 newer so our channel can mark playable.
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.ONE),
+        ]
+        # Prev: no physical playables (so not next_likely_good).
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertTrue(
+            dr._channel_protects_next(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertNotIsInstance(move, Play)
+        self.assertIn("Protect next (save-hint)", move.why())
+
+    def test_next_likely_good_skips_protect(self) -> None:
+        """Prev has unidentified playable ⇒ assume next hints; do not defer own play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.RED, Number.ONE),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_likely_good(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertFalse(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
+
+    def test_token_gift_discards_confirmed_chop(self) -> None:
+        """At 0 tokens, default danger on next: discard own confirmed chop to gift a token."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=0,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 1
+        player._inferred_hands[0].chop_confirmed = True
+        # Next: dangerous chop, unconfirmed → with 1 token they would hint (default).
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = False
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertFalse(
+            dr._next_would_discard_danger(
+                0, view, common, settings, player._inferred_hands, hint_tokens=1
+            )
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(1, move.card)
+        self.assertIn("Protect next (token gift", move.why())
+
+    def test_token_gift_skipped_when_still_burns_at_one_token(self) -> None:
+        """Confirmed danger + no next_likely_good: gift cannot help; fall through to play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=0,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(
+                0, view, common, settings, player._inferred_hands, hint_tokens=1
+            )
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
+
+
 class TestHintQualityGoodTrashPlusPrevPlay(unittest.TestCase):
     def test_trash_for_next_and_playable_for_prev_is_good(self) -> None:
         """Next discard useless + prev new playable ⇒ good (beats confirmed chop)."""
