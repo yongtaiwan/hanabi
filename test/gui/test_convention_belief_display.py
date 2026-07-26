@@ -106,7 +106,7 @@ class TestConventionBeliefDisplay(unittest.TestCase):
         self.assertIn(0, overlays)
         self.assertTrue(overlays[0].is_chop)
         self.assertFalse(overlays[0].chop_confirmed)
-        players[0]._hand_belief[0].chop_confirmed = True
+        players[0]._inferred_hands[0].chop_confirmed = True
         overlays = convention_overlays_for_seat(game, 0)
         self.assertTrue(overlays[0].chop_confirmed)
 
@@ -121,8 +121,8 @@ class TestConventionBeliefDisplay(unittest.TestCase):
             player.set_game_settings(settings)
         game = Game.create(team=PlayerTeam(players), settings=settings)
         # Only seat 1 knows slot 0 is playable (as after decoding own hint message).
-        players[1]._hand_belief[1].slots[0].playability = DrPlayability.PLAYABLE
-        players[1]._hand_belief[1].chop = 1
+        players[1]._inferred_hands[1].cards[0].playability = DrPlayability.PLAYABLE
+        players[1]._inferred_hands[1].chop = 1
         overlays = convention_overlays_for_seat(game, 1)
         self.assertEqual(CardKind.PLAYABLE, overlays[0].kind)
         self.assertFalse(overlays[0].is_chop)

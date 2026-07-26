@@ -11,7 +11,7 @@ from hanabi.ai import dynamic_hand_type_3p as dht
 from hanabi.ai import dynamic_recommendation_3p as dr
 from hanabi.ai import hint_hand_subtype_3p as hhs
 from hanabi.ai.dht_belief import fresh_slot_belief
-from hanabi.ai.dr_belief import copy_hand_belief, fresh_hand_belief
+from hanabi.ai.dr_belief import copy_inferred_hand, fresh_inferred_hand
 from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P
 from hanabi.ai.dynamic_recommendation_3p import DynamicRecommendation3P
 from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P
@@ -118,8 +118,8 @@ class TestPeerCodesPubliclyDetermined(unittest.TestCase):
         settings = create_standard_game_settings(3)
         common = _common(settings)
         next_hand, prev_hand = self._hands()
-        next_belief = fresh_hand_belief(5)
-        prev_belief = fresh_hand_belief(5)
+        next_belief = fresh_inferred_hand(5)
+        prev_belief = fresh_inferred_hand(5)
         self.assertEqual(
             dr._peer_code_for_hand(next_hand, next_belief, common, settings),
             dr._peer_code_for_hand(list(next_hand), next_belief, common, settings),
@@ -167,7 +167,7 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
     def _observe_convention_hint(self, players, views, common, settings, hand_p1, hand_p2, mod):
         # Opening deal: shared blank belief rows (same for every seat).
         if isinstance(players[0], DynamicRecommendation3P):
-            b1, b2 = players[0]._hand_belief[1], players[0]._hand_belief[2]
+            b1, b2 = players[0]._inferred_hands[1], players[0]._inferred_hands[2]
         elif isinstance(players[0], DynamicHandType3P):
             b1, b2 = players[0]._slot_belief[1], players[0]._slot_belief[2]
         else:
@@ -195,7 +195,7 @@ class TestIndependentDecodeAfterHint(unittest.TestCase):
         hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
         hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
         views = self._views(hand_p1, hand_p2)
-        own_before = [copy_hand_belief(players[s]._hand_belief[s]) for s in range(3)]
+        own_before = [copy_inferred_hand(players[s]._inferred_hands[s]) for s in range(3)]
         hint = self._observe_convention_hint(players, views, common, settings, hand_p1, hand_p2, dr)
         dr.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
         dr.assert_public_non_hinter_rows_agree(players, 0, hint)
@@ -299,11 +299,11 @@ class TestLiveGamesStayConsistent(unittest.TestCase):
             game._advance_turn()
         # After T10, every seat knows P3 slot 4 is playable.
         for bot in players:
-            self.assertEqual(Playability.PLAYABLE, bot._hand_belief[2].slots[4].playability)
+            self.assertEqual(Playability.PLAYABLE, bot._inferred_hands[2].cards[4].playability)
         p2 = players[1]
-        own = p2._hand_belief[1]
+        own = p2._inferred_hands[1]
         pv = game.get_player_view(1)
-        hq = _hint_quality(1, pv, game.state.common_view, game.settings, p2._hand_belief)
+        hq = _hint_quality(1, pv, game.state.common_view, game.settings, p2._inferred_hands)
         chop_class = _chop_class(own)
         self.assertEqual(ChopClass.CONFIRMED, chop_class)
         self.assertNotEqual(HintQuality.GOOD, hq)
