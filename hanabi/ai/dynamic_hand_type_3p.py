@@ -631,39 +631,41 @@ def _pick_discard_slot_for_encoding(
         kind = physical_kind(slot)
         return CardKind.PLAYABLE == kind or CardKind.CRITICAL == kind
 
+    useless: List[int] = []
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if LegacyDiscardKind.USELESS == row[slot].legacy_kind:
-            return slot
+            useless.append(slot)
+            continue
         if (
             LegacyDiscardKind.UNKNOWN == row[slot].legacy_kind
             and CardKind.USELESS == physical_kind(slot)
         ):
-            return slot
+            useless.append(slot)
+    if useless:
+        # Oldest first so a later hint can point at the next-oldest trash.
+        return min(useless)
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if RecState.RECOMMENDED == row[slot].rec_state:
             return slot
-    dispensable: List[Tuple[int, int]] = []
+    dispensable: List[int] = []
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if LegacyDiscardKind.SAFE == row[slot].legacy_kind:
-            dispensable.append((slot, hand[slot].number.value))
+            dispensable.append(slot)
             continue
         if (
             LegacyDiscardKind.UNKNOWN == row[slot].legacy_kind
             and CardKind.DISPENSABLE == physical_kind(slot)
         ):
-            dispensable.append((slot, hand[slot].number.value))
+            dispensable.append(slot)
     if dispensable:
-        # Same tie-break as RecommendationPlayer: highest rank first, then oldest slot.
-        # TODO: Prefer a dispensable whose card identity also appears in the other visible
-        # teammate hand (duplicate is safer to pitch than a unique copy).
-        dispensable.sort(key=lambda item: (-item[1], item[0]))
-        return dispensable[0][0]
+        # Newest among safe discards (sticky chop can pivot right).
+        return max(dispensable)
     for slot in chain:
         if not is_risky_discard(slot):
             return slot

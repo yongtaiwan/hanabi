@@ -14,6 +14,7 @@ from hanabi.ai.dr_belief import (
     Playability,
     apply_decoded_value,
     copy_hand_belief,
+    decoded_value_is_applicable,
     ensure_default_chop,
     finalize_chop_after_shift,
     fresh_hand_belief,
@@ -28,7 +29,7 @@ from hanabi.ai.dr_belief import (
 )
 from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
-from hanabi.core.game import CommonView, GameSettings, PlayerView
+from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
 from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
 from hanabi.core.player import BasePlayer
 
@@ -280,7 +281,9 @@ class DynamicRecommendation3P(BasePlayer):
         )
         hint_move = _build_hint_for_encoded(self._player_index, player_view, enc_type)
         if hint_move is None:
-            hint_move = _build_literal_fallback_hint(self._player_index, player_view)
+            hint_move = _build_literal_fallback_hint(
+                self._player_index, player_view, avoid_enc_type=enc_type
+            )
             assert hint_move is not None, (
                 f"literal fallback hint must exist when convention type {enc_type} is unbuildable"
             )
@@ -383,6 +386,62 @@ def _peer_codes_next_then_prev(
     }
 
 
+def _synthetic_view_for_hint_target_canonical(
+    hinter: int,
+    move: ColorHint | NumberHint,
+    hand_size: int,
+) -> PlayerView:
+    """Rebuild OLD/NEW attribute layout from the touch set for hint-target §8.4 checks.
+
+    Non-touched slots use distinct filler attributes so OLD is not spuriously blocked by
+    “same identity on newest” (which the touch set cannot reveal). Not used for MID: that
+    preference depends on whether OLD was legal, which fillers cannot decide safely.
+    """
+    target = move.teammate
+    touched = set(move.cards)
+    if isinstance(move, NumberHint):
+        fillers = [n for n in Number if n != move.number]
+        fake: List[Card] = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(Color.RED, move.number))
+            else:
+                fake.append(Card(Color.RED, fillers[fi % len(fillers)]))
+                fi += 1
+    else:
+        assert isinstance(move, ColorHint)
+        fillers = [c for c in Color if c != move.color and Color.MULTI != c]
+        fake = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(move.color, Number.ONE))
+            else:
+                fake.append(Card(fillers[fi % len(fillers)], Number.ONE))
+                fi += 1
+    return PlayerView(teammates={target: Hand(fake)}, own_hand_size=hand_size)
+
+
+def _hint_target_accepts_as_convention(
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    target_size: int,
+    encoded_type: int,
+) -> bool:
+    """Whether the hint target should treat this hint as convention (§8.4).
+
+    OLD/NEW: recreate the search from the touch set (safe). MID: bots never emit MID-shaped
+    literal fallbacks, so a MID shape with discard/play encoding is convention.
+    """
+    shape = _hint_slot_shape(move.cards, target_size)
+    if HintSlotShape.MID == shape:
+        return encoded_type <= 3
+    synthetic = _synthetic_view_for_hint_target_canonical(hinter_index, move, target_size)
+    canonical = _build_hint_for_encoded(hinter_index, synthetic, encoded_type)
+    return canonical is not None and _hints_match(canonical, move)
+
+
 def _apply_convention_hint_decodes(
     hinter_index: int,
     move: ColorHint | NumberHint,
@@ -413,6 +472,10 @@ def _apply_convention_hint_decodes(
         canonical = _build_hint_for_encoded(hinter_index, observer_view, encoded_type)
         if canonical is None or not _hints_match(canonical, move):
             return
+    elif not _hint_target_accepts_as_convention(
+        hinter_index, move, target_size, encoded_type
+    ):
+        return
 
     # Snapshot peer codes for every visible non-hinter before mutating either row.
     peer_code_by_seat: Dict[int, int] = {}
@@ -436,6 +499,10 @@ def _apply_convention_hint_decodes(
                 f"P{observer_index + 1} must see decoder P{decoder + 1} to apply public decode"
             )
             decoded_by_seat[decoder] = peer_code_by_seat[decoder]
+
+    for decoder, decoded in decoded_by_seat.items():
+        if not decoded_value_is_applicable(hand_belief[decoder], decoded):
+            return
 
     for decoder, decoded in decoded_by_seat.items():
         apply_decoded_value(hand_belief[decoder], decoded)
@@ -465,11 +532,16 @@ def assert_independent_own_decode_matches(
         enc = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
         if hint_target in view.teammates:
             canonical = _build_hint_for_encoded(hinter_index, view, enc)
-            if canonical is None or not _hints_match(canonical, move):
-                assert players[seat]._hand_belief[seat] == own_rows_before[seat], (
-                    f"P{seat + 1} own belief changed on literal fallback hint"
-                )
-                continue
+            is_convention = canonical is not None and _hints_match(canonical, move)
+        else:
+            is_convention = _hint_target_accepts_as_convention(
+                hinter_index, move, target_size, enc
+            )
+        if not is_convention:
+            assert players[seat]._hand_belief[seat] == own_rows_before[seat], (
+                f"P{seat + 1} own belief changed on literal fallback hint"
+            )
+            continue
         peer_code = _peer_code_for_hand(
             view.teammates[peer].cards,
             own_rows_before[peer],
@@ -482,8 +554,14 @@ def assert_independent_own_decode_matches(
             players[hinter_index].common_view,
             players[hinter_index].game_settings,
         ), f"peer code for P{peer + 1} not publicly determined"
+        decoded = (enc - peer_code) % 8
+        if not decoded_value_is_applicable(own_rows_before[seat], decoded):
+            assert players[seat]._hand_belief[seat] == own_rows_before[seat], (
+                f"P{seat + 1} own belief changed on inapplicable decode"
+            )
+            continue
         expected = copy_hand_belief(own_rows_before[seat])
-        apply_decoded_value(expected, (enc - peer_code) % 8)
+        apply_decoded_value(expected, decoded)
         assert players[seat]._hand_belief[seat] == expected, (
             f"P{seat + 1} own belief after hint != independent decode: "
             f"actual={players[seat]._hand_belief[seat]!r} expected={expected!r}"
@@ -710,6 +788,7 @@ def _build_hint_for_encoded(
         _assert_encoded_hint_round_trip(hinter, enc_type, hint_move, hand)
         return hint_move
     is_number = enc_type in (0, 1)
+    # Types 0–3: prefer OLD, else MID (same as classic 3p / DHT).
     for shape in (HintSlotShape.OLD, HintSlotShape.MID):
         hint_move = _build_shape_hint(target, hand, shape, is_number)
         if hint_move is not None:
@@ -718,7 +797,13 @@ def _build_hint_for_encoded(
     return None
 
 
-def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Optional[HintMove]:
+def _build_literal_fallback_hint(
+    hinter: int,
+    player_view: PlayerView,
+    *,
+    avoid_enc_type: Optional[int] = None,
+) -> Optional[HintMove]:
+    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention)."""
     candidates: List[HintMove] = []
     for offset in (1, 2):
         target = (hinter + offset) % 3
@@ -737,15 +822,34 @@ def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Option
             indices = sorted(i for i, c in enumerate(hand) if col == c.color)
             if indices:
                 candidates.append(ColorHint(target, indices, col))
+    # MID cannot be verified from the touch set alone when OLD was preferred; bots never use
+    # MID-shaped literals so the hint target may treat MID as convention (§8.4 / encode).
+    non_mid: List[HintMove] = []
     for hint_move in candidates:
+        hand_size = len(player_view.teammates[hint_move.teammate].cards)
+        if HintSlotShape.MID == _hint_slot_shape(hint_move.cards, hand_size):
+            continue
+        non_mid.append(hint_move)
+    preferred: Optional[HintMove] = None
+    any_literal: Optional[HintMove] = None
+    for hint_move in non_mid:
         inferred = _infer_encoded_type_from_hint(
             hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
         )
         canonical = _build_hint_for_encoded(hinter, player_view, inferred)
         if canonical is not None and _hints_match(canonical, hint_move):
             continue
-        return hint_move
-    return candidates[0] if candidates else None
+        if any_literal is None:
+            any_literal = hint_move
+        if avoid_enc_type is not None and inferred == avoid_enc_type:
+            continue
+        preferred = hint_move
+        break
+    if preferred is not None:
+        return preferred
+    if any_literal is not None:
+        return any_literal
+    return non_mid[0] if non_mid else None
 
 
 def _assert_encoded_hint_round_trip(

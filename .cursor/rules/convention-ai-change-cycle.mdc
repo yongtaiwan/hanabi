@@ -1,0 +1,23 @@
+---
+description: Verify DR (and other 3p convention) changes with unit tests and a short experiment batch
+globs: hanabi/ai/dynamic_recommendation_3p.py,hanabi/ai/dr_belief.py,THREE_PLAYER_DYNAMIC_RECOMMENDATION.md
+alwaysApply: false
+---
+
+# DR convention AI change cycle
+
+When changing Dynamic Recommendation encode, decode, discard ranking, hint quality, or literal-fallback behavior:
+
+1. **Unit tests** — run `test.ai.test_dynamic_recommendation_3p` and `test.ai.test_anti_cheat_convention_3p`.
+2. **Short experiment** — before considering the change done, run a seed-fixed batch including DR, e.g.:
+
+```bash
+python run_ai_experiments.py --players 3 --runs 100 --seed 42 \
+  --ais dynamic_recommendation_3p commonsense_cheater
+```
+
+Use `--runs 100` when the change touches decode, peer codes, or literal fallback (crash-prone paths).
+
+3. **Fix forward** — if the batch asserts or desyncs, treat that as a required fix in the same change cycle. Prefer a regression test from the failing seed (`42 + run_id`) when practical.
+
+4. **Anti-cheat** — peer codes stay channel-safe (one visible hand + that seat’s public belief + piles); public non-hinter rows must agree after convention hints; literal hints must not update convention belief for **any** observer, including the hint target.

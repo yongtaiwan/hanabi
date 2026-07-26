@@ -33,7 +33,10 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 
 - Not `DynamicHandType3P` (dual legacy↔recommendation) and not classic `HintHandSubtype3P`.
 - Not a full card-identify tracker. No convention-derived `useless` / `safe` / `critical` kinds.
-- Not updated by **literal** hints (including fallback when OLD/MID is unbuildable). Those may be played for tempo; they do **not** change convention belief.
+- Not updated by **literal** hints (including fallback when OLD/MID are unbuildable for types
+  ``0``–``3``). Those may be played for tempo; they do **not** change convention belief —
+  including for the hint target. Bots never emit MID-shaped literals (MID is treated as
+  convention by the hint target); OLD/NEW literals are rejected via the touch-set check.
 
 ---
 
@@ -106,6 +109,9 @@ Unchanged from classic 3p hint-hand-type.
 | 5 | previous | NEW | number |
 | 6 | next | NEW | color |
 | 7 | previous | NEW | color |
+
+Types `0`–`3` prefer OLD, then MID, when building the physical hint. Types `4`–`7` always use NEW.
+Literal fallback never uses a MID-shaped hint (so the hint target can treat MID as convention).
 
 ### 4.2 Channel sum
 
@@ -234,6 +240,8 @@ Encoder discard ranking (lower = better to recommend):
 - **Critical tie-break:** any critical discard already rules out a perfect score, so among
   criticals prefer only the **newest** slot (sticky chop can pivot to later non-criticals on a
   following hint). Do not rank by points lost or by rank.
+- **Safe (dispensable) / residual playable:** prefer **higher rank**, then **older** slot.
+- **Useless:** prefer **lower rank**, then **older** slot.
 
 Hinter-only hint **quality** (whether to hint vs discard chop, §9) may still look at both visible
 hands; that does not change the encoded peer codes.

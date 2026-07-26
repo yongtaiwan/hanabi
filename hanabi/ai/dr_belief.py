@@ -170,6 +170,28 @@ def apply_decoded_value(hand: HandBelief, decoded: int) -> None:
     apply_discard_decode_with_n_play(hand, decoded, n_play_before)
 
 
+def decoded_value_is_applicable(hand: HandBelief, decoded: int) -> bool:
+    """True when :func:`apply_decoded_value` would not assert on ``decoded`` for ``hand``."""
+    if not 0 <= decoded <= 7:
+        return False
+    n_play_before = n_play(hand)
+    if 1 <= decoded <= n_play_before:
+        return slot_for_play_type(hand, decoded) is not None
+    types = discard_types_for_n_play(n_play_before)
+    if decoded not in types:
+        return False
+    # Mirror apply_discard_decode_with_n_play: close unknowns, then chop/candidates.
+    probe = copy_hand_belief(hand)
+    for belief in probe.slots:
+        if Playability.UNKNOWN == belief.playability:
+            set_playability(belief, Playability.UNPLAYABLE)
+    ensure_default_chop(probe)
+    candidates = discard_chain(probe)[: len(types)]
+    if not candidates:
+        return False
+    return types.index(decoded) < len(candidates)
+
+
 def apply_physical_channel_decode(hand: HandBelief, decoded: int) -> None:
     """Legacy helper: interpret ``decoded`` against a blank ``n_play == hand_size`` boundary.
 

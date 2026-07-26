@@ -250,6 +250,20 @@ class TestLiveGamesStayConsistent(unittest.TestCase):
             result = field._play_game_with_team(team, save_record=False)
             self.assertIsNotNone(result.score)
 
+    def test_dr_seed_93_completes_without_belief_desync(self) -> None:
+        """Exp run 51 (seed 42+51): literal MID must not update only the hint target."""
+        from hanabi.core.game import create_ai_simulation_game_settings
+        from hanabi.core.game_field import GameField
+
+        settings = create_ai_simulation_game_settings(3)
+        field = GameField(GameField._create_start_position(settings, seed=93))
+        team = PlayerTeam([DynamicRecommendation3P(i) for i in range(3)])
+        result = field._play_game_with_team(
+            team, save_record=False, experiment_id="test", run_id=51, ai_name="DR"
+        )
+        self.assertIsNotNone(result.score)
+        self.assertGreater(result.moves_count, 0)
+
     def test_replay_t10_marks_reach_all_seats_so_t11_discards(self) -> None:
         """Non-hinter must absorb public decode of both hands (game 12 T10→T11)."""
         from hanabi.ai.dr_belief import Playability

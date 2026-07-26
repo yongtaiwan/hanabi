@@ -1156,8 +1156,8 @@ class TestRecommendationMode(unittest.TestCase):
         code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
         self.assertEqual(discard_type_for_slot(row, 1), code)
 
-    def test_rec_encode_dispensable_prefers_highest_rank(self) -> None:
-        """Among safe discards on the chop chain, prefer highest rank (then oldest)."""
+    def test_rec_encode_dispensable_prefers_newest(self) -> None:
+        """Among safe discards on the chop chain, prefer newest slot (no rank)."""
         settings = create_standard_game_settings(3)
         # No yellow/green piles: Y2, G4, G2 are dispensable; W4 playable → not on chain.
         common = CommonView(
@@ -1183,7 +1183,7 @@ class TestRecommendationMode(unittest.TestCase):
         self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[1], settings))
         self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[4], settings))
         code = h3p._encode_recommendation_peer_code(hand, row, common, settings)
-        self.assertEqual(discard_type_for_slot(row, 1), code)
+        self.assertEqual(discard_type_for_slot(row, 4), code)
 
 
 class TestDynamicHandType3PGui(unittest.TestCase):

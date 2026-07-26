@@ -208,6 +208,61 @@ class TestHintSlotShape(unittest.TestCase):
         self.assertEqual(HintSlotShape.NEW, dr._hint_slot_shape([4], 5))
 
 
+class TestBuildHintOldThenMid(unittest.TestCase):
+    def test_builds_mid_when_old_unbuildable(self) -> None:
+        """Oldest number also on newest → OLD fails; MID number still encodes type 0."""
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.ONE),
+                        Card(Color.WHITE, Number.TWO),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        hint = dr._build_hint_for_encoded(0, view, 0)
+        self.assertIsInstance(hint, NumberHint)
+        self.assertEqual(HintSlotShape.MID, dr._hint_slot_shape(hint.cards, 5))
+
+    def test_literal_fallback_never_mid_shaped(self) -> None:
+        """When OLD is available, a mid-only color must not be chosen as literal."""
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.WHITE, Number.FIVE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.BLUE, Number.THREE),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        # Force a situation where we ask for literal (any).
+        literal = dr._build_literal_fallback_hint(0, view)
+        self.assertIsNotNone(literal)
+        hand_size = len(view.teammates[literal.teammate].cards)
+        self.assertNotEqual(
+            HintSlotShape.MID, dr._hint_slot_shape(literal.cards, hand_size)
+        )
+
+
 class TestEncodePreferPlay(unittest.TestCase):
     def test_encodes_playable_unknown(self) -> None:
         settings = create_standard_game_settings(3)
@@ -808,6 +863,64 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         code, slot = dr._pick_discard_code(hand, belief, common, settings)
         self.assertEqual(2, slot)
         self.assertEqual(6, code)
+
+    def test_dispensable_prefers_high_rank_then_older(self) -> None:
+        """Among lone dispensables, higher rank wins; same rank prefers older."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.WHITE, Number.FIVE),
+            Card(Color.GREEN, Number.TWO),
+            Card(Color.BLUE, Number.FIVE),
+            Card(Color.RED, Number.THREE),
+        ]
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[2], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[4], settings))
+        s_old_high = dr._discard_option_score(hand, 0, common, settings)
+        s_mid_low = dr._discard_option_score(hand, 2, common, settings)
+        s_new = dr._discard_option_score(hand, 4, common, settings)
+        self.assertLess(s_old_high, s_new)
+        self.assertLess(s_new, s_mid_low)
+        belief = fresh_hand_belief(5)
+        set_playability(belief.slots[1], Playability.PLAYABLE)
+        set_playability(belief.slots[3], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(0, slot)
+
+    def test_useless_prefers_low_rank_then_older(self) -> None:
+        """Among useless trash, lower rank wins; same rank prefers older."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.BLUE: Number.THREE, Color.GREEN: Number.TWO},
+        )
+        hand = [
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.YELLOW, Number.FIVE),
+            Card(Color.GREEN, Number.ONE),
+            Card(Color.WHITE, Number.FIVE),
+            Card(Color.BLUE, Number.ONE),
+        ]
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[2], settings))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[4], settings))
+        s0 = dr._discard_option_score(hand, 0, common, settings)
+        s2 = dr._discard_option_score(hand, 2, common, settings)
+        s4 = dr._discard_option_score(hand, 4, common, settings)
+        self.assertLess(s2, s4)
+        self.assertLess(s4, s0)
+        belief = fresh_hand_belief(5)
+        set_playability(belief.slots[1], Playability.PLAYABLE)
+        set_playability(belief.slots[3], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
 
     def test_useless_beats_in_hand_duplicate(self) -> None:
         settings = create_standard_game_settings(3)
