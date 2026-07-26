@@ -7,7 +7,7 @@ from enum import Enum
 from typing import List, Optional, Sequence
 
 from hanabi.core.card import Card
-from hanabi.core.enums import CardKind, Color, Number
+from hanabi.core.enums import CardKind, Number
 from hanabi.core.game import CommonView, GameSettings
 
 
@@ -216,17 +216,14 @@ _MIDDLE_DISCARD_RANKS = frozenset({Number.TWO, Number.THREE, Number.FOUR})
 
 def play_reopens_playability(
     card: Card,
-    cards_played_before: dict[Color, Number],
     common_view: CommonView,
     settings: GameSettings,
 ) -> bool:
+    """True when a successful play of ``card`` newly opens the next rank with copies left."""
     if Number.FIVE == card.number:
         return False
-    before_top = cards_played_before.get(card.color)
     after_top = common_view.cards_played.get(card.color)
     if after_top != card.number:
-        return False
-    if before_top is not None and before_top.value >= card.number.value:
         return False
     next_number = Number(card.number.value + 1)
     return _copies_of_card_remain(Card(card.color, next_number), common_view, settings)

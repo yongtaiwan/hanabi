@@ -10,7 +10,7 @@ from hanabi.ai.hint_hand_subtype_3p import HintHandSubtype3P, HintSlotShape
 from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
-from hanabi.core.moves import ColorHint, Discard, NumberHint, Play
+from hanabi.core.moves import FinishedPlay, FinishedDiscard, ColorHint, Discard, NumberHint, Play
 
 
 def _common(settings=None) -> CommonView:
@@ -418,7 +418,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_play_move(0, Play(2), view)
+        player.observe_play_move(0, FinishedPlay(2, Card(Color.RED, Number.ONE), successful=True), view)
         self.assertEqual(
             [None, CardKind.CRITICAL, None, CardKind.USELESS, None],
             player._inferred_card_kind[0],
@@ -445,7 +445,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=4,
         )
-        player.observe_discard_move(0, Discard(1), view)
+        player.observe_discard_move(0, FinishedDiscard(1, Card(Color.RED, Number.TWO)), view)
         self.assertEqual([None, None, CardKind.PLAYABLE, None], player._inferred_card_kind[0])
 
     def test_safe_cleared_on_non_useless_middle_rank_discard(self) -> None:
@@ -473,7 +473,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_discard_move(1, Discard(2), view)
+        player.observe_discard_move(1, FinishedDiscard(2, Card(Color.RED, Number.TWO)), view)
         self.assertEqual(
             [None, None, None, CardKind.CRITICAL, None],
             player._inferred_card_kind[0],
@@ -488,7 +488,6 @@ class TestBeliefLifecycle(unittest.TestCase):
         common = _common(settings)
         player.set_common_view(common)
         player._inferred_card_kind[1] = [None, CardKind.DISPENSABLE, None, None, None]
-        player._discard_pile_snapshot = {Color.RED: {Number.THREE: 1}}
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
             hint_tokens=common.hint_tokens,
@@ -503,7 +502,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_discard_move(1, Discard(0), view)
+        player.observe_discard_move(1, FinishedDiscard(0, Card(Color.RED, Number.THREE)), view)
         self.assertEqual([CardKind.DISPENSABLE, None, None, None, None], player._inferred_card_kind[1])
 
     def test_safe_unchanged_on_rank_one_discard(self) -> None:
@@ -527,7 +526,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=4,
         )
-        player.observe_discard_move(0, Discard(0), view)
+        player.observe_discard_move(0, FinishedDiscard(0, Card(Color.WHITE, Number.ONE)), view)
         self.assertEqual([CardKind.DISPENSABLE, None, None, None], player._inferred_card_kind[0])
 
     def test_safe_cleared_on_middle_rank_misplay(self) -> None:
@@ -555,7 +554,9 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_play_move(1, Play(0), view)
+        player.observe_play_move(
+            1, FinishedPlay(0, Card(Color.RED, Number.TWO), successful=False), view
+        )
         self.assertEqual([None, None, None, None, None], player._inferred_card_kind[0])
         self.assertEqual([None, None, None, None, None], player._inferred_card_kind[1])
 

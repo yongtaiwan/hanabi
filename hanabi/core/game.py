@@ -1348,10 +1348,13 @@ class Game:
         self._set_common_view_for_players()
 
         # Notify players about the move BEFORE the callback
-        # This ensures hints are updated before display is refreshed
-        self._notify_players(player_index, move)
+        # This ensures hints are updated before display is refreshed.
+        # Card moves are decorated with public outcome (moved_card / successful).
+        observer_move = _observer_move_with_outcome(state_before_move, new_state, player_index, move)
+        self._notify_players(player_index, observer_move)
 
         # Notify global callback with old and new state (for display, logging, etc.)
+        # Intent ``move`` keeps HasWhy from play(); GUI still diffs states for copy.
         if self._on_move is not None:
             self._on_move(player_index, move, state_before_move, new_state)
 
@@ -1371,4 +1374,25 @@ class Game:
             f"turns_left={last_state.turns_left}, turn_number={last_state.turn_number}, "
             f"is_finished={last_state.is_finished()}"
         )
+
+
+def _observer_move_with_outcome(
+    state_before: GameState,
+    state_after: GameState,
+    player_index: int,
+    move: Move,
+) -> Move:
+    """Decorate play/discard intents with public ``moved_card`` (+ ``successful`` for plays)."""
+    from .moves import Discard, Play, finished_card_move_for_observer
+
+    if isinstance(move, Play):
+        moved_card = state_before.player_hands[player_index].cards[move.card]
+        successful = (
+            state_after.common_view.live_tokens == state_before.common_view.live_tokens
+        )
+        return finished_card_move_for_observer(move, moved_card, successful=successful)
+    if isinstance(move, Discard):
+        moved_card = state_before.player_hands[player_index].cards[move.card]
+        return finished_card_move_for_observer(move, moved_card)
+    return move
 

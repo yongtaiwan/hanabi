@@ -14,6 +14,8 @@ from .moves import (
     Discard,
     ColorHint,
     NumberHint,
+    FinishedPlay,
+    FinishedDiscard,
     HasWhy,
     ExplainedMixin,
     ExplainedPlay,
@@ -22,6 +24,7 @@ from .moves import (
     ExplainedNumberHint,
     ensure_concrete_move,
     move_with_why,
+    finished_card_move_for_observer,
 )
 from .game import (
     Hand,
@@ -76,6 +79,8 @@ __all__ = [
     "CardMove",
     "Play",
     "Discard",
+    "FinishedPlay",
+    "FinishedDiscard",
     "ColorHint",
     "NumberHint",
     "HasWhy",
@@ -86,6 +91,7 @@ __all__ = [
     "ExplainedNumberHint",
     "ensure_concrete_move",
     "move_with_why",
+    "finished_card_move_for_observer",
     # Players
     "Player",
     "Cheater",

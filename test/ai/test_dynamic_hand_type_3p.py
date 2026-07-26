@@ -24,7 +24,7 @@ from hanabi.ai.dynamic_hand_type_3p import DynamicHandType3P, HintSlotShape
 from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
-from hanabi.core.moves import ColorHint, Discard, NumberHint, Play
+from hanabi.core.moves import FinishedPlay, FinishedDiscard, ColorHint, Discard, NumberHint, Play
 
 
 def _legacy_row(kinds: List[Optional[CardKind]]) -> List[h3p.SlotBelief]:
@@ -678,7 +678,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_play_move(0, Play(2), view)
+        player.observe_play_move(0, FinishedPlay(2, Card(Color.RED, Number.ONE), successful=True), view)
         self.assertEqual(
             [None, CardKind.CRITICAL, None, CardKind.USELESS, None],
             _player_legacy_matrix(player)[0],
@@ -705,7 +705,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=4,
         )
-        player.observe_discard_move(0, Discard(1), view)
+        player.observe_discard_move(0, FinishedDiscard(1, Card(Color.RED, Number.TWO)), view)
         self.assertEqual([None, None, CardKind.PLAYABLE, None], _player_legacy_matrix(player)[0])
 
     def test_safe_cleared_on_non_useless_middle_rank_discard(self) -> None:
@@ -733,7 +733,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_discard_move(1, Discard(2), view)
+        player.observe_discard_move(1, FinishedDiscard(2, Card(Color.RED, Number.TWO)), view)
         self.assertEqual(
             [None, None, None, CardKind.CRITICAL, None],
             _player_legacy_matrix(player)[0],
@@ -748,7 +748,6 @@ class TestBeliefLifecycle(unittest.TestCase):
         common = _common(settings)
         player.set_common_view(common)
         _set_legacy_row(player, 1, [None, CardKind.DISPENSABLE, None, None, None])
-        player._discard_pile_snapshot = {Color.RED: {Number.THREE: 1}}
         player._common_view = CommonView(
             live_tokens=common.live_tokens,
             hint_tokens=common.hint_tokens,
@@ -763,16 +762,15 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_discard_move(1, Discard(0), view)
+        player.observe_discard_move(1, FinishedDiscard(0, Card(Color.RED, Number.THREE)), view)
         self.assertEqual([CardKind.DISPENSABLE, None, None, None, None], _player_legacy_matrix(player)[1])
 
-    def test_frontier_play_reopens_unplayable_using_played_snapshot(self) -> None:
-        """Game updates common_view before observe; reopen must use prior cards_played snapshot."""
+    def test_frontier_play_reopens_unplayable(self) -> None:
+        """Successful frontier play reopens unplayable slots via FinishedPlay.moved_card."""
         settings = create_standard_game_settings(3)
         player = DynamicHandType3P(0)
         player.set_game_settings(settings)
         player.set_common_view(_common(settings))
-        player._cards_played_snapshot = {}
         for seat in range(3):
             for belief in player._slot_belief[seat]:
                 belief.playability = Playability.UNPLAYABLE
@@ -791,12 +789,11 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_play_move(1, Play(0), view)
+        player.observe_play_move(1, FinishedPlay(0, Card(Color.RED, Number.ONE), successful=True), view)
         self.assertTrue(
             all(Playability.UNKNOWN == b.playability for row in player._slot_belief for b in row),
             "frontier-opening play must reopen all unplayable slots",
         )
-        self.assertEqual({Color.RED: Number.ONE}, player._cards_played_snapshot)
 
     def test_safe_unchanged_on_rank_one_discard(self) -> None:
         settings = create_standard_game_settings(3)
@@ -819,7 +816,7 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=4,
         )
-        player.observe_discard_move(0, Discard(0), view)
+        player.observe_discard_move(0, FinishedDiscard(0, Card(Color.WHITE, Number.ONE)), view)
         self.assertEqual([CardKind.DISPENSABLE, None, None, None], _player_legacy_matrix(player)[0])
 
     def test_safe_cleared_on_middle_rank_misplay(self) -> None:
@@ -847,7 +844,9 @@ class TestBeliefLifecycle(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        player.observe_play_move(1, Play(0), view)
+        player.observe_play_move(
+            1, FinishedPlay(0, Card(Color.RED, Number.TWO), successful=False), view
+        )
         self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[0])
         self.assertEqual([None, None, None, None, None], _player_legacy_matrix(player)[1])
 

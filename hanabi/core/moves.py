@@ -3,8 +3,9 @@ Move classes for Hanabi game actions.
 """
 
 from abc import ABC
-from typing import List, Protocol, TypeAlias, runtime_checkable
+from typing import List, Optional, Protocol, TypeAlias, runtime_checkable
 
+from .card import Card
 from .enums import Color, Number
 
 
@@ -109,6 +110,9 @@ class CardMove(Move):
         Args:
             card: Index of the card in the player's hand
         """
+        # TODO: Rename ``card`` / ``_card`` to ``card_index`` (slot in hand). Observer-facing
+        # identity already lives on :class:`FinishedPlay` / :class:`FinishedDiscard` as
+        # ``moved_card``.
         self._card = card
 
     def __repr__(self) -> str:
@@ -152,9 +156,66 @@ class Discard(CardMove):
         return f"Discard(card={self._card})"
 
 
+class FinishedPlay(Play):
+    """Observer-facing play after the engine applies it (intent :class:`Play` + outcome)."""
+
+    def __init__(self, card: int, moved_card: Card, *, successful: bool) -> None:
+        """
+        Args:
+            card: Hand slot index (same as :class:`Play`).
+            moved_card: Public identity of the card that left the hand.
+            successful: True if the pile advanced; False if the play bombed (card discarded).
+        """
+        super().__init__(card)
+        # TODO: After ``CardMove.card`` → ``card_index``, consider renaming ``moved_card`` to
+        # ``card: Card`` (slot stays ``card_index``).
+        self._moved_card = moved_card
+        self._successful = successful
+
+    def __repr__(self) -> str:
+        return (
+            f"FinishedPlay(card={self._card}, moved_card={self._moved_card!r}, "
+            f"successful={self._successful})"
+        )
+
+    @property
+    def moved_card(self) -> Card:
+        """Card that left the hand (public after the play attempt)."""
+        return self._moved_card
+
+    @property
+    def successful(self) -> bool:
+        """True when the play advanced a firework pile."""
+        return self._successful
+
+
+class FinishedDiscard(Discard):
+    """Observer-facing discard after the engine applies it (intent :class:`Discard` + card)."""
+
+    def __init__(self, card: int, moved_card: Card) -> None:
+        """
+        Args:
+            card: Hand slot index (same as :class:`Discard`).
+            moved_card: Public identity of the discarded card.
+        """
+        super().__init__(card)
+        # TODO: After ``CardMove.card`` → ``card_index``, consider renaming ``moved_card`` to
+        # ``card: Card`` (slot stays ``card_index``).
+        self._moved_card = moved_card
+
+    def __repr__(self) -> str:
+        return f"FinishedDiscard(card={self._card}, moved_card={self._moved_card!r})"
+
+    @property
+    def moved_card(self) -> Card:
+        """Card that left the hand (public after the discard)."""
+        return self._moved_card
+
+
 # Every legal engine move is one of these leaf types. Use with exhaustive dispatch +
 # ``typing.assert_never`` (or a final ``case _: assert False``) so new move kinds are caught.
-# Subclasses such as :class:`ExplainedPlay` are still :class:`Play` / etc. for ``isinstance``.
+# Subclasses such as :class:`ExplainedPlay` / :class:`FinishedPlay` are still :class:`Play`
+# for ``isinstance``.
 ConcreteMove: TypeAlias = Play | Discard | ColorHint | NumberHint
 
 HintMove: TypeAlias = ColorHint | NumberHint
@@ -209,6 +270,9 @@ def move_with_why(move: Move, why: str) -> Move:
     """
     if isinstance(move, HasWhy):
         return move
+    assert not isinstance(move, (FinishedPlay, FinishedDiscard)), (
+        "move_with_why is for intent moves; FinishedPlay/FinishedDiscard are engine observe events"
+    )
     if isinstance(move, Play):
         return ExplainedPlay(move.card, why=why)
     if isinstance(move, Discard):
@@ -225,3 +289,18 @@ def ensure_concrete_move(move: Move) -> ConcreteMove:
     if isinstance(move, (Play, Discard, ColorHint, NumberHint)):
         return move
     assert False, f"unexpected Move subclass (add to ConcreteMove / dispatch): {type(move).__name__}"
+
+
+def finished_card_move_for_observer(
+    move: Play | Discard,
+    moved_card: Card,
+    *,
+    successful: Optional[bool] = None,
+) -> FinishedPlay | FinishedDiscard:
+    """Build the observer-facing play/discard event from an intent move + public outcome."""
+    if isinstance(move, Play):
+        assert successful is not None, "FinishedPlay requires successful="
+        return FinishedPlay(move.card, moved_card, successful=successful)
+    assert isinstance(move, Discard)
+    assert successful is None, "FinishedDiscard does not take successful="
+    return FinishedDiscard(move.card, moved_card)

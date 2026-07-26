@@ -14,10 +14,20 @@ from __future__ import annotations
 from enum import Enum
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from hanabi.core.card import Card, Suit
+from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.player import BasePlayer
 
 
@@ -39,7 +49,6 @@ class HintHandSubtype3P(BasePlayer):
     def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
         self._inferred_card_kind: List[List[Optional[CardKind]]] = []
-        self._discard_pile_snapshot: Dict[Color, Dict[Number, int]] = {}
         self._last_decision_summary: Optional[str] = None
 
     @classmethod
@@ -56,7 +65,6 @@ class HintHandSubtype3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._inferred_card_kind = [[None for _ in range(hand_size)] for _ in range(num_players)]
-        self._discard_pile_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
         if player_index == self._player_index:
@@ -64,29 +72,30 @@ class HintHandSubtype3P(BasePlayer):
         assert player_index in observer_view.teammates
         return len(observer_view.teammates[player_index].cards)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_play_move(
+        self, player_index: int, move: FinishedPlay, observer_view: PlayerView
+    ) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
-            self.common_view,
-            self.game_settings,
-            self._inferred_card_kind,
-        )
+        if not move.successful:
+            _maybe_invalidate_safe_for_moved_card(
+                move.moved_card,
+                self.common_view,
+                self.game_settings,
+                self._inferred_card_kind,
+            )
         self._shift_kinds_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
+        _maybe_invalidate_safe_for_moved_card(
+            move.moved_card,
             self.common_view,
             self.game_settings,
             self._inferred_card_kind,
         )
         self._shift_kinds_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -368,42 +377,13 @@ def assert_public_non_hinter_rows_agree(
             )
 
 
-def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, Dict[Number, int]]:
-    return {color: suit.cards.copy() for color, suit in cards_discarded.items()}
-
-
-def _card_from_discard_pile_diff(
-    before: Dict[Color, Dict[Number, int]],
-    after: Dict[Color, Dict[Number, int]],
-) -> Card:
-    """Return the single card whose discard-pile count increased by one."""
-    found: Optional[Card] = None
-    for color in set(before) | set(after):
-        before_counts = before.get(color, {})
-        after_counts = after.get(color, {})
-        for number in set(before_counts) | set(after_counts):
-            delta = after_counts.get(number, 0) - before_counts.get(number, 0)
-            if 0 == delta:
-                continue
-            assert 1 == delta and found is None, (
-                f"expected exactly one new discard, before={before!r} after={after!r}"
-            )
-            found = Card(color, number)
-    assert found is not None, f"no discard-pile change: before={before!r} after={after!r}"
-    return found
-
-
-def _maybe_invalidate_safe_after_discard_pile_change(
-    before_discards: Dict[Color, Dict[Number, int]],
+def _maybe_invalidate_safe_for_moved_card(
+    card: Card,
     common_view: CommonView,
     settings: GameSettings,
     inferred_card_kind: List[List[Optional[CardKind]]],
 ) -> None:
-    """Apply safe→unknown when a discard or misplay adds a card to the public discard pile."""
-    after_discards = _flatten_discard_counts(common_view.cards_discarded)
-    if before_discards == after_discards:
-        return
-    card = _card_from_discard_pile_diff(before_discards, after_discards)
+    """Apply safe→unknown when a discard or misplay adds ``card`` to the public discard pile."""
     if _pile_add_invalidates_safe_belief(card, common_view, settings):
         _reset_all_safe_to_unknown(inferred_card_kind)
 

@@ -33,10 +33,20 @@ from hanabi.ai.dht_belief import (
     slot_belief_from_legacy_kind,
     slot_for_play_type,
 )
-from hanabi.core.card import Card, Suit
+from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.player import BasePlayer
 
 
@@ -58,8 +68,6 @@ class DynamicHandType3P(BasePlayer):
     def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
         self._slot_belief: List[List[SlotBelief]] = []
-        self._discard_pile_snapshot: Dict[Color, Dict[Number, int]] = {}
-        self._cards_played_snapshot: Dict[Color, Number] = {}
         self._last_decision_summary: Optional[str] = None
 
     @classmethod
@@ -76,8 +84,6 @@ class DynamicHandType3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._slot_belief = [[fresh_slot_belief() for _ in range(hand_size)] for _ in range(num_players)]
-        self._discard_pile_snapshot = {}
-        self._cards_played_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
         if player_index == self._player_index:
@@ -85,41 +91,32 @@ class DynamicHandType3P(BasePlayer):
         assert player_index in observer_view.teammates
         return len(observer_view.teammates[player_index].cards)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
-        # Game updates ``common_view`` before ``observe``; use the prior-turn snapshot as "before".
-        before_discards = self._discard_pile_snapshot
-        cards_played_before = self._cards_played_snapshot
+    def observe_play_move(
+        self, player_index: int, move: FinishedPlay, observer_view: PlayerView
+    ) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
-            self.common_view,
-            self._slot_belief,
-            self.game_settings,
-        )
-        played_card = _card_from_successful_play(cards_played_before, self.common_view.cards_played)
-        if (
-            played_card is not None
-            and play_reopens_playability(
-                played_card, cards_played_before, self.common_view, self.game_settings
+        if not move.successful:
+            _maybe_invalidate_safe_for_moved_card(
+                move.moved_card,
+                self.common_view,
+                self._slot_belief,
+                self.game_settings,
             )
-        ):
+        elif play_reopens_playability(move.moved_card, self.common_view, self.game_settings):
             reopen_unplayable_after_play(self._slot_belief)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
+        _maybe_invalidate_safe_for_moved_card(
+            move.moved_card,
             self.common_view,
             self._slot_belief,
             self.game_settings,
         )
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -321,24 +318,6 @@ class DynamicHandType3P(BasePlayer):
 _MIDDLE_DISCARD_RANKS = frozenset({Number.TWO, Number.THREE, Number.FOUR})
 
 
-def _card_from_successful_play(
-    before_played: Dict[Color, Number],
-    after_played: Dict[Color, Number],
-) -> Optional[Card]:
-    """Return the card whose color pile advanced by one rank, or ``None`` if not a successful play."""
-    found: Optional[Card] = None
-    for color in set(before_played) | set(after_played):
-        before_top = before_played.get(color)
-        after_top = after_played.get(color)
-        if before_top == after_top:
-            continue
-        assert after_top is not None and found is None, (
-            f"expected exactly one pile advance: before={before_played!r} after={after_played!r}"
-        )
-        found = Card(color, after_top)
-    return found
-
-
 def _peer_code_for_hand(
     hand: List[Card],
     belief: List[SlotBelief],
@@ -418,40 +397,13 @@ def _hints_match(a: HintMove, b: HintMove) -> bool:
     return False
 
 
-def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, Dict[Number, int]]:
-    return {color: suit.cards.copy() for color, suit in cards_discarded.items()}
-
-
-def _card_from_discard_pile_diff(
-    before: Dict[Color, Dict[Number, int]],
-    after: Dict[Color, Dict[Number, int]],
-) -> Card:
-    found: Optional[Card] = None
-    for color in set(before) | set(after):
-        before_counts = before.get(color, {})
-        after_counts = after.get(color, {})
-        for number in set(before_counts) | set(after_counts):
-            delta = after_counts.get(number, 0) - before_counts.get(number, 0)
-            if 0 == delta:
-                continue
-            assert 1 == delta and found is None, (
-                f"expected exactly one new discard, before={before!r} after={after!r}"
-            )
-            found = Card(color, number)
-    assert found is not None, f"no discard-pile change: before={before!r} after={after!r}"
-    return found
-
-
-def _maybe_invalidate_safe_after_discard_pile_change(
-    before_discards: Dict[Color, Dict[Number, int]],
+def _maybe_invalidate_safe_for_moved_card(
+    card: Card,
     common_view: CommonView,
     slot_belief: List[List[SlotBelief]],
     settings: GameSettings,
 ) -> None:
-    after_discards = _flatten_discard_counts(common_view.cards_discarded)
-    if before_discards == after_discards:
-        return
-    card = _card_from_discard_pile_diff(before_discards, after_discards)
+    """Clear legacy safe belief when ``card`` entering discard invalidates mid-rank safes."""
     if _pile_add_invalidates_safe_belief(card, common_view, settings):
         clear_legacy_safe(slot_belief)
 

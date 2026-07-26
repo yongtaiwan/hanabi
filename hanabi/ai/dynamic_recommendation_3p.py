@@ -34,6 +34,8 @@ from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
 from hanabi.core.moves import (
     ColorHint,
     Discard,
+    FinishedDiscard,
+    FinishedPlay,
     HasWhy,
     HintMove,
     Move,
@@ -88,7 +90,6 @@ class DynamicRecommendation3P(BasePlayer):
     def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
         self._hand_belief: List[HandBelief] = []
-        self._cards_played_snapshot: Dict[Color, Number] = {}
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
@@ -103,7 +104,6 @@ class DynamicRecommendation3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._hand_belief = [fresh_hand_belief(hand_size) for _ in range(num_players)]
-        self._cards_played_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
         if player_index == self._player_index:
@@ -111,24 +111,21 @@ class DynamicRecommendation3P(BasePlayer):
         assert player_index in observer_view.teammates
         return len(observer_view.teammates[player_index].cards)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
-        cards_played_before = self._cards_played_snapshot
+    def observe_play_move(
+        self, player_index: int, move: FinishedPlay, observer_view: PlayerView
+    ) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        played_card = _card_from_successful_play(cards_played_before, self.common_view.cards_played)
-        if (
-            played_card is not None
-            and play_reopens_playability(
-                played_card, cards_played_before, self.common_view, self.game_settings
-            )
+        if move.successful and play_reopens_playability(
+            move.moved_card, self.common_view, self.game_settings
         ):
             reopen_unplayable(self._hand_belief)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -314,23 +311,6 @@ class DynamicRecommendation3P(BasePlayer):
         if not self.is_move_legal(player_view, Discard(0)):
             return None
         return move_with_why(Discard(0), "[3p DR] Discard slot 0 (oldest; no chop)")
-
-
-def _card_from_successful_play(
-    before_played: Dict[Color, Number],
-    after_played: Dict[Color, Number],
-) -> Optional[Card]:
-    found: Optional[Card] = None
-    for color in set(before_played) | set(after_played):
-        before_top = before_played.get(color)
-        after_top = after_played.get(color)
-        if before_top == after_top:
-            continue
-        assert after_top is not None and found is None, (
-            f"expected exactly one pile advance: before={before_played!r} after={after_played!r}"
-        )
-        found = Card(color, after_top)
-    return found
 
 
 def _peer_code_for_hand(

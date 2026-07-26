@@ -60,6 +60,8 @@ from hanabi.core.moves import (
     ExplainedDiscard,
     ExplainedColorHint,
     ExplainedNumberHint,
+    FinishedPlay,
+    FinishedDiscard,
 )
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
@@ -129,7 +131,7 @@ class RecommendationPlayer(BasePlayer):
         )
         super().set_game_settings(game_settings)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
+    def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
         self._plays_since_hint += 1
 
