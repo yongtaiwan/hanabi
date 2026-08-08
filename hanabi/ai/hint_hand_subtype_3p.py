@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
-from hanabi.core.game import CommonView, GameSettings, PlayerView
+from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
 from hanabi.core.moves import (
     ColorHint,
     Discard,
@@ -275,12 +275,19 @@ def _apply_convention_hint_decodes(
     else:
         target_size = observer_view.own_hand_size
 
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return
+
     encoded_type = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
 
     if hint_target in observer_view.teammates:
         canonical = _build_hint_for_encoded(hinter_index, observer_view, encoded_type)
         if canonical is None or not _hints_match(canonical, move):
             return
+    elif not _hint_target_accepts_as_convention(
+        hinter_index, move, target_size, encoded_type
+    ):
+        return
 
     peer_code_by_seat: Dict[int, int] = {}
     for seat in (hint_target, other_non_hinter):
@@ -332,11 +339,16 @@ def assert_independent_own_decode_matches(
         enc = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
         if hint_target in view.teammates:
             canonical = _build_hint_for_encoded(hinter_index, view, enc)
-            if canonical is None or not _hints_match(canonical, move):
-                assert list(players[seat]._inferred_card_kind[seat]) == list(own_rows_before[seat]), (
-                    f"P{seat + 1} own belief changed on literal fallback hint"
-                )
-                continue
+            is_convention = canonical is not None and _hints_match(canonical, move)
+        else:
+            is_convention = _hint_target_accepts_as_convention(
+                hinter_index, move, target_size, enc
+            )
+        if not is_convention:
+            assert list(players[seat]._inferred_card_kind[seat]) == list(own_rows_before[seat]), (
+                f"P{seat + 1} own belief changed on literal fallback hint"
+            )
+            continue
         peer_code = _peer_code_for_hand(
             view.teammates[peer].cards,
             list(own_rows_before[peer]),
@@ -571,6 +583,8 @@ def _build_hint_for_encoded(
         is_number = enc_type in (4, 5)
         hint_move = _build_shape_hint(target, hand, HintSlotShape.NEW, is_number)
         assert hint_move is not None, f"build_shape_hint failed for enc_type={enc_type} shape=NEW"
+        if _hint_touches_entire_hand(hint_move.cards, len(hand)):
+            return None
         _assert_encoded_hint_round_trip(hinter, enc_type, hint_move, hand)
         return hint_move
     is_number = enc_type in (0, 1)
@@ -595,8 +609,98 @@ def _hints_match(a: HintMove, b: HintMove) -> bool:
     return False
 
 
+def _hint_touches_entire_hand(card_indices: List[int], hand_size: int) -> bool:
+    """True when every slot is touched — abandon-convention signal, never a mod-8 channel."""
+    return 0 < hand_size and len(set(card_indices)) == hand_size
+
+
+def _synthetic_view_for_hint_target_canonical(
+    hinter: int,
+    move: ColorHint | NumberHint,
+    hand_size: int,
+) -> PlayerView:
+    """Rebuild OLD/NEW attribute layout from the touch set for hint-target checks."""
+    target = move.teammate
+    touched = set(move.cards)
+    if isinstance(move, NumberHint):
+        fillers = [n for n in Number if n != move.number]
+        fake: List[Card] = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(Color.RED, move.number))
+            else:
+                fake.append(Card(Color.RED, fillers[fi % len(fillers)]))
+                fi += 1
+    else:
+        assert isinstance(move, ColorHint)
+        fillers = [c for c in Color if c != move.color and Color.MULTI != c]
+        fake = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(move.color, Number.ONE))
+            else:
+                fake.append(Card(fillers[fi % len(fillers)], Number.ONE))
+                fi += 1
+    return PlayerView(teammates={target: Hand(fake)}, own_hand_size=hand_size)
+
+
+def _hint_target_accepts_as_convention(
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    target_size: int,
+    encoded_type: int,
+) -> bool:
+    """Whether the hint target should treat this hint as convention.
+
+    Full-hand touches are never convention. OLD/NEW: recreate the search from the touch
+    set. MID: bots never emit MID-shaped literal fallbacks, so MID is convention for
+    types ``0``–``3``.
+    """
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return False
+    shape = _hint_slot_shape(move.cards, target_size)
+    if HintSlotShape.MID == shape:
+        return encoded_type <= 3
+    synthetic = _synthetic_view_for_hint_target_canonical(hinter_index, move, target_size)
+    canonical = _build_hint_for_encoded(hinter_index, synthetic, encoded_type)
+    return canonical is not None and _hints_match(canonical, move)
+
+
+def _would_be_read_as_convention(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> bool:
+    """True when every observer who sees the target would apply a mod-8 decode."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    if _hint_touches_entire_hand(hint_move.cards, hand_size):
+        return False
+    inferred = _infer_encoded_type_from_hint(hinter, hint_move.teammate, hint_move, hand_size)
+    canonical = _build_hint_for_encoded(hinter, player_view, inferred)
+    return canonical is not None and _hints_match(canonical, hint_move)
+
+
+def _literal_fallback_sort_key(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> Tuple[int, int]:
+    """Lower is better: full-hand ones, then any full-hand, then other true literals."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    full = _hint_touches_entire_hand(hint_move.cards, hand_size)
+    if full and isinstance(hint_move, NumberHint) and Number.ONE == hint_move.number:
+        primary = 0
+    elif full:
+        primary = 1
+    else:
+        primary = 2
+    return (primary, 0)
+
+
 def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Optional[HintMove]:
-    """Any legal color/number hint that is not a canonical convention encoding."""
+    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention)."""
     candidates: List[HintMove] = []
     for offset in (1, 2):
         target = (hinter + offset) % 3
@@ -615,15 +719,20 @@ def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Option
             indices = sorted(i for i, c in enumerate(hand) if col == c.color)
             if indices:
                 candidates.append(ColorHint(target, indices, col))
+    non_mid: List[HintMove] = []
+    true_literals: List[HintMove] = []
     for hint_move in candidates:
-        inferred = _infer_encoded_type_from_hint(
-            hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
-        )
-        canonical = _build_hint_for_encoded(hinter, player_view, inferred)
-        if canonical is not None and _hints_match(canonical, hint_move):
+        hand_size = len(player_view.teammates[hint_move.teammate].cards)
+        if HintSlotShape.MID == _hint_slot_shape(hint_move.cards, hand_size):
             continue
-        return hint_move
-    return candidates[0] if candidates else None
+        non_mid.append(hint_move)
+        if _would_be_read_as_convention(hinter, player_view, hint_move):
+            continue
+        true_literals.append(hint_move)
+    if not true_literals:
+        return non_mid[0] if non_mid else None
+    true_literals.sort(key=lambda h: _literal_fallback_sort_key(hinter, player_view, h))
+    return true_literals[0]
 
 
 def _assert_encoded_hint_round_trip(

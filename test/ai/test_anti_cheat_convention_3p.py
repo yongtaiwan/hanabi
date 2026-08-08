@@ -264,6 +264,34 @@ class TestLiveGamesStayConsistent(unittest.TestCase):
         self.assertIsNotNone(result.score)
         self.assertGreater(result.moves_count, 0)
 
+    def test_dht_seed_443_completes_without_literal_target_desync(self) -> None:
+        """Exp seed 142+301: hint target must not decode a literal fallback alone."""
+        from hanabi.core.game import create_ai_simulation_game_settings
+        from hanabi.core.game_field import GameField
+
+        settings = create_ai_simulation_game_settings(3)
+        field = GameField(GameField._create_start_position(settings, seed=443))
+        team = PlayerTeam([DynamicHandType3P(i) for i in range(3)])
+        result = field._play_game_with_team(
+            team, save_record=False, experiment_id="test", run_id=301, ai_name="DHT"
+        )
+        self.assertIsNotNone(result.score)
+        self.assertGreater(result.moves_count, 0)
+
+    def test_hhs_seed_599_completes_without_literal_target_desync(self) -> None:
+        """Exp seed 142+457: hint target must not decode a literal fallback alone."""
+        from hanabi.core.game import create_ai_simulation_game_settings
+        from hanabi.core.game_field import GameField
+
+        settings = create_ai_simulation_game_settings(3)
+        field = GameField(GameField._create_start_position(settings, seed=599))
+        team = PlayerTeam([HintHandSubtype3P(i) for i in range(3)])
+        result = field._play_game_with_team(
+            team, save_record=False, experiment_id="test", run_id=457, ai_name="HHS"
+        )
+        self.assertIsNotNone(result.score)
+        self.assertGreater(result.moves_count, 0)
+
     def test_number_five_hint_marks_known_five_on_all_observers(self) -> None:
         """Public number-5 touches update every seat's belief for the target hand."""
         from hanabi.ai.dr_belief import is_discard_candidate

@@ -252,6 +252,25 @@ def reopen_unplayable(hands: List[InferredHand]) -> None:
                 set_playability(belief, Playability.UNKNOWN)
 
 
+def remaining_achievable_plays(common_view: CommonView, settings: GameSettings) -> int:
+    """Plays still possible toward max score (public).
+
+    Each pile counts ranks above its top until the first rank with no copies left
+    outside the discard pile (dead colors stop counting there).
+    """
+    total = 0
+    for color, suit in settings.cards.items():
+        top = common_view.cards_played.get(color)
+        next_value = 1 if top is None else top.value + 1
+        for number in sorted(suit.cards, key=lambda n: n.value):
+            if number.value < next_value:
+                continue
+            if not _copies_of_card_remain(Card(color, number), common_view, settings):
+                break
+            total += 1
+    return total
+
+
 def play_reopens_playability(
     card: Card,
     common_view: CommonView,
@@ -267,10 +286,11 @@ def play_reopens_playability(
     return _copies_of_card_remain(Card(card.color, next_number), common_view, settings)
 
 
-def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSettings) -> bool:
+def remaining_copies(card: Card, common_view: CommonView, settings: GameSettings) -> int:
+    """Copies of ``card`` still outside the discard pile and not already on the fireworks."""
     suit = settings.cards.get(card.color)
     if suit is None:
-        return False
+        return 0
     total = suit.cards.get(card.number, 0)
     discarded = 0
     disc = common_view.cards_discarded.get(card.color)
@@ -278,7 +298,11 @@ def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSe
         discarded = disc.cards.get(card.number, 0)
     played_top = common_view.cards_played.get(card.color)
     on_pile = 1 if played_top is not None and played_top.value >= card.number.value else 0
-    return total - discarded - on_pile > 0
+    return max(0, total - discarded - on_pile)
+
+
+def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSettings) -> bool:
+    return remaining_copies(card, common_view, settings) > 0
 
 
 def copy_inferred_hand(hand: InferredHand) -> InferredHand:

@@ -402,7 +402,7 @@ Evaluated only when a convention hint is **buildable**. If the type is unbuildab
 |-------|------------|
 | `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions), **or** **known-5 assist**: the would-be **buildable** convention channel’s physical hint is a **number-5** that **newly** marks ≥1 `known_five` on **either** peer (slot was not already `known_five`) **and** the projected decode also newly identifies a **playable** on **either** peer (same identity / topping-up / no double-play exclusions) **or** recommends a **useless/duplicate** discard on **either** peer. A number-5 that only marks 5s, with no playable and no useless/dup trash in the decode, stays `fine`. |
 | `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels when **more than one life** remains (tempo preferred over bomb risk). |
-| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard; ones excluded), **or** newly mark the **same** playable identity on **both** peers while **only one life** remains (double play would end the game). |
+| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard; ones excluded), **or** newly mark the **same** playable identity on **both** peers while **only one life** remains (double play would end the game), **or** **topping-up**: newly mark identity *C* playable on a peer while *C* is already `playable` on another visible seat (schedules a second copy / bomb after the pending play). |
 
 Precedence when classifying: `good` → `bad` → `fine`.
 
@@ -420,6 +420,13 @@ Guards outside the matrix:
 
 - No hint tokens → discard (by chop / oldest)
 - Discard illegal (max hints) → hint anyway (including `bad`; literal escape for `bad` deferred)
+- **Late-deck guard**: while `cards_to_draw <= remaining achievable plays` (both public;
+  achievable plays cap each pile at the first rank with all copies discarded) **and** some
+  teammate has an identified playable pending (common belief), **avoid discarding**: prefer
+  any non-`bad` hint over the chop, overriding the matrix. The discard would consume a draw
+  the playing seat needs for its own play-then-final-turn tempo. Without a pending identified
+  play, discarding still digs needed cards out of the deck; at 0 tokens the discard fallback
+  applies regardless.
 - **TODO (hint-bank):** Avoid filling the bank — at `max-1` tokens, prefer discard unless hint is
   `good` (discard or play-5 both refund to max). At max tokens with no playable, prefer literal
   escape over a `bad` convention channel. Soft caution at `max-2` / endgame exceptions later.
@@ -502,6 +509,10 @@ not burn the card.
 | Dispatch | Protect next (§9.0), then play leftmost playable, then hint×chop matrix (§9) |
 | Protect next | Next-seat only; save-hint (bad overridden) before play; “would discard” via confirmed∧¬next-likely-good or 0 tokens (§9.0.1); at 0 tokens gift via confirmed-chop discard only if hypothetical `tokens==1` stops the burn; play-5 only if public piles imply playable≡5 (§9.0.3); no default-chop gift; endgame TODO |
 | Hint quality known-5 | Number-5 newly marking `known_five` is `good` only with decode playable **or** useless/dup trash on either peer (§9.2); bare 5-mark stays `fine` |
+| Late deck | `cards_to_draw <= remaining achievable plays` (public) + teammate has identified playable: prefer any non-`bad` hint over discard (§9.3 guard); without a pending play, discard digs the deck |
+| Final round | Deck empty: only play-identifying `good` hints; unknown score attempt requires a spare life (>1) — a last-life misplay forfeits every remaining final turn |
+| Topping-up | Newly marking *C* playable while another visible seat already has *C* `playable` is `bad` (§9.2) |
+| Refuse impossible play | When about to play: if every remaining pile-next copy is visible in teammates, skip marked own `playable` (act-time only; do **not** mutate shared belief / channel). |
 | Mod-8 wire | Unchanged |
 | Bot name | `DynamicRecommendation3P` (leave `DynamicHandType3P` untouched) |
 
@@ -535,4 +546,4 @@ not burn the card.
 
 ---
 
-*Spec version: 2026-07-26 (`DynamicRecommendation3P`; §9.2 known-5 assist; §3 known 5s outside `N_play` while no pile at 4).*
+*Spec version: 2026-07-26 (`DynamicRecommendation3P`; §9.2 known-5 assist + topping-up bad; §3 known 5s outside `N_play` while no pile at 4; §9.3 late-deck guard + final-round life gate; refuse impossible play without mutating belief).*

@@ -19,6 +19,7 @@ from hanabi.ai.dr_belief import (
     is_discard_candidate,
     mark_known_fives,
     n_play,
+    remaining_achievable_plays,
     reset_chop_after_removal,
     set_playability,
     slot_for_play_type,
@@ -543,6 +544,170 @@ class TestDispatch(unittest.TestCase):
         move = player.play(view)
         self.assertIsInstance(move, Discard)
         self.assertEqual(0, move.card)
+
+    def test_topping_up_existing_playable_is_bad(self) -> None:
+        """Newly marking B4 playable while another seat already has B4 playable is bad (§9.2)."""
+        settings = create_standard_game_settings(3)
+        # Mirror game 976 T53: P2 moves; P3 already has B4 playable; P1 all unknown.
+        player = DynamicRecommendation3P(1)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=2,
+                cards_to_draw=2,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.THREE,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        # P2 own: closed; P3: slot0 playable, rest closed; P1: fresh unknowns (opening-like).
+        for belief in player._inferred_hands[1].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        for belief in player._inferred_hands[2].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[2].cards[0], Playability.PLAYABLE)
+        player._inferred_hands[1].chop = 3
+        player._inferred_hands[1].chop_confirmed = True
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[2].chop = 2
+        player._inferred_hands[2].chop_confirmed = False
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.YELLOW, Number.TWO),
+                        Card(Color.WHITE, Number.ONE),
+                        Card(Color.YELLOW, Number.ONE),
+                        Card(Color.YELLOW, Number.THREE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.WHITE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.RED, Number.TWO),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        channel = dr._project_channel(1, view, player.common_view, settings, player._inferred_hands)
+        self.assertEqual(Card(Color.BLUE, Number.FOUR), channel.prev_new_playable)
+        self.assertIsNone(channel.next_new_playable)
+        self.assertEqual(HintQuality.BAD, channel.quality)
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(3, move.card)
+
+    def test_refuse_play_when_all_pile_next_visible_without_mutating_belief(self) -> None:
+        """Act-time only: skip marked playable; shared belief stays playable (channel-safe)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=1,
+                cards_to_draw=1,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.FOUR,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[0], Playability.PLAYABLE)
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.GREEN, Number.THREE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.THREE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.WHITE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.BLUE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._all_pile_next_cards_visible_in_teammates(view, player.common_view, settings)
+        )
+        move = player.play(view)
+        self.assertEqual(Playability.PLAYABLE, player._inferred_hands[0].cards[0].playability)
+        self.assertNotIsInstance(move, Play)
+
+    def test_one_of_two_playable_copies_visible_still_plays(self) -> None:
+        """Seeing one B3 does not refuse play — the other copy may be own."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=4,
+                cards_to_draw=10,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.TWO,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.PLAYABLE)
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.GREEN, Number.THREE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.THREE),
+                    ]
+                ),
+                2: Hand([Card(Color.WHITE, Number.FOUR)] * 5),
+            },
+            own_hand_size=5,
+        )
+        self.assertFalse(
+            dr._all_pile_next_cards_visible_in_teammates(view, player.common_view, settings)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
 
     def test_confirmed_chop_before_fine_hint(self) -> None:
         """Confirmed chop: fine hint loses to discard."""
@@ -1149,6 +1314,125 @@ class TestHintQualityKnownFiveAssist(unittest.TestCase):
         self.assertFalse(dr._physical_hint_newly_marks_known_five(physical, player._inferred_hands))
         self.assertFalse(channel.known_five_assist)
         self.assertEqual(HintQuality.FINE, channel.quality)
+
+
+class TestLateDeckPhase(unittest.TestCase):
+    def test_remaining_achievable_plays_caps_dead_ranks(self) -> None:
+        """Achievable plays count pile tops upward, stopping at fully discarded ranks."""
+        settings = create_standard_game_settings(3)
+        self.assertEqual(25, remaining_achievable_plays(_common(settings), settings))
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=30,
+            cards_discarded={Color.WHITE: Suit({Number.THREE: 2})},
+            cards_played={Color.WHITE: Number.TWO},
+        )
+        # White: both 3s gone, so nothing above the 2 counts; other colors 5 each.
+        self.assertEqual(20, remaining_achievable_plays(common, settings))
+
+    def test_late_deck_phase_boundary(self) -> None:
+        """Late deck iff 0 < cards_to_draw <= remaining achievable plays (§9.3 guard)."""
+        settings = create_standard_game_settings(3)
+
+        def common_with(to_draw: int) -> CommonView:
+            return CommonView(
+                live_tokens=3,
+                hint_tokens=6,
+                cards_to_draw=to_draw,
+                cards_discarded={},
+                cards_played={},
+            )
+
+        self.assertFalse(dr._in_late_deck_phase(common_with(26), settings))
+        self.assertTrue(dr._in_late_deck_phase(common_with(25), settings))
+        self.assertFalse(dr._in_late_deck_phase(common_with(0), settings))
+
+    def test_late_deck_prefers_hint_over_confirmed_chop_with_pending_play(self) -> None:
+        """Late deck + teammate identified playable: fine hint beats confirmed chop (§9.3)."""
+        settings = create_standard_game_settings(3)
+        # Empty piles: 25 achievable; R1 on next is a real pending playable (survives stale clear).
+        # Already-marked next playable keeps the would-be channel fine (not "identifies for next").
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.RED, Number.ONE),
+                    ]
+                ),
+                2: Hand([Card(Color.GREEN, Number.THREE)] * 5),
+            },
+            own_hand_size=5,
+        )
+        # (to_draw, mark a teammate playable, expect discard)
+        cases = ((40, True, True), (20, True, False), (20, False, True))
+        for to_draw, pending_play, expect_discard in cases:
+            player = DynamicRecommendation3P(0)
+            player.set_game_settings(settings)
+            common = CommonView(
+                live_tokens=3,
+                hint_tokens=6,
+                cards_to_draw=to_draw,
+                cards_discarded={},
+                cards_played={},
+            )
+            player.set_common_view(common)
+            for belief in player._inferred_hands[0].cards:
+                set_playability(belief, Playability.UNPLAYABLE)
+            player._inferred_hands[0].chop = 0
+            player._inferred_hands[0].chop_confirmed = True
+            if pending_play:
+                set_playability(player._inferred_hands[1].cards[4], Playability.PLAYABLE)
+            channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+            self.assertEqual(HintQuality.FINE, channel.quality, msg=(to_draw, pending_play))
+            case = (to_draw, pending_play)
+            move = player.play(view)
+            if expect_discard:
+                self.assertIsInstance(move, Discard, msg=case)
+                self.assertEqual(0, move.card, msg=case)
+            else:
+                self.assertNotIsInstance(move, Discard, msg=case)
+                self.assertIn("Hint", move.why(), msg=case)
+                self.assertEqual(
+                    Playability.PLAYABLE,
+                    player._inferred_hands[1].cards[4].playability,
+                    msg=case,
+                )
+
+    def test_final_round_no_gamble_on_last_life(self) -> None:
+        """Final round: unknown score attempt needs a spare life; last life discards instead."""
+        settings = create_standard_game_settings(3)
+        for lives, expect_play in ((2, True), (1, False)):
+            player = DynamicRecommendation3P(0)
+            player.set_game_settings(settings)
+            player.set_common_view(
+                CommonView(
+                    live_tokens=lives,
+                    hint_tokens=0,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={
+                        Color.RED: Number.FOUR,
+                        Color.BLUE: Number.THREE,
+                        Color.GREEN: Number.FIVE,
+                        Color.YELLOW: Number.FIVE,
+                        Color.WHITE: Number.FIVE,
+                    },
+                )
+            )
+            for belief in player._inferred_hands[0].cards:
+                set_playability(belief, Playability.UNPLAYABLE)
+            set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+            move = player.play(_teammate_view())
+            if expect_play:
+                self.assertIsInstance(move, Play)
+                self.assertEqual(4, move.card)
+            else:
+                self.assertIsInstance(move, Discard)
 
 
 class TestHintChopMatrix(unittest.TestCase):

@@ -27,6 +27,8 @@ from hanabi.ai.dr_belief import (
     n_play,
     play_reopens_playability,
     play_type_for_slot,
+    remaining_achievable_plays,
+    remaining_copies,
     reopen_unplayable,
     reset_chop_after_removal,
     slot_for_play_type,
@@ -185,7 +187,15 @@ class DynamicRecommendation3P(BasePlayer):
                     self.game_settings,
                     self._inferred_hands,
                 )
-                prefer_hint = _HINT_CHOP_MATRIX[(channel.quality, chop_class)]
+                if _in_late_deck_phase(self.common_view, self.game_settings) and (
+                    _any_teammate_identified_playable(self._player_index, self._inferred_hands)
+                ):
+                    # Late deck (§9.3) with a pending identified play: our discard would
+                    # consume a draw the playing seat needs for its own play-then-final-turn
+                    # tempo; hint instead. Without a pending play, discarding digs the deck.
+                    prefer_hint = HintQuality.BAD != channel.quality
+                else:
+                    prefer_hint = _HINT_CHOP_MATRIX[(channel.quality, chop_class)]
                 # TODO(hint-bank): When tokens == max-1, discard (even default chop) unless
                 # quality is good — avoid filling the bank via discard. Optional later: soft
                 # caution at max-2; endgame/short deck may ignore banking.
@@ -271,8 +281,9 @@ class DynamicRecommendation3P(BasePlayer):
     def _play_final_round(self, player_view: PlayerView) -> Optional[Move]:
         """Deck empty + lives left: maximize score; skip protect and non-good hints.
 
-        Order: known playable / safe known-5 → good hint → newest unknown →
-        any remaining hint → chop / oldest discard (last resort only).
+        Order: known playable / safe known-5 → play-identifying good hint → newest
+        unknown (spare life only) → any remaining hint → chop / oldest discard
+        (last resort only).
         """
         move = self._try_play_leftmost_playable(player_view)
         if move is not None:
@@ -286,17 +297,23 @@ class DynamicRecommendation3P(BasePlayer):
                 self.game_settings,
                 self._inferred_hands,
             )
-            if HintQuality.GOOD == channel.quality:
-                if channel.identifies_new_playable_for_next:
-                    why_prefix = "[3p DR] Endgame hint (identifies playable for next)"
-                elif channel.trash_next_and_play_prev:
-                    why_prefix = "[3p DR] Endgame hint (trash for next + playable for prev)"
-                else:
-                    why_prefix = "[3p DR] Endgame hint (known-5 assist with playable/trash)"
+            # Only play-identifying good hints: a known-5 assist spends a final turn
+            # without advancing the play chain.
+            if HintQuality.GOOD == channel.quality and (
+                channel.identifies_new_playable_for_next or channel.trash_next_and_play_prev
+            ):
+                why_prefix = (
+                    "[3p DR] Endgame hint (identifies playable for next)"
+                    if channel.identifies_new_playable_for_next
+                    else "[3p DR] Endgame hint (trash for next + playable for prev)"
+                )
                 return self._give_convention_hint(player_view, why_prefix=why_prefix)
-        move = self._try_play_newest_unknown(player_view)
-        if move is not None:
-            return move
+        # Gamble only with a spare life: a misplay on the last life ends the game and
+        # forfeits every teammate's remaining final turn.
+        if 1 < self.common_view.live_tokens:
+            move = self._try_play_newest_unknown(player_view)
+            if move is not None:
+                return move
         if can_hint:
             return self._give_convention_hint(
                 player_view, why_prefix="[3p DR] Endgame hint (no play candidate)"
@@ -372,11 +389,17 @@ class DynamicRecommendation3P(BasePlayer):
         return None
 
     def _try_play_leftmost_playable(self, player_view: PlayerView) -> Optional[Move]:
-        for slot, belief in enumerate(self._inferred_hands[self._player_index].cards):
-            if Playability.PLAYABLE != belief.playability:
-                continue
-            assert self.is_move_legal(player_view, Play(slot))
-            return move_with_why(Play(slot), f"[3p DR] Play slot {slot} (identified playable)")
+        # Private act-time check only (does not mutate shared belief / channel): if every
+        # remaining pile-next copy is visible in teammates, own marked playable cannot be
+        # playable — skip and fall through.
+        if not _all_pile_next_cards_visible_in_teammates(
+            player_view, self.common_view, self.game_settings
+        ):
+            for slot, belief in enumerate(self._inferred_hands[self._player_index].cards):
+                if Playability.PLAYABLE != belief.playability:
+                    continue
+                assert self.is_move_legal(player_view, Play(slot))
+                return move_with_why(Play(slot), f"[3p DR] Play slot {slot} (identified playable)")
         return self._try_play_known_five(
             player_view,
             why="[3p DR] Play known 5 (all incomplete colors await a 5)",
@@ -456,6 +479,27 @@ class DynamicRecommendation3P(BasePlayer):
 def _in_final_round_score_mode(common_view: CommonView) -> bool:
     """True when the deck is empty and at least one life remains (score > chop)."""
     return 0 == common_view.cards_to_draw and 0 < common_view.live_tokens
+
+
+def _in_late_deck_phase(common_view: CommonView, settings: GameSettings) -> bool:
+    """True while the deck is non-empty but draws no longer exceed the plays still needed.
+
+    ``cards_to_draw <= remaining_achievable_plays`` means the slack for non-play,
+    deck-consuming turns is nearly gone (§9.3 late-deck guard). All inputs are public.
+    """
+    return 0 < common_view.cards_to_draw and (
+        common_view.cards_to_draw <= remaining_achievable_plays(common_view, settings)
+    )
+
+
+def _any_teammate_identified_playable(mover: int, inferred_hands: List[InferredHand]) -> bool:
+    """True when common belief marks a playable in any other seat's hand."""
+    return any(
+        Playability.PLAYABLE == belief.playability
+        for seat, hand in enumerate(inferred_hands)
+        if seat != mover
+        for belief in hand.cards
+    )
 
 
 def _apply_known_five_marks_from_number_hint(
@@ -1399,14 +1443,29 @@ def _project_channel(
         and prev_discard is not None
         and next_discard == prev_discard
     )
+    # Newly mark C playable while another visible seat already has C as playable (game 976).
+    tops_up_existing_playable = (
+        next_new_playable is not None
+        and _card_already_identified_playable_on_visible_seats(
+            next_new_playable, hinter, player_view, inferred_hands
+        )
+    ) or (
+        prev_new_playable is not None
+        and _card_already_identified_playable_on_visible_seats(
+            prev_new_playable, hinter, player_view, inferred_hands
+        )
+    )
     if not buildable:
         quality = HintQuality.FINE
     elif identifies_new_playable_for_next or trash_next_and_play_prev or known_five_assist:
         quality = HintQuality.GOOD
-    elif causes_double_midrank_discard or (
-        causes_double_play and 1 == common_view.live_tokens
+    elif (
+        causes_double_midrank_discard
+        or tops_up_existing_playable
+        or (causes_double_play and 1 == common_view.live_tokens)
     ):
-        # Double-play is fine with spare lives (tempo over bomb risk); bad on the last life.
+        # Double-play of the same new mark is fine with spare lives; topping-up an
+        # already-pending playable is always bad (schedules a bomb / dead play).
         quality = HintQuality.BAD
     else:
         quality = HintQuality.FINE
@@ -1589,6 +1648,38 @@ def _card_already_identified_playable_on_visible_seats(
             if Playability.PLAYABLE == inferred_hands[seat].cards[slot].playability:
                 return True
     return False
+
+
+def _all_pile_next_cards_visible_in_teammates(
+    player_view: PlayerView,
+    common_view: CommonView,
+    settings: GameSettings,
+) -> bool:
+    """True when own hand cannot hold any currently playable identity (private view).
+
+    For each pile-next identity *C*, every remaining copy of *C* must be visible in
+    teammates' hands. Seeing one of two B3s is not enough — the other may be own.
+    Also true when nothing is playable on the piles.
+    """
+    playable_now: List[Card] = []
+    for color in settings.cards:
+        top = common_view.cards_played.get(color)
+        next_value = 1 if top is None else top.value + 1
+        if next_value > Number.FIVE.value:
+            continue
+        card = Card(color, Number(next_value))
+        if CardKind.PLAYABLE == common_view.card_kind(card, settings):
+            playable_now.append(card)
+    if not playable_now:
+        return True
+    for card in playable_now:
+        remain = remaining_copies(card, common_view, settings)
+        visible = sum(
+            1 for hand in player_view.teammates.values() for held in hand.cards if card == held
+        )
+        if visible < remain:
+            return False
+    return True
 
 
 def _physical_hint_newly_marks_known_five(
