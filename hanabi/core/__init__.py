@@ -14,6 +14,8 @@ from .moves import (
     Discard,
     ColorHint,
     NumberHint,
+    FinishedPlay,
+    FinishedDiscard,
     HasWhy,
     ExplainedMixin,
     ExplainedPlay,
@@ -22,6 +24,7 @@ from .moves import (
     ExplainedNumberHint,
     ensure_concrete_move,
     move_with_why,
+    finished_card_move_for_observer,
 )
 from .game import (
     Hand,
@@ -31,6 +34,7 @@ from .game import (
     GameState,
     Game,
     create_standard_game_settings,
+    create_ai_simulation_game_settings,
     StartPosition,
     Deck,
 )
@@ -60,6 +64,7 @@ __all__ = [
     "Hand",
     "GameSettings",
     "create_standard_game_settings",
+    "create_ai_simulation_game_settings",
     "CommonView",
     "PlayerView",
     "GameState",
@@ -74,6 +79,8 @@ __all__ = [
     "CardMove",
     "Play",
     "Discard",
+    "FinishedPlay",
+    "FinishedDiscard",
     "ColorHint",
     "NumberHint",
     "HasWhy",
@@ -84,6 +91,7 @@ __all__ = [
     "ExplainedNumberHint",
     "ensure_concrete_move",
     "move_with_why",
+    "finished_card_move_for_observer",
     # Players
     "Player",
     "Cheater",

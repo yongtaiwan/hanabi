@@ -14,10 +14,20 @@ from __future__ import annotations
 from enum import Enum
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from hanabi.core.card import Card, Suit
+from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
-from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
+from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.player import BasePlayer
 
 
@@ -36,11 +46,9 @@ class HintHandSubtype3P(BasePlayer):
     Standard 3-player settings from :func:`~hanabi.core.game.create_standard_game_settings`.
     """
 
-    def __init__(self, player_index: int, *, safe_double_play: bool = True) -> None:
+    def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
-        self._safe_double_play = safe_double_play
         self._inferred_card_kind: List[List[Optional[CardKind]]] = []
-        self._discard_pile_snapshot: Dict[Color, Dict[Number, int]] = {}
         self._last_decision_summary: Optional[str] = None
 
     @classmethod
@@ -57,7 +65,6 @@ class HintHandSubtype3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._inferred_card_kind = [[None for _ in range(hand_size)] for _ in range(num_players)]
-        self._discard_pile_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
         if player_index == self._player_index:
@@ -65,29 +72,30 @@ class HintHandSubtype3P(BasePlayer):
         assert player_index in observer_view.teammates
         return len(observer_view.teammates[player_index].cards)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_play_move(
+        self, player_index: int, move: FinishedPlay, observer_view: PlayerView
+    ) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
-            self.common_view,
-            self.game_settings,
-            self._inferred_card_kind,
-        )
+        if not move.successful:
+            _maybe_invalidate_safe_for_moved_card(
+                move.moved_card,
+                self.common_view,
+                self.game_settings,
+                self._inferred_card_kind,
+            )
         self._shift_kinds_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
+        _maybe_invalidate_safe_for_moved_card(
+            move.moved_card,
             self.common_view,
             self.game_settings,
             self._inferred_card_kind,
         )
         self._shift_kinds_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -234,129 +242,15 @@ class HintHandSubtype3P(BasePlayer):
 _MIDDLE_DISCARD_RANKS = frozenset({Number.TWO, Number.THREE, Number.FOUR})
 
 
-def _card_from_successful_play(
-    before_played: Dict[Color, Number],
-    after_played: Dict[Color, Number],
-) -> Optional[Card]:
-    """Return the card whose color pile advanced by one rank, or ``None`` if not a successful play."""
-    found: Optional[Card] = None
-    for color in set(before_played) | set(after_played):
-        before_top = before_played.get(color)
-        after_top = after_played.get(color)
-        if before_top == after_top:
-            continue
-        assert after_top is not None and found is None, (
-            f"expected exactly one pile advance: before={before_played!r} after={after_played!r}"
-        )
-        found = Card(color, after_top)
-    return found
-
-
-def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSettings) -> bool:
-    """True when at least one copy of ``card`` is not yet played or discarded."""
-    suit = settings.cards.get(card.color)
-    if suit is None:
-        return False
-    total = suit.cards.get(card.number, 0)
-    discarded = 0
-    disc = common_view.cards_discarded.get(card.color)
-    if disc is not None:
-        discarded = disc.cards.get(card.number, 0)
-    played_top = common_view.cards_played.get(card.color)
-    on_pile = 1 if played_top is not None and played_top.value >= card.number.value else 0
-    return total - discarded - on_pile > 0
-
-
-def _invalidate_playable_matching_card_on_other_players(
-    inferred_card_kind: List[List[Optional[CardKind]]],
-    mover_index: int,
-    hand_cards: Sequence[List[Card]],
-    played_card: Card,
-) -> None:
-    """
-    Clear ``PLAYABLE`` on non-mover hands for ``played_card`` (except the mover).
-
-    When one life remains, playing a card with other copies still in play makes duplicate
-    ``PLAYABLE`` marks lethal; reset matching marks to unknown on other players' rows.
-    """
-    for seat, cards in enumerate(hand_cards):
-        if seat == mover_index:
-            continue
-        for slot, card in enumerate(cards):
-            if played_card != card:
-                continue
-            if CardKind.PLAYABLE == inferred_card_kind[seat][slot]:
-                inferred_card_kind[seat][slot] = None
-
-
-def align_convention_beliefs_after_move(
-    players: Sequence[HintHandSubtype3P],
-    mover_index: int,
-    move: Move,
-    *,
-    cards_played_before: Optional[Dict[Color, Number]] = None,
-    hand_cards: Optional[Sequence[List[Card]]] = None,
-) -> None:
-    """After a public move, propagate hint beliefs and optionally clear duplicate playables."""
-    if isinstance(move, (ColorHint, NumberHint)):
-        propagate_convention_belief_from_hinter(players, mover_index)
-
-    if (
-        isinstance(move, Play)
-        and hand_cards is not None
-        and cards_played_before is not None
-        and players[0]._safe_double_play
-    ):
-        played_card = _card_from_successful_play(cards_played_before, players[0].common_view.cards_played)
-        if (
-            played_card is not None
-            and 1 == players[0].common_view.live_tokens
-            and _copies_of_card_remain(played_card, players[0].common_view, players[0].game_settings)
-        ):
-            matrix = players[0]._inferred_card_kind
-            _invalidate_playable_matching_card_on_other_players(
-                matrix,
-                mover_index,
-                hand_cards,
-                played_card,
-            )
-            canonical = [row.copy() for row in matrix]
-            for player in players:
-                player._inferred_card_kind = [row.copy() for row in canonical]
-
-    assert_convention_beliefs_in_sync(players)
-
-
-def assert_convention_beliefs_in_sync(players: Sequence[HintHandSubtype3P]) -> None:
-    """
-    Assert every seat's convention belief row matches across homogeneous ``HintHandSubtype3P`` bots.
-
-    Each player keeps an independent copy of all rows; public observe paths must derive identical
-    matrices. Mismatch is a convention bug (fail fast).
-    """
-    if not players:
-        return
-    reference = players[0]._inferred_card_kind
-    for seat, player in enumerate(players[1:], start=1):
-        assert player._inferred_card_kind == reference, (
-            f"convention belief out of sync: P1 vs P{seat + 1} "
-            f"P1={reference!r} P{seat + 1}={player._inferred_card_kind!r}"
-        )
-
-
-def propagate_convention_belief_from_hinter(
-    players: Sequence[HintHandSubtype3P],
-    hinter_index: int,
-) -> None:
-    """
-    Copy the hinter's full belief matrix to every seat after a convention hint.
-
-    The hinter sees both teammate hands and applies both non-hinter decodes; other seats
-    only apply one decode locally and may retain stale teammate rows until this copy.
-    """
-    canonical = players[hinter_index]._inferred_card_kind
-    for player in players:
-        player._inferred_card_kind = [row.copy() for row in canonical]
+def _peer_code_for_hand(
+    hand: List[Card],
+    belief: List[Optional[CardKind]],
+    common_view: CommonView,
+    settings: GameSettings,
+) -> int:
+    """Peer code from one visible hand + that seat's shared public belief + piles."""
+    assert len(hand) == len(belief), f"hand size {len(hand)} != belief slots {len(belief)}"
+    return _encode_hand_type(hand, len(hand), common_view, settings, belief)
 
 
 def _apply_convention_hint_decodes(
@@ -368,95 +262,140 @@ def _apply_convention_hint_decodes(
     settings: GameSettings,
     inferred_card_kind: List[List[Optional[CardKind]]],
 ) -> None:
-    """
-    Apply type-only decode after a convention hint.
+    """Update belief from the public channel using shared belief + visible cards.
 
-    The hinter sees both teammate hands and applies both non-hinter decodes. The hint target and
-    other non-hinter each apply the decode for their own hand (peer hand is visible). Other rows
-    are aligned by :func:`propagate_convention_belief_from_hinter` after all players observe.
+    Every observer applies the public decode to **both** non-hinter rows and never to the
+    hinter's row. Peer codes are snapshotted before either decode mutates belief.
     """
     hint_target = move.teammate
     other_non_hinter = _third_player_index(hinter_index, hint_target)
-
-    if hinter_index == observer_index:
-        decoders = (hint_target, other_non_hinter)
-    elif observer_index == hint_target:
-        decoders = (hint_target,)
-    elif observer_index == other_non_hinter:
-        decoders = (other_non_hinter,)
-    else:
-        assert False, (
-            f"observer P{observer_index + 1} must be hinter, hint target, or other non-hinter "
-            f"for hint P{hinter_index + 1} -> P{hint_target + 1}"
-        )
 
     if hint_target in observer_view.teammates:
         target_size = len(observer_view.teammates[hint_target].cards)
     else:
         target_size = observer_view.own_hand_size
 
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return
+
     encoded_type = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
 
-    # Snapshot peer hand types before any decode: the hinter applies both non-hinter decodes
-    # on one matrix; the second decode must not see belief changes from the first.
-    peer_types: Dict[int, int] = {}
-    for decoder in decoders:
-        peer_index = other_non_hinter if decoder == hint_target else hint_target
-        if peer_index in peer_types:
+    if hint_target in observer_view.teammates:
+        canonical = _build_hint_for_encoded(hinter_index, observer_view, encoded_type)
+        if canonical is None or not _hints_match(canonical, move):
+            return
+    elif not _hint_target_accepts_as_convention(
+        hinter_index, move, target_size, encoded_type
+    ):
+        return
+
+    peer_code_by_seat: Dict[int, int] = {}
+    for seat in (hint_target, other_non_hinter):
+        if seat not in observer_view.teammates:
             continue
-        assert peer_index in observer_view.teammates
-        peer_hand = observer_view.teammates[peer_index].cards
-        peer_types[peer_index] = _encode_hand_type(
-            peer_hand,
-            len(peer_hand),
+        peer_code_by_seat[seat] = _peer_code_for_hand(
+            observer_view.teammates[seat].cards,
+            inferred_card_kind[seat],
             common_view,
             settings,
-            inferred_card_kind[peer_index],
         )
 
-    for decoder in decoders:
+    decoded_by_seat: Dict[int, int] = {}
+    for decoder in (hint_target, other_non_hinter):
         peer_index = other_non_hinter if decoder == hint_target else hint_target
-        peer_type = peer_types[peer_index]
-        decoded_type = (encoded_type - peer_type) % 8
-        _apply_decoded_hand_type(inferred_card_kind, decoder, decoded_type)
-
-
-def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, Dict[Number, int]]:
-    return {color: suit.cards.copy() for color, suit in cards_discarded.items()}
-
-
-def _card_from_discard_pile_diff(
-    before: Dict[Color, Dict[Number, int]],
-    after: Dict[Color, Dict[Number, int]],
-) -> Card:
-    """Return the single card whose discard-pile count increased by one."""
-    found: Optional[Card] = None
-    for color in set(before) | set(after):
-        before_counts = before.get(color, {})
-        after_counts = after.get(color, {})
-        for number in set(before_counts) | set(after_counts):
-            delta = after_counts.get(number, 0) - before_counts.get(number, 0)
-            if 0 == delta:
-                continue
-            assert 1 == delta and found is None, (
-                f"expected exactly one new discard, before={before!r} after={after!r}"
+        if peer_index in peer_code_by_seat:
+            decoded_by_seat[decoder] = (encoded_type - peer_code_by_seat[peer_index]) % 8
+        else:
+            assert decoder in peer_code_by_seat, (
+                f"P{observer_index + 1} must see decoder P{decoder + 1} to apply public decode"
             )
-            found = Card(color, number)
-    assert found is not None, f"no discard-pile change: before={before!r} after={after!r}"
-    return found
+            decoded_by_seat[decoder] = peer_code_by_seat[decoder]
+
+    for decoder, decoded in decoded_by_seat.items():
+        _apply_decoded_hand_type(inferred_card_kind, decoder, decoded)
 
 
-def _maybe_invalidate_safe_after_discard_pile_change(
-    before_discards: Dict[Color, Dict[Number, int]],
+def assert_independent_own_decode_matches(
+    players: Sequence[HintHandSubtype3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    views: Sequence[PlayerView],
+    own_rows_before: Sequence[Sequence[Optional[CardKind]]],
+) -> None:
+    """After observe, each decoder's own row must equal decode(pre-hint own row)."""
+    assert 3 == len(players) == len(views) == len(own_rows_before)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        peer = other_non_hinter if seat == hint_target else hint_target
+        view = views[seat]
+        assert peer in view.teammates
+        if hint_target in view.teammates:
+            target_size = len(view.teammates[hint_target].cards)
+        else:
+            target_size = view.own_hand_size
+        enc = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
+        if hint_target in view.teammates:
+            canonical = _build_hint_for_encoded(hinter_index, view, enc)
+            is_convention = canonical is not None and _hints_match(canonical, move)
+        else:
+            is_convention = _hint_target_accepts_as_convention(
+                hinter_index, move, target_size, enc
+            )
+        if not is_convention:
+            assert list(players[seat]._inferred_card_kind[seat]) == list(own_rows_before[seat]), (
+                f"P{seat + 1} own belief changed on literal fallback hint"
+            )
+            continue
+        peer_code = _peer_code_for_hand(
+            view.teammates[peer].cards,
+            list(own_rows_before[peer]),
+            players[seat].common_view,
+            players[seat].game_settings,
+        )
+        assert peer_code == _peer_code_for_hand(
+            views[hinter_index].teammates[peer].cards,
+            list(own_rows_before[peer]),
+            players[hinter_index].common_view,
+            players[hinter_index].game_settings,
+        ), f"peer code for P{peer + 1} not publicly determined"
+        expected = [row for row in own_rows_before[seat]]
+        matrix = [list(expected)]
+        _apply_decoded_hand_type(matrix, 0, (enc - peer_code) % 8)
+        assert players[seat]._inferred_card_kind[seat] == matrix[0], (
+            f"P{seat + 1} own belief after hint != independent decode"
+        )
+
+
+def assert_public_non_hinter_rows_agree(
+    players: Sequence[HintHandSubtype3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+) -> None:
+    """After a convention hint, all seats must share the same next/prev belief rows."""
+    assert 3 == len(players)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        ref = players[0]._inferred_card_kind[seat]
+        for player in players[1:]:
+            assert player._inferred_card_kind[seat] == ref, (
+                f"P{player._player_index + 1} belief for P{seat + 1} != P1 after "
+                f"hint from P{hinter_index + 1}"
+            )
+
+
+def _maybe_invalidate_safe_for_moved_card(
+    card: Card,
     common_view: CommonView,
     settings: GameSettings,
     inferred_card_kind: List[List[Optional[CardKind]]],
 ) -> None:
-    """Apply safe→unknown when a discard or misplay adds a card to the public discard pile."""
-    after_discards = _flatten_discard_counts(common_view.cards_discarded)
-    if before_discards == after_discards:
-        return
-    card = _card_from_discard_pile_diff(before_discards, after_discards)
+    """Apply safe→unknown when a discard or misplay adds ``card`` to the public discard pile."""
     if _pile_add_invalidates_safe_belief(card, common_view, settings):
         _reset_all_safe_to_unknown(inferred_card_kind)
 
@@ -644,6 +583,8 @@ def _build_hint_for_encoded(
         is_number = enc_type in (4, 5)
         hint_move = _build_shape_hint(target, hand, HintSlotShape.NEW, is_number)
         assert hint_move is not None, f"build_shape_hint failed for enc_type={enc_type} shape=NEW"
+        if _hint_touches_entire_hand(hint_move.cards, len(hand)):
+            return None
         _assert_encoded_hint_round_trip(hinter, enc_type, hint_move, hand)
         return hint_move
     is_number = enc_type in (0, 1)
@@ -668,8 +609,98 @@ def _hints_match(a: HintMove, b: HintMove) -> bool:
     return False
 
 
+def _hint_touches_entire_hand(card_indices: List[int], hand_size: int) -> bool:
+    """True when every slot is touched — abandon-convention signal, never a mod-8 channel."""
+    return 0 < hand_size and len(set(card_indices)) == hand_size
+
+
+def _synthetic_view_for_hint_target_canonical(
+    hinter: int,
+    move: ColorHint | NumberHint,
+    hand_size: int,
+) -> PlayerView:
+    """Rebuild OLD/NEW attribute layout from the touch set for hint-target checks."""
+    target = move.teammate
+    touched = set(move.cards)
+    if isinstance(move, NumberHint):
+        fillers = [n for n in Number if n != move.number]
+        fake: List[Card] = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(Color.RED, move.number))
+            else:
+                fake.append(Card(Color.RED, fillers[fi % len(fillers)]))
+                fi += 1
+    else:
+        assert isinstance(move, ColorHint)
+        fillers = [c for c in Color if c != move.color and Color.MULTI != c]
+        fake = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(move.color, Number.ONE))
+            else:
+                fake.append(Card(fillers[fi % len(fillers)], Number.ONE))
+                fi += 1
+    return PlayerView(teammates={target: Hand(fake)}, own_hand_size=hand_size)
+
+
+def _hint_target_accepts_as_convention(
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    target_size: int,
+    encoded_type: int,
+) -> bool:
+    """Whether the hint target should treat this hint as convention.
+
+    Full-hand touches are never convention. OLD/NEW: recreate the search from the touch
+    set. MID: bots never emit MID-shaped literal fallbacks, so MID is convention for
+    types ``0``–``3``.
+    """
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return False
+    shape = _hint_slot_shape(move.cards, target_size)
+    if HintSlotShape.MID == shape:
+        return encoded_type <= 3
+    synthetic = _synthetic_view_for_hint_target_canonical(hinter_index, move, target_size)
+    canonical = _build_hint_for_encoded(hinter_index, synthetic, encoded_type)
+    return canonical is not None and _hints_match(canonical, move)
+
+
+def _would_be_read_as_convention(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> bool:
+    """True when every observer who sees the target would apply a mod-8 decode."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    if _hint_touches_entire_hand(hint_move.cards, hand_size):
+        return False
+    inferred = _infer_encoded_type_from_hint(hinter, hint_move.teammate, hint_move, hand_size)
+    canonical = _build_hint_for_encoded(hinter, player_view, inferred)
+    return canonical is not None and _hints_match(canonical, hint_move)
+
+
+def _literal_fallback_sort_key(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> Tuple[int, int]:
+    """Lower is better: full-hand ones, then any full-hand, then other true literals."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    full = _hint_touches_entire_hand(hint_move.cards, hand_size)
+    if full and isinstance(hint_move, NumberHint) and Number.ONE == hint_move.number:
+        primary = 0
+    elif full:
+        primary = 1
+    else:
+        primary = 2
+    return (primary, 0)
+
+
 def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Optional[HintMove]:
-    """Any legal color/number hint that is not a canonical convention encoding."""
+    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention)."""
     candidates: List[HintMove] = []
     for offset in (1, 2):
         target = (hinter + offset) % 3
@@ -688,15 +719,20 @@ def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Option
             indices = sorted(i for i, c in enumerate(hand) if col == c.color)
             if indices:
                 candidates.append(ColorHint(target, indices, col))
+    non_mid: List[HintMove] = []
+    true_literals: List[HintMove] = []
     for hint_move in candidates:
-        inferred = _infer_encoded_type_from_hint(
-            hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
-        )
-        canonical = _build_hint_for_encoded(hinter, player_view, inferred)
-        if canonical is not None and _hints_match(canonical, hint_move):
+        hand_size = len(player_view.teammates[hint_move.teammate].cards)
+        if HintSlotShape.MID == _hint_slot_shape(hint_move.cards, hand_size):
             continue
-        return hint_move
-    return candidates[0] if candidates else None
+        non_mid.append(hint_move)
+        if _would_be_read_as_convention(hinter, player_view, hint_move):
+            continue
+        true_literals.append(hint_move)
+    if not true_literals:
+        return non_mid[0] if non_mid else None
+    true_literals.sort(key=lambda h: _literal_fallback_sort_key(hinter, player_view, h))
+    return true_literals[0]
 
 
 def _assert_encoded_hint_round_trip(
@@ -772,6 +808,29 @@ def _apply_decoded_hand_type(
 
     Conflicting kind transitions are convention bugs; see :func:`_assign_kind_to_matrix`.
     """
+    _apply_hand_type_to_row(inferred_card_kind, player_index, hand_type, soft=False)
+
+
+def _apply_physical_channel_hand_type(
+    inferred_card_kind: List[List[Optional[CardKind]]],
+    player_index: int,
+    hand_type: int,
+) -> None:
+    """Apply a channel type encoded with physical peer codes; skip illegal transitions.
+
+    Peer encoding ignores stored belief, so a later message may target a slot already
+    identified another way — that is not a cheat, just a no-op.
+    """
+    _apply_hand_type_to_row(inferred_card_kind, player_index, hand_type, soft=True)
+
+
+def _apply_hand_type_to_row(
+    inferred_card_kind: List[List[Optional[CardKind]]],
+    player_index: int,
+    hand_type: int,
+    *,
+    soft: bool,
+) -> None:
     assert 0 <= hand_type <= 7
     belief = inferred_card_kind[player_index]
     hand_size = len(belief)
@@ -781,21 +840,24 @@ def _apply_decoded_hand_type(
         assert 0 <= play_slot < hand_size, (
             f"type {hand_type} play slot {play_slot} out of range for hand_size {hand_size}"
         )
+        if soft and not _transition_allowed(belief[play_slot], CardKind.PLAYABLE):
+            return
         _assign_kind_to_matrix(inferred_card_kind, player_index, play_slot, CardKind.PLAYABLE)
         return
     chop = _chop_slot_from_belief(belief)
     if chop is None:
         return
     if 0 == hand_type:
-        _assign_kind_to_matrix(inferred_card_kind, player_index, chop, CardKind.DISPENSABLE)
+        kind = CardKind.DISPENSABLE
+    elif 6 == hand_type:
+        kind = CardKind.CRITICAL
+    elif 7 == hand_type:
+        kind = CardKind.USELESS
+    else:
+        assert False, f"unexpected hand_type {hand_type}"
+    if soft and not _transition_allowed(belief[chop], kind):
         return
-    if 6 == hand_type:
-        _assign_kind_to_matrix(inferred_card_kind, player_index, chop, CardKind.CRITICAL)
-        return
-    if 7 == hand_type:
-        _assign_kind_to_matrix(inferred_card_kind, player_index, chop, CardKind.USELESS)
-        return
-    assert False, f"unexpected hand_type {hand_type}"
+    _assign_kind_to_matrix(inferred_card_kind, player_index, chop, kind)
 
 
 def _assign_kind_to_matrix(
@@ -847,7 +909,7 @@ def _channel_encoded_type(
         )
         hand = player_view.teammates[teammate].cards
         teammate_types.append(
-            _encode_hand_type(hand, len(hand), common_view, settings, inferred_card_kind[teammate])
+            _peer_code_for_hand(hand, inferred_card_kind[teammate], common_view, settings)
         )
     type_sum = "+".join(str(t) for t in teammate_types)
     return sum(teammate_types) % 8, type_sum
@@ -867,42 +929,56 @@ def _convention_hint_would_identify_new_playable(
     settings: GameSettings,
     inferred_card_kind: List[List[Optional[CardKind]]],
 ) -> bool:
-    """
-    True when the hinter's convention hint would newly mark a playable slot for a non-hinter.
-
-    Simulates type-only decode for the hint target and the other non-hinter; the hinter does
-    not decode. Requires the identified slot to be physically playable on a visible hand.
-    """
+    """True when the convention hint would newly mark a physically playable slot for next."""
+    next_player = (hinter + 1) % 3
+    prev_player = (hinter + 2) % 3
+    if any(CardKind.PLAYABLE == k for k in inferred_card_kind[next_player]):
+        return False
     enc_type, _type_sum = _channel_encoded_type(
         hinter, player_view, common_view, settings, inferred_card_kind
     )
     hint_move = _build_hint_for_encoded(hinter, player_view, enc_type)
     if hint_move is None:
         return False
-    hint_target = hint_move.teammate
-    other_non_hinter = _third_player_index(hinter, hint_target)
-    for decoder in (hint_target, other_non_hinter):
-        peer_index = other_non_hinter if decoder == hint_target else hint_target
-        assert peer_index in player_view.teammates
-        peer_hand = player_view.teammates[peer_index].cards
-        peer_type = _encode_hand_type(
-            peer_hand,
-            len(peer_hand),
-            common_view,
-            settings,
-            inferred_card_kind[peer_index],
-        )
-        decoded_type = (enc_type - peer_type) % 8
-        if not 1 <= decoded_type <= 5:
-            continue
-        hand_size = len(player_view.teammates[decoder].cards)
-        play_slot = _new_slot(hand_size) - (decoded_type - 1)
-        if not 0 <= play_slot < hand_size:
-            continue
-        if CardKind.PLAYABLE == inferred_card_kind[decoder][play_slot]:
-            continue
-        card = player_view.teammates[decoder].cards[play_slot]
-        if CardKind.PLAYABLE != common_view.card_kind(card, settings):
-            continue
-        return True
-    return False
+    peer_type = _peer_code_for_hand(
+        player_view.teammates[prev_player].cards,
+        inferred_card_kind[prev_player],
+        common_view,
+        settings,
+    )
+    decoded_type = (enc_type - peer_type) % 8
+    if not 1 <= decoded_type <= 5:
+        return False
+    hand_size = len(player_view.teammates[next_player].cards)
+    play_slot = _new_slot(hand_size) - (decoded_type - 1)
+    if not 0 <= play_slot < hand_size:
+        return False
+    if CardKind.PLAYABLE == inferred_card_kind[next_player][play_slot]:
+        return False
+    card = player_view.teammates[next_player].cards[play_slot]
+    if CardKind.PLAYABLE != common_view.card_kind(card, settings):
+        return False
+    # Same identity already marked playable on the other visible seat?
+    for slot, held in enumerate(player_view.teammates[prev_player].cards):
+        if card == held and CardKind.PLAYABLE == inferred_card_kind[prev_player][slot]:
+            return False
+    # Both seats would newly mark the same identity?
+    prev_peer = _peer_code_for_hand(
+        player_view.teammates[next_player].cards,
+        inferred_card_kind[next_player],
+        common_view,
+        settings,
+    )
+    prev_decoded = (enc_type - prev_peer) % 8
+    if 1 <= prev_decoded <= 5:
+        prev_size = len(player_view.teammates[prev_player].cards)
+        prev_slot = _new_slot(prev_size) - (prev_decoded - 1)
+        if 0 <= prev_slot < prev_size:
+            if CardKind.PLAYABLE != inferred_card_kind[prev_player][prev_slot]:
+                prev_card = player_view.teammates[prev_player].cards[prev_slot]
+                if (
+                    CardKind.PLAYABLE == common_view.card_kind(prev_card, settings)
+                    and card == prev_card
+                ):
+                    return False
+    return True

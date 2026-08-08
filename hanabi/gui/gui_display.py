@@ -814,10 +814,16 @@ class GUIDisplay:
         main_frame = tk.Frame(self.root, bg="#2C3E50")
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Top status bar
+        # Top status bar — grid keeps Home / transport / score in fixed columns so the
+        # LAST TURN banner and long filenames expand in the middle without shifting buttons.
         status_frame = tk.Frame(main_frame, bg="#34495E", height=40)
         status_frame.pack(fill=tk.X, pady=(0, 10))
         status_frame.pack_propagate(False)
+        status_frame.grid_propagate(False)
+        status_frame.columnconfigure(3, weight=1)  # banner column absorbs spare width
+
+        # Store reference to status frame for later use
+        self._status_frame = status_frame
 
         # Home button (top left, always visible during play/replay)
         self._home_btn = tk.Button(
@@ -830,30 +836,43 @@ class GUIDisplay:
             highlightthickness=0,
             state=tk.DISABLED,  # Disabled until game starts
         )
-        self._home_btn.pack(side=tk.LEFT, padx=10, pady=5)
-
-        # Store reference to status frame for later use
-        self._status_frame = status_frame
+        self._home_btn.grid(row=0, column=0, padx=(10, 5), pady=5, sticky="w")
 
         self._status_label = tk.Label(
             status_frame, text="Hanabi - Fireworks Game", bg="#34495E", fg="white", font=("Arial", 14, "bold")
         )
-        self._status_label.pack(side=tk.LEFT, padx=10, pady=5)
+        self._status_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
-        # Last turn warning banner (initially hidden)
+        # Replay record basename (shown during replay; hover for full path).
+        self._replay_file_label = tk.Label(
+            status_frame,
+            text="",
+            bg="#34495E",
+            fg="#AED6F1",
+            font=("Arial", 9),
+        )
+        self._replay_file_label.grid(row=0, column=2, padx=5, pady=5, sticky="w")
+
+        # Last turn warning banner (blank until the deck empties). Middle column expands.
         self._last_turn_label = tk.Label(
             status_frame,
-            text="⚠️ LAST TURN - Deck is empty!",
-            bg="#E74C3C",
-            fg="white",
+            text="",
+            bg="#34495E",
+            fg="#34495E",
             font=("Arial", 12, "bold"),
-            padx=15,
-            pady=3,
+            padx=0,
+            pady=0,
         )
-        # Will be packed when needed
+        self._last_turn_label.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
-        self._score_label = tk.Label(status_frame, text="Score: 0/25", bg="#34495E", fg="#FFD700", font=("Arial", 12))
-        self._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
+        # Replay transport controls live in column 4 (created by GUIGame when loading a replay).
+        self._replay_controls_slot = tk.Frame(status_frame, bg="#34495E")
+        self._replay_controls_slot.grid(row=0, column=4, padx=5, pady=2, sticky="e")
+
+        self._score_label = tk.Label(
+            status_frame, text="Score: 0/25", bg="#34495E", fg="#FFD700", font=("Arial", 12), width=12, anchor="e"
+        )
+        self._score_label.grid(row=0, column=5, padx=(5, 10), pady=5, sticky="e")
 
         # Main content area: canvas on left, history panel on right
         content_frame = tk.Frame(main_frame, bg="#2C3E50")
@@ -1926,9 +1945,14 @@ class GUIDisplay:
             # Recommendation indicators (play/discard) for recommendation AI seats
             seat_recommendations: Dict[int, RecommendationAction] = {}
             seat_convention_overlays: Dict[int, ConventionSlotOverlay] = {}
+            # Show card front if: replay mode OR not current player
+            # Current player's cards always show back (?) with hint boxes outside
+            show_front = self._show_all_cards or not is_current_player
             if self._game:
                 seat_recommendations = recommendations_by_slot_for_seat(self._game, i)
-                seat_convention_overlays = convention_overlays_for_seat(self._game, i)
+                seat_convention_overlays = convention_overlays_for_seat(
+                    self._game, i, compare_to_actual=show_front
+                )
 
             # Draw cards in hand
             total_width = len(hand.cards) * (card_width + spacing) - spacing
@@ -1942,10 +1966,6 @@ class GUIDisplay:
                 # Card and hints are always drawn together as a unit
                 player_hints = self._hints.get(i, {})
                 card_hints = player_hints.get(card_idx, {})
-
-                # Show card front if: replay mode OR not current player
-                # Current player's cards always show back (?) with hint boxes outside
-                show_front = self._show_all_cards or not is_current_player
 
                 # Always pass hints - they will be used when drawing the card
                 # For front-facing cards (other players), hints are shown on the card
@@ -2533,19 +2553,18 @@ class GUIDisplay:
 
     def _update_last_turn_warning(self):
         """Update the last turn warning banner visibility."""
-        if not self._game:
-            return
-
-        deck_empty = 0 == self._game.state.common_view.cards_to_draw
-
+        deck_empty = bool(self._game) and 0 == self._game.state.common_view.cards_to_draw
         if deck_empty:
-            # Show warning banner
-            if not self._last_turn_label.winfo_ismapped():
-                self._last_turn_label.pack(side=tk.LEFT, padx=10, pady=5)
+            self._last_turn_label.config(
+                text="⚠️ LAST TURN - Deck is empty!",
+                bg="#E74C3C",
+                fg="white",
+                padx=15,
+                pady=3,
+            )
         else:
-            # Hide warning banner
-            if self._last_turn_label.winfo_ismapped():
-                self._last_turn_label.pack_forget()
+            # Match status bar so the banner is visually gone (do not rely on pack_forget).
+            self._last_turn_label.config(text="", bg="#34495E", fg="#34495E", padx=0, pady=0)
 
     def _on_canvas_resize(self, event):
         """Handle canvas resize - redraw game state."""

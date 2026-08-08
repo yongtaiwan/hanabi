@@ -43,7 +43,7 @@ import os
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, Tuple
 
-from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import create_ai_simulation_game_settings
 from hanabi.core.game_field import GameField, ExperimentResults
 from hanabi.tools.experiment_outcome import build_experiment_outcome_categories_payload
 from hanabi.ai import (
@@ -277,7 +277,7 @@ def run_experiments(
         print("=" * 70)
 
         # Create game settings for this player count
-        settings = create_standard_game_settings(num_players)
+        settings = create_ai_simulation_game_settings(num_players)
 
         # Create GameField with a reproducible starting position
         game_field = GameField.create_from_settings(settings, seed=base_seed)

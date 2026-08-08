@@ -5,7 +5,7 @@ across different player counts (2, 3, 4, 5 players).
 This script organizes experiments by player count for better comparison.
 """
 
-from hanabi.core.game import create_standard_game_settings
+from hanabi.core.game import create_ai_simulation_game_settings
 from hanabi.core.game_field import GameField
 from hanabi.ai.random_player import RandomPlayer
 from hanabi.ai.common_sense_player import CommonSensePlayer
@@ -40,7 +40,7 @@ def run_experiment_for_player_count(num_players: int, num_runs: int = 50, random
     print(f"{'=' * 70}")
 
     # Create game settings
-    settings = create_standard_game_settings(num_players)
+    settings = create_ai_simulation_game_settings(num_players)
 
     # Create GameField
     game_field = GameField.create_from_settings(settings, seed=random_seed)

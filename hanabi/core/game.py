@@ -200,7 +200,11 @@ def create_deck_from_settings(settings: GameSettings) -> Deck:
     return Deck(draw_deck)
 
 
-def create_standard_game_settings(num_players: int) -> GameSettings:
+def create_standard_game_settings(
+    num_players: int,
+    *,
+    auto_end_when_no_points_possible: bool = False,
+) -> GameSettings:
     """
     Create a GameSettings instance following standard Hanabi rules.
 
@@ -212,8 +216,12 @@ def create_standard_game_settings(num_players: int) -> GameSettings:
     - 3 live tokens (fuse tokens)
     - Cards per hand: 5 for 2-3 players, 4 for 4-5 players
 
+    ``auto_end_when_no_points_possible`` defaults to False (official rules: play continues).
+    AI batch sims should use :func:`create_ai_simulation_game_settings` instead.
+
     Args:
         num_players: Number of players (2-5)
+        auto_end_when_no_points_possible: If True, end when every unfinished color is blocked
 
     Returns:
         A GameSettings instance configured for standard Hanabi rules
@@ -258,8 +266,17 @@ def create_standard_game_settings(num_players: int) -> GameSettings:
         max_hint_tokens=max_hint_tokens,
         max_cards_in_hand=max_cards_in_hand,
         cards=cards,
-        auto_end_when_no_points_possible=False,  # Default: follow standard rules (game continues)
+        auto_end_when_no_points_possible=auto_end_when_no_points_possible,
     )
+
+
+def create_ai_simulation_game_settings(num_players: int) -> GameSettings:
+    """Standard Hanabi settings with early end when no further points are possible.
+
+    For all-AI batch experiments (:class:`~hanabi.core.game_field.GameField`). Human
+    console/GUI games should keep :func:`create_standard_game_settings` (auto-end off).
+    """
+    return create_standard_game_settings(num_players, auto_end_when_no_points_possible=True)
 
 
 class CommonView:
@@ -1247,7 +1264,7 @@ class Game:
             if isinstance(player, BasePlayer):
                 player.set_common_view(self.state.common_view)
 
-    def _notify_players(self, player_index: int, move: Move, state_before_move: GameState) -> None:
+    def _notify_players(self, player_index: int, move: Move) -> None:
         """Notify all :class:`~hanabi.core.player.BasePlayer` seats about a move."""
         from .player import BasePlayer
 
@@ -1258,13 +1275,6 @@ class Game:
                     move,
                     observer_view=self._get_player_view(observer_index),
                 )
-        _maybe_assert_hint_hand_subtype_beliefs_in_sync(
-            self._team.players,
-            player_index,
-            move,
-            cards_played_before=state_before_move.common_view.cards_played,
-            hand_cards=[hand.cards for hand in self.state.player_hands],
-        )
 
     def _get_player_view(self, player_index: int) -> PlayerView:
         """
@@ -1338,10 +1348,13 @@ class Game:
         self._set_common_view_for_players()
 
         # Notify players about the move BEFORE the callback
-        # This ensures hints are updated before display is refreshed
-        self._notify_players(player_index, move, state_before_move)
+        # This ensures hints are updated before display is refreshed.
+        # Card moves are decorated with public outcome (moved_card / successful).
+        observer_move = _observer_move_with_outcome(state_before_move, new_state, player_index, move)
+        self._notify_players(player_index, observer_move)
 
         # Notify global callback with old and new state (for display, logging, etc.)
+        # Intent ``move`` keeps HasWhy from play(); GUI still diffs states for copy.
         if self._on_move is not None:
             self._on_move(player_index, move, state_before_move, new_state)
 
@@ -1363,42 +1376,23 @@ class Game:
         )
 
 
-def _maybe_assert_hint_hand_subtype_beliefs_in_sync(
-    players: List[Any],
-    hinter_index: int,
+def _observer_move_with_outcome(
+    state_before: GameState,
+    state_after: GameState,
+    player_index: int,
     move: Move,
-    *,
-    cards_played_before: Optional[Dict[Color, Number]] = None,
-    hand_cards: Optional[List[List[Card]]] = None,
-) -> None:
-    """When all seats share a 3p convention bot, propagate beliefs and assert matrices match."""
-    if 3 != len(players):
-        return
-    from hanabi.ai.dynamic_hand_type_3p import (
-        DynamicHandType3P,
-        align_convention_beliefs_after_move as align_dynamic_hand_type,
-    )
-    from hanabi.ai.dynamic_recommendation_3p import (
-        DynamicRecommendation3P,
-        align_convention_beliefs_after_move as align_dynamic_recommendation,
-    )
-    from hanabi.ai.hint_hand_subtype_3p import (
-        HintHandSubtype3P,
-        align_convention_beliefs_after_move as align_hint_hand_subtype,
-    )
+) -> Move:
+    """Decorate play/discard intents with public ``moved_card`` (+ ``successful`` for plays)."""
+    from .moves import Discard, Play, finished_card_move_for_observer
 
-    if all(isinstance(player, DynamicHandType3P) for player in players):
-        align = align_dynamic_hand_type
-    elif all(isinstance(player, DynamicRecommendation3P) for player in players):
-        align = align_dynamic_recommendation
-    elif all(isinstance(player, HintHandSubtype3P) for player in players):
-        align = align_hint_hand_subtype
-    else:
-        return
-    align(
-        players,
-        hinter_index,
-        move,
-        cards_played_before=cards_played_before,
-        hand_cards=hand_cards,
-    )
+    if isinstance(move, Play):
+        moved_card = state_before.player_hands[player_index].cards[move.card]
+        successful = (
+            state_after.common_view.live_tokens == state_before.common_view.live_tokens
+        )
+        return finished_card_move_for_observer(move, moved_card, successful=successful)
+    if isinstance(move, Discard):
+        moved_card = state_before.player_hands[player_index].cards[move.card]
+        return finished_card_move_for_observer(move, moved_card)
+    return move
+

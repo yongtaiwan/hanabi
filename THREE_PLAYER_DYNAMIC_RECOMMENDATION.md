@@ -33,7 +33,16 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 
 - Not `DynamicHandType3P` (dual legacy↔recommendation) and not classic `HintHandSubtype3P`.
 - Not a full card-identify tracker. No convention-derived `useless` / `safe` / `critical` kinds.
-- Not updated by **literal** hints (including fallback when OLD/MID is unbuildable). Those may be played for tempo; they do **not** change convention belief.
+- Not updated by **literal** hints (including fallback when OLD/MID are unbuildable for types
+  ``0``–``3``), **except** public **number-5** touches which set `known_five` for every
+  observer (§2.1b). Other literal hints may be played for tempo; they do **not** change
+  playability / chop — including for the hint target. Bots never emit MID-shaped literals
+  (MID is treated as convention by the hint target); OLD/NEW literals are rejected via the
+  touch-set check.
+- **Full-hand touch = abandon convention.** A hint that touches **every** slot in the target
+  hand is never a mod-8 channel (receivers and observers leave belief unchanged). When the
+  would-be type is unbuildable, literal fallback **prefers a full-hand number-1** hint when
+  available (e.g. five 1s) — clear tempo and an unmistakable abandon signal.
 
 ---
 
@@ -49,6 +58,16 @@ Each **seat** carries:
 | `playable` | Convention-identified playable |
 | `unplayable` | Known not playable |
 
+### 2.1b Per-slot known five
+
+| Field | Meaning |
+|-------|---------|
+| `known_five` | `true` iff a public **number-5** hint has touched this slot (all observers agree) |
+
+`known_five` is independent of playability. It is set for **every** number-5 touch (convention channel or literal), including after mod-8 decode on convention hints. Other ranks/colors are not tracked.
+
+A `known_five` slot never needs a discard mark (see §2.2) and, while **no** color pile is topped by a **4**, also never needs a play mark — no 5 can possibly play, so the slot is a **play-unknown** only when some pile is at 4 (§3). Public piles gate this, so every observer agrees. Playability is **not** eagerly rewritten: when a played 4 reopens 5s (§8.1), the slot naturally rejoins the play-code set.
+
 ### 2.2 Per-hand chop
 
 | Field | Meaning |
@@ -56,13 +75,12 @@ Each **seat** carries:
 | `chop` | Expected discard slot, or `None` if no discard candidate |
 | `chop_confirmed` | `true` iff chop was set by a discard decode (each of the `m` codes names one candidate) |
 
-**Discard candidate:** any slot with `playability != playable`.
+**Discard candidate:** any slot with `playability != playable` **and** not `known_five`.
 
 **Default chop** (deal, and when chop must be chosen with no newer sticky target):
 
 - `chop` = **leftmost** discard candidate
 - `chop_confirmed` = `false`
-- `chop_hinted` = `false`
 
 After a **recommended** chop leaves the hand, chop advances to the next newer discard candidate when one exists (§8.2), rather than jumping back to leftmost. Older-than-chop cards remain reachable as **later** discard-chain positions via wrap (§5.2).
 
@@ -80,8 +98,10 @@ There is **no** legacy discard-kind layer and **no** per-slot `recommended` flag
 ## 3. Counts (no mode switch)
 
 ```
-N_play  = number of slots with playability == unknown
+N_play  = number of play-unknown slots
 ```
+
+A slot is **play-unknown** iff `playability == unknown`, **except** a `known_five` slot while **no** color pile is at **4** (no 5 can play, §2.1b). Both branches read only public piles + public belief, so `N_play` stays channel-safe.
 
 - Play codes use `1 .. N_play` (empty if `N_play = 0`).
 - Discard codes are the remaining values in `{0,1,…,7}` (see §5).
@@ -107,6 +127,11 @@ Unchanged from classic 3p hint-hand-type.
 | 6 | next | NEW | color |
 | 7 | previous | NEW | color |
 
+Types `0`–`3` prefer OLD, then MID, when building the physical hint. Types `4`–`7` always use NEW.
+Literal fallback never uses a MID-shaped hint (so the hint target can treat MID as convention).
+A hint that touches the **entire** target hand is never built as a convention channel (NEW types
+that would touch every slot are treated as unbuildable) and is never decoded as one.
+
 ### 4.2 Channel sum
 
 ```
@@ -121,7 +146,9 @@ decoded_self = (channel - code_peer) mod 8
 
 Snapshot rule: when the hinter applies two peer codes, compute **both codes before** either decode mutates belief.
 
-Literal / unbuildable fallbacks: no mod-8 decode (belief unchanged).
+Literal / unbuildable fallbacks: no mod-8 decode (belief unchanged). Full-hand touches are
+always treated as abandon-convention (same: no decode), including when they would otherwise
+match a NEW number/color shape (e.g. hinting five 1s).
 
 ---
 
@@ -131,11 +158,11 @@ Let `N = N_play` at decode/encode time for that hand.
 
 ### 5.1 Play types `1 .. N`
 
-Among slots with `playability == unknown`, order **newest first** (rightmost = type `1`). Type `k` marks the `k`-th slot **`playable`**.
+Among **play-unknown** slots (§3 — `unknown` playability, excluding known 5s while no pile is at 4), order **newest first** (rightmost = type `1`). Type `k` marks the `k`-th slot **`playable`**.
 
-**Negative inference:** every **newer** unknown (types `1 .. k-1`, i.e. strictly right of the marked slot) becomes **`unplayable`**. Older unknowns are unchanged. Discard chop fields are unchanged (except §8.2 if the marked slot was chop).
+**Negative inference:** every **newer** play-unknown (types `1 .. k-1`, i.e. strictly right of the marked slot) becomes **`unplayable`**. Older unknowns are unchanged. Discard chop fields are unchanged (except §8.2 if the marked slot was chop). Excluded known-5 slots are skipped by both the ordering and the negative inference.
 
-**Encode:** among physically playable unknowns, always choose the **newest** such card, then emit its from-new index `k`. Receivers may therefore treat “type `k`” as “newest playable is here; nothing newer is playable.”
+**Encode:** among physically playable play-unknowns, always choose the **newest** such card, then emit its from-new index `k`. Receivers may therefore treat “type `k`” as “newest playable is here; nothing newer is playable.”
 
 ### 5.2 Discard types
 
@@ -186,7 +213,11 @@ Exactly the first `m` wrapped-chain slots (§5.2). A card past position `m - 1` 
 
 Computed per visible teammate hand, then summed mod 8.
 
-**Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Belief snapshot is still taken before either decode mutates state (§4.2); only the **encoder’s ranking** for prev may depend on next’s chosen discard identity (§6.4).
+**Order:** always encode **next** (`hinter+1`), then **previous** (`hinter+2`). Each peer code
+uses that hand’s cards, **that seat’s current shared public belief** (chop / playability), and
+public piles — independently reconstructible by every observer who sees the hand. Do **not**
+wipe belief to a blank row when encoding (sticky chop must remain). Snapshot both peer codes
+before either decode mutates state (§4.2).
 
 ### 6.1 Prefer play
 
@@ -210,39 +241,31 @@ If the preferred physical discard is not in the indicable set, pick the best **i
 
 ### 6.3 Recompute on each convention hint
 
-Each convention hint **freshly** computes both peer codes from the current snapshot. Do not re-apply a stored relative discard instruction between hints beyond ordinary chop maintenance (§8).
+Each convention hint **freshly** computes both peer codes from the **current** shared belief
+snapshot (same chop / playability everyone already shares). “Freshly” means re-rank with
+current cards + belief — not reset belief to blank. Do not re-apply a stored relative discard
+instruction between hints beyond ordinary chop maintenance (§8).
 
-### 6.4 Double-discard guard
+### 6.4 Discard ranking (channel-safe)
 
-When encoding a peer, treat these physical card identities as **almost-critical** on the
-**other** peer (do not treat them as safe cross-hand trash):
-
-1. If that peer’s code on **this** hint is a discard recommendation — the card at that implied chop.
-2. If that peer already has a convention chop with `chop_hinted` or `chop_confirmed` from an
-   **earlier** discard decode — that chop card, even when this hint gives them a **play** code.
-
-Apply (2) in **both** directions (next↔prev). Apply (1) for prev after next is encoded (next is
-encoded first).
+Each peer’s discard code is chosen from that hand alone (plus public piles). Do **not** use the
+other teammate’s cards or standing chop when picking the code — those inputs are not shared by
+every observer who must recompute the same peer code.
 
 Encoder discard ranking (lower = better to recommend):
 
-`useless > in-hand duplicate > cross-hand duplicate > dispensable > soon-playable > almost-critical > critical > playable`
+`useless > in-hand duplicate > dispensable > critical > playable`
 
 - **In-hand duplicate:** same identity ≥2 times in that hand. Among tied in-hand dups, prefer the
   **newest** copy (sticky chop then advances into later candidates).
-- **Cross-hand duplicate:** same identity also appears in the other visible teammate hand, **and**
-  that identity is **not** almost-critical (the other seat was not already told to discard it).
-- **Soon-playable:** not yet playable, but every rank from the pile top+1 through this card appears
-  somewhere in the hinter’s **visible** hands (the scored hand plus the other teammate). If those
-  cards are never misdiscarded, this card can be played in sequence soon — prefer not discarding it
-  vs ordinary dispensable trash.
-- **Almost-critical** overrides cross-hand preference: if the other seat holds a recommended
-  discard of that identity, the remaining copy is protected (worse than normal dispensable, better
-  than a true singleton critical).
-- **Critical tie-break:** among true criticals, prefer fewest fireworks points lost (still-reachable
-  ranks from that card up to 5; already-dead higher ranks do not count — e.g. both 4s gone ⇒
-  discarding a 3 loses 1). If equal loss, prefer **lower rank** (keep 5s for the play hint-token
-  bonus), then older slot.
+- **Critical tie-break:** any critical discard already rules out a perfect score, so among
+  criticals prefer only the **newest** slot (sticky chop can pivot to later non-criticals on a
+  following hint). Do not rank by points lost or by rank.
+- **Safe (dispensable) / residual playable:** prefer **higher rank**, then **older** slot.
+- **Useless:** prefer **lower rank**, then **older** slot.
+
+Hinter-only hint **quality** (whether to hint vs discard chop, §9) may still look at both visible
+hands; that does not change the encoded peer codes.
 ---
 
 ## 7. Decoding
@@ -270,7 +293,7 @@ When the chop slot is discarded or played:
 
 1. Prefer the **next newer** discard candidate (first slot `> chop` with `playability != playable`).
 2. If none exists, fall back to the **leftmost** remaining discard candidate (or `None`).
-3. Set `chop_confirmed = false` and `chop_hinted = false` (chop class `default` — keep position, drop urgency).
+3. Set `chop_confirmed = false` (chop class `default` — keep position, drop urgency).
 
 This keeps chop moving right after a recommended discard is spent. Older-than-chop cards stay
 reachable later in the wrapped discard chain (§5.2), so they remain indicable when `m` allows.
@@ -283,13 +306,86 @@ Play/discard shifts slots left; drawn cards append as `unknown` playability. Adj
 
 With no legacy `safe` kind, middle-rank discard-pile invalidation of “safe” is **removed**.
 
+### 8.5 Full-hand abandon convention
+
+If a hint’s touch set covers **all** slots of the target hand:
+
+- Encode: do **not** emit that physical hint as a mod-8 channel (the corresponding NEW type is
+  unbuildable when it would touch the whole hand).
+- Decode: every observer (including the hint target) leaves convention belief unchanged.
+- Literal fallback: among true non-convention hints, prefer **full-hand number-1**, then any
+  other full-hand touch, then remaining OLD/NEW literals. If somehow every non-MID hint would
+  still round-trip as convention and no full-hand option exists, a non-MID last resort is
+  still emitted so the bot stays legal at max tokens (receivers may mis-decode — rare).
+
+Rationale: a whole-hand 1s hint is obvious tempo and cannot be mistaken for a selective
+OLD/MID/NEW band once the full-hand rule is shared.
+
 ---
 
 ## 9. Play strategy (`DynamicRecommendation3P`)
 
-1. **Play** oldest (leftmost) `playable` if any.
-2. Otherwise choose **hint vs discard chop** from hint quality × chop class (below).
-3. If somehow no chop remains, discard slot `0`.
+1. **`_try_protect_next_player`** — if next is about to burn a critical / unique playable,
+   save them before cashing own tempo (§9.0).
+2. **Play** oldest (leftmost) `playable` if any.
+3. Otherwise choose **hint vs discard chop** from hint quality × chop class (below).
+4. If somehow no chop remains, discard slot `0`.
+
+### 9.0 Protect next (`_try_protect_next_player`)
+
+Emergency override that runs **before** playing a known playable. Goal: prevent the immediate
+next seat from discarding (or being forced to discard) a card that makes a perfect score
+impossible — the same notion as experiment outcome “critical lost”: last remaining copy for
+fireworks (`CRITICAL`, or unique `PLAYABLE`).
+
+This step is **next-seat only** (the player who acts immediately after us). Prev’s chop danger
+is left to next’s own protect step on their turn. Endgame / short-deck exceptions are deferred.
+
+#### 9.0.1 Predicates
+
+| Name | Definition |
+|------|------------|
+| **Dangerous chop card** | On a visible hand, the physical card at that seat’s current chop is `CRITICAL` or `PLAYABLE` under `common_view.card_kind` (last copy for fireworks). |
+| **Next likely good** | Honest approx that next’s turn would produce a §9.2 `good` channel via “playable for their next” (**prev** from us). True when `hint_tokens > 0`, **prev** has **no** convention-`playable` yet, and prev has ≥1 `unknown` slot that is **physically playable**. (Does not assume good via “trash next + playable for us” — that needs our hidden hand. Residual holes: double-play / unbuildable.) |
+| **Next would discard** | Next has no convention-`playable`, their chop card is dangerous, and either `hint_tokens == 0` **or** (chop is `confirmed` **and not** next-likely-good). Does **not** fully simulate next as hinter (their channel encodes our invisible hand). With tokens and `default` chop, treat as “would hint” (matrix). |
+| **Hint protects next** | The **standard** would-be convention channel (`_project_channel` / §6 peer codes → one `enc_type`) is buildable, and **after** applying its projected decode to both non-hinter rows, “next would discard” is **false**. Typical successes: next newly marks a `playable` (they play), or next’s chop moves to a non-dangerous card. A channel that only helps **prev** does **not** count. Protect does **not** search alternate encodings or use belief-updating literals (literals never update convention belief). |
+| **Token gift** | When `hint_tokens == 0`, an action that leaves `hint_tokens ≥ 1` for next’s turn. In this version that means **discard** only (+1 when below max). Ordinary plays do not change the token count unless the card is a **5**, but see §9.0.3 — we usually **cannot** know our playable is a 5. |
+
+#### 9.0.2 Algorithm
+
+When `_try_protect_next_player` runs:
+
+1. If **not** “next would discard” a dangerous chop card → return no move (fall through).
+2. **Save-hint:** if `hint_tokens > 0` and the standard convention channel **protects next** → give that hint (same builder as normal convention hints).
+   - Precedence vs §9.2 `bad`: **critical save overrides `bad`** (still emit the channel when it protects).
+   - If the channel is unbuildable, or buildable but does **not** protect next → do not save-hint (fall through to token gift / no move).
+3. **Token gift** (only when `hint_tokens == 0`):
+   - First build the **post-gift hypothetical**: same hands and belief, but `hint_tokens == 1`. Token gift is useful **only if** in that hypothetical “next would discard” a dangerous chop card is **false** (they would hint via the matrix, or play a convention-`playable`). If they would still discard danger with one token (typical: `confirmed` + non-`good` channel), token gift cannot save them — return no move.
+   - Else, if own chop is **`confirmed`** and discard is legal → discard confirmed chop. Do **not** gift via `default` chop.
+   - Do **not** use “play a 5 for refund” unless §9.0.3 says the leftmost playable is **known** to be a 5 (rare). Prefer discard gift when both would work.
+4. Otherwise → return no move.
+
+#### 9.0.3 Knowing a playable is a 5
+
+Convention belief stores **playability** plus public **`known_five`** from number-5 touches (§2.1b). It does **not** track other ranks/colors. A leftmost `playable` mark alone does **not** mean the card is a 5 unless that slot is also `known_five` or piles force it.
+
+Honest ways we could know:
+
+| Source | When it works |
+|--------|----------------|
+| **Public piles** | Every incomplete color already has top **4** (the only currently playable identities are 5s). Then any convention-`playable` must be a 5 → playing it refunds a token. |
+| **`known_five`** | Slot was touched by a public number-5 hint. Play only when piles guarantee the 5 is playable (same as § final-round / known-5 play helpers) — do not assume every known 5 is immediately playable. |
+| Seeing own card | **Forbidden** (anti-cheat). |
+
+**Token gift:** = **confirmed-chop discard only**, unless public piles make every playable a 5 (then play-5 refund is honest). Do not assume rank from playability alone.
+
+Notes:
+
+- Protect may fire even when we have our own playable: deferring that play is intentional.
+- If save-hint is available, it beats token gift and beats playing our own card.
+- At 0 tokens with next on `confirmed` + non-`good`, only a prior save-hint (when tokens existed) could have helped; this step correctly no-ops and fallthrough may play.
+- Prev-seat critical chop is out of scope for this step.
+- Soft endgame exception (defer protect when `turns_left` is tight and the endangered card is not needed for remaining score) is **TODO**.
 
 ### 9.1 Chop class (own hand; mutually exclusive)
 
@@ -300,13 +396,15 @@ With no legacy `safe` kind, middle-rank discard-pile invalidation of “safe” 
 
 ### 9.2 Hint quality (would-be convention channel)
 
-Evaluated only when a convention hint is **buildable**. If the type is unbuildable, treat quality as `mediocre` and use literal fallback when the matrix says hint.
+Evaluated only when a convention hint is **buildable**. If the type is unbuildable, treat quality as `fine` and use literal fallback when the matrix says hint.
 
 | Class | Definition |
 |-------|------------|
-| `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions) |
-| `bad` | Channel would newly mark the **same** playable identity on both peers (**double-play**) |
-| `mediocre` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal) |
+| `good` | Newly identifies a playable for the **next** player (exclusions: no topping-up; identity not already `playable` on a visible seat; not the same identity newly marked on both peers), **or** recommends **useless/duplicate** trash discard for next **and** a new playable for **prev** (no topping-up on prev; same identity exclusions), **or** **known-5 assist**: the would-be **buildable** convention channel’s physical hint is a **number-5** that **newly** marks ≥1 `known_five` on **either** peer (slot was not already `known_five`) **and** the projected decode also newly identifies a **playable** on **either** peer (same identity / topping-up / no double-play exclusions) **or** recommends a **useless/duplicate** discard on **either** peer. A number-5 that only marks 5s, with no playable and no useless/dup trash in the decode, stays `fine`. |
+| `fine` | Buildable convention hint that is neither `good` nor `bad` (or unbuildable → literal). Includes double-play channels when **more than one life** remains (tempo preferred over bomb risk). |
+| `bad` | Channel would recommend discard of the **same** mid-rank identity (`2`/`3`/`4`) on **both** peers (double mid-rank discard; ones excluded), **or** newly mark the **same** playable identity on **both** peers while **only one life** remains (double play would end the game), **or** **topping-up**: newly mark identity *C* playable on a peer while *C* is already `playable` on another visible seat (schedules a second copy / bomb after the pending play). |
+
+Precedence when classifying: `good` → `bad` → `fine`.
 
 ### 9.3 Decision matrix
 
@@ -315,19 +413,30 @@ When **both** hint and discard are legal:
 | hint \\ chop | confirmed | default |
 |--------------|-----------|---------|
 | **good** | Hint | Hint |
-| **mediocre** | Discard | Hint |
-| **bad** | Discard | Hint |
+| **fine** | Discard | Hint |
+| **bad** | Discard | Discard |
 
 Guards outside the matrix:
 
 - No hint tokens → discard (by chop / oldest)
-- Discard illegal (max hints) → hint anyway (even `bad`)
+- Discard illegal (max hints) → hint anyway (including `bad`; literal escape for `bad` deferred)
+- **Late-deck guard**: while `cards_to_draw <= remaining achievable plays` (both public;
+  achievable plays cap each pile at the first rank with all copies discarded) **and** some
+  teammate has an identified playable pending (common belief), **avoid discarding**: prefer
+  any non-`bad` hint over the chop, overriding the matrix. The discard would consume a draw
+  the playing seat needs for its own play-then-final-turn tempo. Without a pending identified
+  play, discarding still digs needed cards out of the deck; at 0 tokens the discard fallback
+  applies regardless.
+- **TODO (hint-bank):** Avoid filling the bank — at `max-1` tokens, prefer discard unless hint is
+  `good` (discard or play-5 both refund to max). At max tokens with no playable, prefer literal
+  escape over a `bad` convention channel. Soft caution at `max-2` / endgame exceptions later.
 
 Reading the matrix:
 
-- `good` always beats chop (tempo: playable for next, or trash for next + playable for prev).
-- `confirmed` beats non-good hints (trust prior discard recommendation).
-- `bad` / `mediocre` with `default` still hint (avoid burning criticals / playables on unhinted chop).
+- `good` always beats chop (tempo: playable for next, trash for next + playable for prev, or known-5 assist with playable/trash content).
+- `confirmed` beats non-good / non-bad hints (trust prior discard recommendation).
+- `bad` always discards when discard is legal (never schedule both mid-rank discards; never schedule double play on the last life).
+- `fine` with `default` still hint (avoid burning criticals / playables on unhinted chop).
 
 ---
 
@@ -357,6 +466,27 @@ Slots `0`/`1` are not indicable on this hint.
 
 Chop card gone → new chop = **next newer** discard candidate if any, else leftmost; `confirmed = false`, `hinted = false` → chop class `default` until a new discard hint confirms again.
 
+### 10.5 Protect next (save-hint before own play)
+
+Next’s chop is a physical critical; next has no convention-`playable`; tokens > 0; next’s matrix
+would discard (`fine`/`bad` + `confirmed`, or equivalent). We have our own marked playable.
+
+- Without §9.0 we would play and next would burn the critical.
+- With §9.0: if a convention hint **protects next** (e.g. marks a playable for them, or moves
+  their chop to trash) → hint now; own play waits.
+
+### 10.6 Protect next (token gift at 0 tokens)
+
+Next would discard a dangerous chop **only because** `hint_tokens == 0` (e.g. `default` chop
+and a `fine` channel, or `good` available). With a hypothetical `tokens == 1`, matrix/play would
+not burn the card.
+
+- Own chop is **`confirmed`** and discard is legal → discard chop (+1 token).
+- Play-5 refund only if §9.0.3 public-pile test says every playable is a 5 (otherwise we do
+  not know rank).
+- If instead next’s chop is `confirmed` and the channel is non-`good`, hypothetical still
+  discards danger → token gift is useless; protect returns no move.
+
 ---
 
 ## 11. Decisions locked (design log)
@@ -365,7 +495,7 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 |-------|----------|
 | Mode switch | Removed; always §5 partition |
 | Legacy kinds | Removed |
-| `N` | `N_play` = count of `unknown` playability |
+| `N` | `N_play` = count of play-unknowns; known 5s excluded while no pile at 4 (§3) |
 | Play codes | `1..N`; `0` never a play type |
 | Play encode | Newest physically playable unknown; decode marks newer unknowns unplayable |
 | Discard when | Only if no new playable to encode on that hand |
@@ -373,10 +503,16 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 | Discard candidates | First `m = 8 - N` slots of wrapped chain; each `D[i]` names candidate `[i]`, confirmed |
 | Type `0` | Candidate `[0]` = current chop |
 | Chop after chop leaves | Next newer discard candidate if any, else leftmost; unconfirmed / unhinted |
-| Encode discard choice | Best among **indicable** (first `m`) options only; prev sees next’s discard id as almost-critical |
+| Encode discard choice | Best among **indicable** (first `m`) options; single hand + public piles only |
 | Encode order | Next peer code, then previous |
-| Recompute | Fresh peer codes on each convention hint |
-| Dispatch | Play leftmost playable, then hint×chop matrix (§9) |
+| Recompute | Fresh peer codes from current shared belief on each convention hint |
+| Dispatch | Protect next (§9.0), then play leftmost playable, then hint×chop matrix (§9) |
+| Protect next | Next-seat only; save-hint (bad overridden) before play; “would discard” via confirmed∧¬next-likely-good or 0 tokens (§9.0.1); at 0 tokens gift via confirmed-chop discard only if hypothetical `tokens==1` stops the burn; play-5 only if public piles imply playable≡5 (§9.0.3); no default-chop gift; endgame TODO |
+| Hint quality known-5 | Number-5 newly marking `known_five` is `good` only with decode playable **or** useless/dup trash on either peer (§9.2); bare 5-mark stays `fine` |
+| Late deck | `cards_to_draw <= remaining achievable plays` (public) + teammate has identified playable: prefer any non-`bad` hint over discard (§9.3 guard); without a pending play, discard digs the deck |
+| Final round | Deck empty: only play-identifying `good` hints; unknown score attempt requires a spare life (>1) — a last-life misplay forfeits every remaining final turn |
+| Topping-up | Newly marking *C* playable while another visible seat already has *C* `playable` is `bad` (§9.2) |
+| Refuse impossible play | When about to play: if every remaining pile-next copy is visible in teammates, skip marked own `playable` (act-time only; do **not** mutate shared belief / channel). |
 | Mod-8 wire | Unchanged |
 | Bot name | `DynamicRecommendation3P` (leave `DynamicHandType3P` untouched) |
 
@@ -385,11 +521,12 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 ## 12. Implementation checklist
 
 - [x] New module/player `DynamicRecommendation3P` (do **not** modify `DynamicHandType3P`)
-- [x] Belief: playability + `chop` + `chop_confirmed` only
+- [x] Belief: playability + `known_five` + `chop` + `chop_confirmed`
 - [x] Encode/decode per §5–§6 (first `m` wrapped-chain candidates)
-- [x] Dispatch per §9
+- [x] Dispatch per §9 (play / hint×chop matrix)
+- [x] `_try_protect_next_player` per §9.0
 - [x] GUI: `/` unconfirmed chop, `X` confirmed chop (DHT keeps axe)
-- [ ] Tests + A/B vs `DynamicHandType3P` / `HintHandSubtype3P`
+- [ ] Tests + A/B vs `DynamicHandType3P` / `HintHandSubtype3P` (protect: watch `3.3` critical-lost)
 
 ---
 
@@ -397,8 +534,10 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 
 | Term | Meaning |
 |------|---------|
-| **N_play** | Count of `playability == unknown` |
-| **Discard candidate** | `playability != playable` |
+| **Protect next** | §9.0 emergency: save next from discarding a last-copy critical/playable before own play |
+| **N_play** | Count of play-unknowns (`unknown`, excluding known 5s while no pile at 4) |
+| **Known five** | Slot touched by a public number-5 hint (`known_five`) |
+| **Discard candidate** | `playability != playable` and not `known_five` |
 | **Chop** | Expected discard slot |
 | **Chop confirmed** | Chop set by a discard decode (each of `m` codes names one candidate) |
 | **Discard chain** | Chop, then newer, then wrap older; codes use first `m = 8−N` only |
@@ -407,4 +546,4 @@ Chop card gone → new chop = **next newer** discard candidate if any, else left
 
 ---
 
-*Spec version: 2026-07-11 (`DynamicRecommendation3P` implemented).*
+*Spec version: 2026-07-26 (`DynamicRecommendation3P`; §9.2 known-5 assist + topping-up bad; §3 known 5s outside `N_play` while no pile at 4; §9.3 late-deck guard + final-round life gate; refuse impossible play without mutating belief).*

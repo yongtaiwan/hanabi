@@ -25,6 +25,8 @@ from .moves import (
     NumberHint,
     CardMove,
     Hint,
+    FinishedPlay,
+    FinishedDiscard,
     ensure_concrete_move,
 )
 from .enums import Color, Number
@@ -151,10 +153,14 @@ class BasePlayer(Observer, Player):
         """
         m = ensure_concrete_move(move)
         match m:
-            case Play():
+            case FinishedPlay():
                 self.observe_play_move(player_index, m, observer_view)
-            case Discard():
+            case FinishedDiscard():
                 self.observe_discard_move(player_index, m, observer_view)
+            case Play():
+                assert False, "engine must notify FinishedPlay (not bare Play) to observers"
+            case Discard():
+                assert False, "engine must notify FinishedDiscard (not bare Discard) to observers"
             case ColorHint():
                 self.observe_color_hint_move(player_index, m, observer_view)
             case NumberHint():
@@ -162,14 +168,12 @@ class BasePlayer(Observer, Player):
             case _:
                 assert_never(m)
 
-    # TODO: Pass observer-facing FinishedPlay/FinishedDiscard from Game._notify_players
-    # (played_card, successful on plays). Rename CardMove.card -> card_index first; intent
-    # moves stay Play/Discard. Lets bots drop discard-pile diffing for safe invalidation.
-
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
+    def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         """Hook: a player played a card. Default does nothing."""
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         """Hook: a player discarded a card. Default does nothing."""
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
@@ -205,12 +209,14 @@ class HintTrackingPlayer(BasePlayer):
         super().__init__(player_index)
         self._hints: Dict[int, Dict[str, Optional[Union[Color, Number]]]] = {}
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
+    def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
         if player_index == self._player_index:
             self._update_hints_from_card_move(move)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         if player_index == self._player_index:
             self._update_hints_from_card_move(move)

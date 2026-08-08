@@ -199,7 +199,55 @@ class TestExperimentOutcome(unittest.TestCase):
             row["games_by_score"],
         )
 
+    def test_no_points_possible_marks_last_copy_playable_loss(self) -> None:
+        """Discarding a unique PLAYABLE (e.g. only 5) counts as irreversible loss for auto-end."""
+        path = self._path(
+            "game_records",
+            "exp_ai_comparison",
+            "20260725_202300",
+            "3p",
+            "games",
+            "all-games",
+            "run_010_ai_DynamicHandType3P.yaml",
+        )
+        s = eo.replay_summary(eo.load_history_file(path))
+        self.assertEqual("no_points_possible", s.end_reason)
+        self.assertTrue(s.lost_critical)
+        self.assertFalse(s.lost_all_lives)
+        self.assertEqual(24, s.score)
+
+    def test_discarding_last_useless_spare_is_not_critical_lost(self) -> None:
+        """Game 12 (protect batch): deck tempo at 22; only discarded dead-rank spares, not criticals."""
+        path = self._path(
+            "game_records",
+            "exp_ai_comparison",
+            "20260725_231338",
+            "3p",
+            "ai",
+            "DynamicRecommendation3P",
+            "run_012_ai_DynamicRecommendation3P.yaml",
+        )
+        s = eo.replay_summary(eo.load_history_file(path))
+        self.assertEqual(22, s.score)
+        self.assertEqual("deck_exhausted", s.end_reason)
+        self.assertFalse(s.lost_critical)
+        self.assertFalse(s.lost_all_lives)
+        cheater = self._path(
+            "game_records",
+            "exp_ai_comparison",
+            "20260725_231338",
+            "3p",
+            "ai",
+            "CommonSenseCheater",
+            "run_012_ai_CommonSenseCheater.yaml",
+        )
+        self.assertEqual(
+            "3.4",
+            eo.classify_pair_from_history_files(path, cheater),
+        )
+
     def test_mismatched_deck_asserts(self) -> None:
+
         """Paired classification requires identical deck and settings."""
         base = self._path(
             "game_records",

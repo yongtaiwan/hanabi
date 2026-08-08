@@ -371,5 +371,40 @@ class TestGame(unittest.TestCase):
         self.assertIsNone(hints_after[3].get("color"))
 
 
+class TestAutoEndWhenNoPointsPossible(unittest.TestCase):
+    def test_standard_settings_leave_auto_end_off(self) -> None:
+        """Human / default settings keep official play-out when suits are blocked."""
+        self.assertFalse(create_standard_game_settings(3).auto_end_when_no_points_possible)
+
+    def test_ai_simulation_settings_enable_auto_end(self) -> None:
+        from hanabi.core.game import create_ai_simulation_game_settings
+
+        self.assertTrue(create_ai_simulation_game_settings(3).auto_end_when_no_points_possible)
+
+    def test_game_finishes_when_all_remaining_suits_are_blocked(self) -> None:
+        """With auto-end on, blocked unfinished colors end the game without deck play-out."""
+        from hanabi.core.card import Suit
+        from hanabi.core.game import create_ai_simulation_game_settings
+
+        settings = create_ai_simulation_game_settings(3)
+        players = [HumanPlayer(i) for i in range(3)]
+        game = Game.create(PlayerTeam(players), settings)
+        state = game.state
+        # W/G/B complete; R and Y stuck needing a 5 that is fully discarded.
+        state.common_view._cards_played = {
+            Color.WHITE: Number.FIVE,
+            Color.GREEN: Number.FIVE,
+            Color.BLUE: Number.FIVE,
+            Color.RED: Number.FOUR,
+            Color.YELLOW: Number.FOUR,
+        }
+        state.common_view._cards_discarded = {
+            Color.RED: Suit({Number.FIVE: 1}),
+            Color.YELLOW: Suit({Number.FIVE: 1}),
+        }
+        self.assertTrue(state._is_no_more_points_possible())
+        self.assertTrue(game.is_finished)
+
+
 if __name__ == "__main__":
     unittest.main()

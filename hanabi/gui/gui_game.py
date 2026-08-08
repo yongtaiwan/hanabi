@@ -45,6 +45,54 @@ def _replay_moves_equivalent(a: Move, b: Move) -> bool:
     return False
 
 
+class _HoverTooltip:
+    """Simple hover tooltip for a Tk widget (full path, etc.)."""
+
+    def __init__(self, widget: tk.Widget, text: str = ""):
+        self._widget = widget
+        self._text = text
+        self._tip: Optional[tk.Toplevel] = None
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+
+    def set_text(self, text: str) -> None:
+        self._text = text
+        self._hide()
+
+    def _show(self, _event=None) -> None:
+        if self._tip is not None or not self._text:
+            return
+        tip = tk.Toplevel(self._widget)
+        tip.wm_overrideredirect(True)
+        try:
+            tip.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        label = tk.Label(
+            tip,
+            text=self._text,
+            justify=tk.LEFT,
+            background="#FFFFE0",
+            foreground="#000000",
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("Arial", 10),
+            padx=6,
+            pady=3,
+        )
+        label.pack()
+        self._widget.update_idletasks()
+        x = self._widget.winfo_rootx()
+        y = self._widget.winfo_rooty() + self._widget.winfo_height() + 4
+        tip.wm_geometry(f"+{x}+{y}")
+        self._tip = tip
+
+    def _hide(self, _event=None) -> None:
+        if self._tip is not None:
+            self._tip.destroy()
+            self._tip = None
+
+
 class GUIGame:
     """Main GUI game controller."""
 
@@ -63,6 +111,7 @@ class GUIGame:
         self._history: Optional[GameHistory] = None
         self._is_replay_mode: bool = False
         self._replay_history: Optional[dict] = None
+        self._replay_path: Optional[str] = None
         self._replay_move_index: int = 0
         # Debug-replay opt-in: when True, _update_replay_display also re-runs each bot's
         # play() to surface move.why() in the event log. Saved bots are always resurrected
@@ -339,6 +388,7 @@ class GUIGame:
         """
         self._is_replay_mode = False
         self._replay_history = None
+        self._replay_path = None
         self._replay_move_index = 0
         self._game_ended = False  # Reset game ended flag
         self._one_player_mode = one_player_mode  # Store for reference
@@ -793,6 +843,7 @@ class GUIGame:
         self._history = None
         self._is_replay_mode = False
         self._replay_history = None
+        self._replay_path = None
         self._replay_move_index = 0
         self._replay_debug_mode = False
 
@@ -807,7 +858,11 @@ class GUIGame:
                 self._display._score_label.config(text="Score: 0/25")
             # Hide last turn warning
             if hasattr(self._display, "_last_turn_label"):
-                self._display._last_turn_label.pack_forget()
+                self._display._last_turn_label.config(text="", bg="#34495E", fg="#34495E", padx=0, pady=0)
+            if hasattr(self._display, "_replay_file_label"):
+                self._display._replay_file_label.config(text="")
+            if getattr(self, "_replay_file_tooltip", None) is not None:
+                self._replay_file_tooltip.set_text("")
             # Clear event history
             if hasattr(self._display, "_history_text"):
                 self._display._history_text.config(state=tk.NORMAL)
@@ -822,20 +877,10 @@ class GUIGame:
                 self._display._replay_player_names = None
 
         # Remove replay controls if any
-        status_frame = None
-        for widget in self._display.root.winfo_children():
-            if isinstance(widget, tk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
-                        status_frame = child
-                        break
-                if status_frame:
-                    break
-
-        if status_frame:
-            for widget in status_frame.winfo_children():
-                if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
-                    widget.destroy()
+        slot = getattr(self._display, "_replay_controls_slot", None)
+        if slot is not None:
+            for widget in slot.winfo_children():
+                widget.destroy()
 
         # Clear replay button references to prevent stale references
         if hasattr(self, "_replay_first_btn"):
@@ -1362,6 +1407,7 @@ class GUIGame:
             raise ValueError("Invalid replay file: missing deck")
 
         self._replay_history = history_data
+        self._replay_path = os.path.abspath(filename)
         self._replay_move_index = 0
         self._is_replay_mode = True
 
@@ -1374,8 +1420,6 @@ class GUIGame:
 
         # Show game display elements (same as _start_new_game)
         if self._display:
-            self._display._status_label.pack(side=tk.LEFT, padx=10, pady=5)
-            self._display._score_label.pack(side=tk.RIGHT, padx=10, pady=5)
             if hasattr(self._display, "_history_frame"):
                 self._display._history_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
@@ -1393,6 +1437,7 @@ class GUIGame:
         """Return to home screen from replay mode."""
         # Clear replay state
         self._replay_history = None
+        self._replay_path = None
         self._replay_move_index = 0
         self._is_replay_mode = False
         self._replay_debug_mode = False
@@ -1401,6 +1446,11 @@ class GUIGame:
         self._game = None
         self._display.set_game(None)
         self._display.set_show_all_cards(False)
+
+        if hasattr(self._display, "_replay_file_label"):
+            self._display._replay_file_label.config(text="")
+        if getattr(self, "_replay_file_tooltip", None) is not None:
+            self._replay_file_tooltip.set_text("")
 
         # Disable home button
         if hasattr(self._display, "_home_btn"):
@@ -1411,20 +1461,10 @@ class GUIGame:
             self._display.canvas.delete("all")
 
         # Remove replay controls
-        status_frame = None
-        for widget in self._display.root.winfo_children():
-            if isinstance(widget, tk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
-                        status_frame = child
-                        break
-                if status_frame:
-                    break
-
-        if status_frame:
-            for widget in status_frame.winfo_children():
-                if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
-                    widget.destroy()
+        slot = getattr(self._display, "_replay_controls_slot", None)
+        if slot is not None:
+            for widget in slot.winfo_children():
+                widget.destroy()
 
         # Show home screen - this will create/repaint the control frame
         self._show_start_screen()
@@ -1446,37 +1486,21 @@ class GUIGame:
         self._update_replay_display()
 
     def _setup_replay_controls(self):
-        """Set up replay control buttons."""
-        # Find status frame to add replay controls
-        status_frame = None
-        for widget in self._display.root.winfo_children():
-            if isinstance(widget, tk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, tk.Frame) and "#34495E" == child.cget("bg"):
-                        status_frame = child
-                        break
-                if status_frame:
-                    break
+        """Set up replay control buttons in the fixed status-bar slot (left of score)."""
+        import os
 
-        if not status_frame:
+        slot = getattr(self._display, "_replay_controls_slot", None)
+        if slot is None:
             return
 
-        # Remove existing replay controls if any
-        for widget in status_frame.winfo_children():
-            if isinstance(widget, tk.Frame) and hasattr(widget, "_replay_controls"):
-                widget.destroy()
+        # Clear previous transport buttons in the dedicated slot.
+        for widget in slot.winfo_children():
+            widget.destroy()
 
-        # Add replay controls to status frame
-        replay_frame = tk.Frame(status_frame, bg="#34495E")
-        replay_frame._replay_controls = True  # Mark as replay controls
-        replay_frame.pack(side=tk.LEFT, padx=10)
+        replay_frame = tk.Frame(slot, bg="#34495E")
+        replay_frame.pack(side=tk.RIGHT)
 
-        # Note: Home button is now always visible in status bar, no need to add it here
-        # Add separator before replay controls
-        separator = tk.Frame(replay_frame, width=2, bg="#5A6B7D")
-        separator.pack(side=tk.LEFT, padx=5, fill=tk.Y)
-
-        # Store button references for enabling/disabling
+        # Visual order L→R: First, Prev, Next, Last, Debug. Fixed widths avoid layout shift.
         self._replay_first_btn = tk.Button(
             replay_frame,
             text="⏮ First",
@@ -1485,6 +1509,7 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0,
+            width=7,
         )
         self._replay_first_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1496,6 +1521,7 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0,
+            width=7,
         )
         self._replay_prev_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1507,6 +1533,7 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0,
+            width=7,
         )
         self._replay_next_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1518,24 +1545,36 @@ class GUIGame:
             fg="black",
             font=("Arial", 9),
             highlightthickness=0,
+            width=7,
         )
         self._replay_last_btn.pack(side=tk.LEFT, padx=2)
 
-        # Debug replay: toggle re-running the original bots so each move's HasWhy
-        # rationale ("why") shows up as a dim italic line under the move.
         self._replay_debug_btn = tk.Button(
             replay_frame,
-            text="🐞 Debug Replay",
+            text="🐞 Debug",
             command=self._toggle_replay_debug_mode,
             bg="#95A5A6",
             fg="black",
             font=("Arial", 9),
             highlightthickness=0,
+            width=10,
         )
         self._replay_debug_btn.pack(side=tk.LEFT, padx=(8, 2))
         self._refresh_replay_debug_btn_style()
 
-        # Update button states
+        # Filename on the left status strip (column 2); hover shows full path.
+        file_label = getattr(self._display, "_replay_file_label", None)
+        if file_label is not None:
+            if self._replay_path:
+                file_label.config(text=os.path.basename(self._replay_path))
+            else:
+                file_label.config(text="")
+            tip = getattr(self, "_replay_file_tooltip", None)
+            if tip is None:
+                self._replay_file_tooltip = _HoverTooltip(file_label, self._replay_path or "")
+            else:
+                tip.set_text(self._replay_path or "")
+
         self._update_replay_button_states()
 
     def _update_replay_button_states(self):
@@ -1626,14 +1665,14 @@ class GUIGame:
         self._update_replay_button_states()
 
     def _refresh_replay_debug_btn_style(self):
-        """Recolor the debug button to reflect on/off state."""
+        """Recolor the debug button to reflect on/off state (fixed width — no layout shift)."""
         if not getattr(self, "_replay_debug_btn", None):
             return
         try:
             if self._replay_debug_mode:
-                self._replay_debug_btn.config(bg="#E67E22", fg="white", text="🐞 Debug Replay (on)")
+                self._replay_debug_btn.config(bg="#E67E22", fg="white", text="🐞 Debug ON")
             else:
-                self._replay_debug_btn.config(bg="#95A5A6", fg="black", text="🐞 Debug Replay")
+                self._replay_debug_btn.config(bg="#95A5A6", fg="black", text="🐞 Debug")
         except (tk.TclError, AttributeError):
             self._replay_debug_btn = None
 
@@ -1672,9 +1711,24 @@ class GUIGame:
         if not self._replay_history:
             return
 
-        # Clear event history before reconstructing
+        # Cancel leftover animations so display_game_state always applies (banner, hints, board).
+        if hasattr(self._display, "_cancel_all_animations"):
+            self._display._cancel_all_animations()
+        self._display._pending_game_state = None
+        self._display._pending_player_index = None
+        self._display._frozen_game_state = None
+        self._display._frozen_state = None
+        # Clear banner immediately; display_game_state will restore it if the deck is empty.
+        if hasattr(self._display, "_last_turn_label"):
+            self._display._last_turn_label.config(text="", bg="#34495E", fg="#34495E", padx=0, pady=0)
+
+        # Clear event history and hint badges before reconstructing.
+        # Color/number are written independently into shared slot dicts; without a reset,
+        # seeking leaves stale fields so badges under cards go out of sync.
         if hasattr(self._display, "_event_history"):
             self._display._event_history.clear()
+        if hasattr(self._display, "_hints"):
+            self._display._hints.clear()
         if hasattr(self._display, "_history_text"):
             self._display._history_text.config(state=tk.NORMAL)
             self._display._history_text.delete("1.0", tk.END)
@@ -1777,14 +1831,10 @@ class GUIGame:
                     recomputed_diverges = not _replay_moves_equivalent(recomputed, move)
 
             self._game._process_move(current_player, move)
-            # Note: _process_move calls _notify_players internally
+            # Note: _process_move calls _notify_players and on_move (hint update) internally
             self._game._advance_turn()
 
             new_state = self._game.state
-
-            # Update hint tracking (callback may have done this, but ensure it's done)
-            # Pass old_state and new_state to detect if a card was drawn
-            self._display.update_hints_from_move(current_player, move, old_state, new_state)
 
             # Add move to event history
             move_message = self._format_move_message(current_player, move, old_state, new_state)
@@ -1818,6 +1868,9 @@ class GUIGame:
         # In replay mode, we can show any player, but for consistency use player 0 in single player mode
         display_player = 0 if getattr(self, "_one_player_mode", False) else self._game.current_player
         self._display.display_game_state(self._game, display_player)
+        # Banner is also updated inside display_game_state; call again after set_game so seek-back
+        # cannot leave a stale LAST TURN label if the redraw early-returned.
+        self._display._update_last_turn_warning()
 
         # Update status label
         if hasattr(self._display, "_status_label"):

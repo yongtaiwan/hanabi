@@ -54,7 +54,8 @@ _CHOP_REC_CODES = frozenset({0, 6})
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import Move, Play, Discard, ColorHint, NumberHint, HintMove, move_with_why
+from hanabi.core.moves import FinishedPlay, FinishedDiscard, Move, Play, Discard, ColorHint, NumberHint, HintMove, move_with_why
+
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
 
@@ -104,12 +105,12 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         )
         super().set_game_settings(game_settings)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
+    def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
         self._maybe_consume_peer_recommendation(player_index, move)
         self._plays_since_hint += 1
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
+    def observe_discard_move(self, player_index: int, move: FinishedDiscard, observer_view: PlayerView) -> None:
         super().observe_discard_move(player_index, move, observer_view)
         self._maybe_consume_peer_recommendation(player_index, move)
 

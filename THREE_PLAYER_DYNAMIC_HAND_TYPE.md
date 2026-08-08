@@ -427,6 +427,7 @@ If the bot (or human) gives a **non-convention** literal hint (e.g. early-game a
 
 - **No** convention belief update.
 - **No** mod-8 decode for that hint.
+- Observers who see the target reject non-canonical touches; the **hint target** uses the same §8.4 gate from the touch set (full-hand abandon; OLD/NEW synthetic rebuild; MID treated as convention because bots never emit MID-shaped literals).
 
 ---
 

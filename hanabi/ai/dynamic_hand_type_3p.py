@@ -30,14 +30,23 @@ from hanabi.ai.dht_belief import (
     play_reopens_playability,
     play_type_for_slot,
     reopen_unplayable_after_play,
-    set_playability,
     slot_belief_from_legacy_kind,
     slot_for_play_type,
 )
-from hanabi.core.card import Card, Suit
+from hanabi.core.card import Card
 from hanabi.core.enums import CardKind, Color, Number
-from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import ColorHint, Discard, HintMove, Move, NumberHint, Play, move_with_why
+from hanabi.core.game import CommonView, GameSettings, Hand, PlayerView
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.player import BasePlayer
 
 
@@ -56,12 +65,9 @@ class DynamicHandType3P(BasePlayer):
     Standard 3-player settings from :func:`~hanabi.core.game.create_standard_game_settings`.
     """
 
-    def __init__(self, player_index: int, *, safe_double_play: bool = True) -> None:
+    def __init__(self, player_index: int) -> None:
         super().__init__(player_index)
-        self._safe_double_play = safe_double_play
         self._slot_belief: List[List[SlotBelief]] = []
-        self._discard_pile_snapshot: Dict[Color, Dict[Number, int]] = {}
-        self._cards_played_snapshot: Dict[Color, Number] = {}
         self._last_decision_summary: Optional[str] = None
 
     @classmethod
@@ -78,8 +84,6 @@ class DynamicHandType3P(BasePlayer):
         hand_size = self.game_settings.max_cards_in_hand
         num_players = self.game_settings.num_players
         self._slot_belief = [[fresh_slot_belief() for _ in range(hand_size)] for _ in range(num_players)]
-        self._discard_pile_snapshot = {}
-        self._cards_played_snapshot = {}
 
     def _hand_size_for_player(self, player_index: int, observer_view: PlayerView) -> int:
         if player_index == self._player_index:
@@ -87,41 +91,32 @@ class DynamicHandType3P(BasePlayer):
         assert player_index in observer_view.teammates
         return len(observer_view.teammates[player_index].cards)
 
-    def observe_play_move(self, player_index: int, move: Play, observer_view: PlayerView) -> None:
-        # Game updates ``common_view`` before ``observe``; use the prior-turn snapshot as "before".
-        before_discards = self._discard_pile_snapshot
-        cards_played_before = self._cards_played_snapshot
+    def observe_play_move(
+        self, player_index: int, move: FinishedPlay, observer_view: PlayerView
+    ) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
-            self.common_view,
-            self._slot_belief,
-            self.game_settings,
-        )
-        played_card = _card_from_successful_play(cards_played_before, self.common_view.cards_played)
-        if (
-            played_card is not None
-            and play_reopens_playability(
-                played_card, cards_played_before, self.common_view, self.game_settings
+        if not move.successful:
+            _maybe_invalidate_safe_for_moved_card(
+                move.moved_card,
+                self.common_view,
+                self._slot_belief,
+                self.game_settings,
             )
-        ):
+        elif play_reopens_playability(move.moved_card, self.common_view, self.game_settings):
             reopen_unplayable_after_play(self._slot_belief)
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
-    def observe_discard_move(self, player_index: int, move: Discard, observer_view: PlayerView) -> None:
-        before_discards = self._discard_pile_snapshot
+    def observe_discard_move(
+        self, player_index: int, move: FinishedDiscard, observer_view: PlayerView
+    ) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        _maybe_invalidate_safe_after_discard_pile_change(
-            before_discards,
+        _maybe_invalidate_safe_for_moved_card(
+            move.moved_card,
             self.common_view,
             self._slot_belief,
             self.game_settings,
         )
         self._shift_belief_after_removal(player_index, move.card, observer_view)
-        self._discard_pile_snapshot = _flatten_discard_counts(self.common_view.cards_discarded)
-        self._cards_played_snapshot = dict(self.common_view.cards_played)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -323,133 +318,20 @@ class DynamicHandType3P(BasePlayer):
 _MIDDLE_DISCARD_RANKS = frozenset({Number.TWO, Number.THREE, Number.FOUR})
 
 
-def _card_from_successful_play(
-    before_played: Dict[Color, Number],
-    after_played: Dict[Color, Number],
-) -> Optional[Card]:
-    """Return the card whose color pile advanced by one rank, or ``None`` if not a successful play."""
-    found: Optional[Card] = None
-    for color in set(before_played) | set(after_played):
-        before_top = before_played.get(color)
-        after_top = after_played.get(color)
-        if before_top == after_top:
-            continue
-        assert after_top is not None and found is None, (
-            f"expected exactly one pile advance: before={before_played!r} after={after_played!r}"
-        )
-        found = Card(color, after_top)
-    return found
-
-
-def _copies_of_card_remain(card: Card, common_view: CommonView, settings: GameSettings) -> bool:
-    """True when at least one copy of ``card`` is not yet played or discarded."""
-    suit = settings.cards.get(card.color)
-    if suit is None:
-        return False
-    total = suit.cards.get(card.number, 0)
-    discarded = 0
-    disc = common_view.cards_discarded.get(card.color)
-    if disc is not None:
-        discarded = disc.cards.get(card.number, 0)
-    played_top = common_view.cards_played.get(card.color)
-    on_pile = 1 if played_top is not None and played_top.value >= card.number.value else 0
-    return total - discarded - on_pile > 0
-
-
-def _invalidate_playable_matching_card_on_other_players(
-    matrix: List[List[SlotBelief]],
-    mover_index: int,
-    hand_cards: Sequence[List[Card]],
-    played_card: Card,
-) -> None:
-    for seat, cards in enumerate(hand_cards):
-        if seat == mover_index:
-            continue
-        for slot, card in enumerate(cards):
-            if played_card != card:
-                continue
-            if Playability.PLAYABLE == matrix[seat][slot].playability:
-                set_playability(matrix[seat][slot], Playability.UNKNOWN)
-
-
-def _copy_belief_matrix(matrix: List[List[SlotBelief]]) -> List[List[SlotBelief]]:
-    return [[SlotBelief(b.playability, b.legacy_kind, b.rec_state) for b in row] for row in matrix]
-
-
-def align_convention_beliefs_after_move(
-    players: Sequence[DynamicHandType3P],
-    mover_index: int,
-    move: Move,
-    *,
-    cards_played_before: Optional[Dict[Color, Number]] = None,
-    hand_cards: Optional[Sequence[List[Card]]] = None,
-) -> None:
-    """After a public move, propagate hint beliefs and optionally clear duplicate playables."""
-    if isinstance(move, (ColorHint, NumberHint)):
-        propagate_convention_belief_from_hinter(players, mover_index)
-        if hand_cards is not None:
-            matrix = players[mover_index]._slot_belief
-            for seat, cards in enumerate(hand_cards):
-                _collapse_duplicate_identified_playables_in_row(cards, matrix, seat)
-            canonical = _copy_belief_matrix(matrix)
-            for player in players:
-                player._slot_belief = _copy_belief_matrix(canonical)
-
-    if (
-        isinstance(move, Play)
-        and hand_cards is not None
-        and cards_played_before is not None
-        and players[0]._safe_double_play
-    ):
-        played_card = _card_from_successful_play(cards_played_before, players[0].common_view.cards_played)
-        if (
-            played_card is not None
-            and 1 == players[0].common_view.live_tokens
-            and _copies_of_card_remain(played_card, players[0].common_view, players[0].game_settings)
-        ):
-            matrix = players[0]._slot_belief
-            _invalidate_playable_matching_card_on_other_players(
-                matrix,
-                mover_index,
-                hand_cards,
-                played_card,
-            )
-            canonical = _copy_belief_matrix(matrix)
-            for player in players:
-                player._slot_belief = _copy_belief_matrix(canonical)
-
-    assert_convention_beliefs_in_sync(players)
-
-
-def assert_convention_beliefs_in_sync(players: Sequence[DynamicHandType3P]) -> None:
-    if not players:
-        return
-    reference = players[0]._slot_belief
-    for seat, player in enumerate(players[1:], start=1):
-        assert player._slot_belief == reference, (
-            f"convention belief out of sync: P1 vs P{seat + 1} "
-            f"P1={reference!r} P{seat + 1}={player._slot_belief!r}"
-        )
-
-
-def propagate_convention_belief_from_hinter(
-    players: Sequence[DynamicHandType3P],
-    hinter_index: int,
-) -> None:
-    canonical = players[hinter_index]._slot_belief
-    for player in players:
-        player._slot_belief = _copy_belief_matrix(canonical)
-
-
 def _peer_code_for_hand(
     hand: List[Card],
-    belief_row: Sequence[SlotBelief],
+    belief: List[SlotBelief],
     common_view: CommonView,
     settings: GameSettings,
 ) -> int:
-    if HandEncodingMode.LEGACY == hand_encoding_mode(belief_row):
-        return _encode_hand_type(hand, len(hand), common_view, settings, belief_row)
-    return _encode_recommendation_peer_code(hand, belief_row, common_view, settings)
+    """Peer code from one visible hand + that seat's shared public belief + piles.
+
+    Uses legacy hand-type encoding or recommendation encoding per that hand's mode (§5).
+    """
+    assert len(hand) == len(belief), f"hand size {len(hand)} != belief slots {len(belief)}"
+    if HandEncodingMode.RECOMMENDATION == hand_encoding_mode(belief):
+        return _encode_recommendation_peer_code(hand, belief, common_view, settings)
+    return _encode_hand_type(hand, len(hand), common_view, settings, belief)
 
 
 def _apply_convention_hint_decodes(
@@ -461,41 +343,58 @@ def _apply_convention_hint_decodes(
     settings: GameSettings,
     slot_belief: List[List[SlotBelief]],
 ) -> None:
-    # Hinter is canonical: only the hinter decodes (sees both hands). Other seats sync via
-    # ``propagate_convention_belief_from_hinter``. Literal fallbacks (§8.4) are skipped when the
-    # physical hint is not the canonical build for its inferred type.
-    if hinter_index != observer_index:
-        return
+    """Update belief from the public channel using shared belief + visible cards.
 
+    Every observer applies the public decode to **both** non-hinter rows and never to the
+    hinter's row. Peer codes are snapshotted before either decode mutates belief.
+    """
     hint_target = move.teammate
     other_non_hinter = _third_player_index(hinter_index, hint_target)
-    decoders = (hint_target, other_non_hinter)
 
-    assert hint_target in observer_view.teammates
-    target_size = len(observer_view.teammates[hint_target].cards)
-    encoded_type = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
-    canonical = _build_hint_for_encoded(hinter_index, observer_view, encoded_type)
-    if canonical is None or not _hints_match(canonical, move):
+    if hint_target in observer_view.teammates:
+        target_size = len(observer_view.teammates[hint_target].cards)
+    else:
+        target_size = observer_view.own_hand_size
+
+    # Full-hand touch = abandon convention; belief unchanged for every seat.
+    if _hint_touches_entire_hand(move.cards, target_size):
         return
 
-    peer_codes: Dict[int, int] = {}
-    for decoder in decoders:
-        peer_index = other_non_hinter if decoder == hint_target else hint_target
-        if peer_index in peer_codes:
+    encoded_type = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
+
+    if hint_target in observer_view.teammates:
+        canonical = _build_hint_for_encoded(hinter_index, observer_view, encoded_type)
+        if canonical is None or not _hints_match(canonical, move):
+            return
+    elif not _hint_target_accepts_as_convention(
+        hinter_index, move, target_size, encoded_type
+    ):
+        return
+
+    peer_code_by_seat: Dict[int, int] = {}
+    for seat in (hint_target, other_non_hinter):
+        if seat not in observer_view.teammates:
             continue
-        assert peer_index in observer_view.teammates
-        peer_hand = observer_view.teammates[peer_index].cards
-        peer_codes[peer_index] = _peer_code_for_hand(
-            peer_hand,
-            slot_belief[peer_index],
+        peer_code_by_seat[seat] = _peer_code_for_hand(
+            observer_view.teammates[seat].cards,
+            slot_belief[seat],
             common_view,
             settings,
         )
 
-    for decoder in decoders:
+    decoded_by_seat: Dict[int, int] = {}
+    for decoder in (hint_target, other_non_hinter):
         peer_index = other_non_hinter if decoder == hint_target else hint_target
-        decoded_type = (encoded_type - peer_codes[peer_index]) % 8
-        apply_decoded_value(slot_belief[decoder], decoded_type)
+        if peer_index in peer_code_by_seat:
+            decoded_by_seat[decoder] = (encoded_type - peer_code_by_seat[peer_index]) % 8
+        else:
+            assert decoder in peer_code_by_seat, (
+                f"P{observer_index + 1} must see decoder P{decoder + 1} to apply public decode"
+            )
+            decoded_by_seat[decoder] = peer_code_by_seat[decoder]
+
+    for decoder, decoded in decoded_by_seat.items():
+        apply_decoded_value(slot_belief[decoder], decoded)
 
 
 def _hints_match(a: HintMove, b: HintMove) -> bool:
@@ -506,40 +405,13 @@ def _hints_match(a: HintMove, b: HintMove) -> bool:
     return False
 
 
-def _flatten_discard_counts(cards_discarded: Dict[Color, Suit]) -> Dict[Color, Dict[Number, int]]:
-    return {color: suit.cards.copy() for color, suit in cards_discarded.items()}
-
-
-def _card_from_discard_pile_diff(
-    before: Dict[Color, Dict[Number, int]],
-    after: Dict[Color, Dict[Number, int]],
-) -> Card:
-    found: Optional[Card] = None
-    for color in set(before) | set(after):
-        before_counts = before.get(color, {})
-        after_counts = after.get(color, {})
-        for number in set(before_counts) | set(after_counts):
-            delta = after_counts.get(number, 0) - before_counts.get(number, 0)
-            if 0 == delta:
-                continue
-            assert 1 == delta and found is None, (
-                f"expected exactly one new discard, before={before!r} after={after!r}"
-            )
-            found = Card(color, number)
-    assert found is not None, f"no discard-pile change: before={before!r} after={after!r}"
-    return found
-
-
-def _maybe_invalidate_safe_after_discard_pile_change(
-    before_discards: Dict[Color, Dict[Number, int]],
+def _maybe_invalidate_safe_for_moved_card(
+    card: Card,
     common_view: CommonView,
     slot_belief: List[List[SlotBelief]],
     settings: GameSettings,
 ) -> None:
-    after_discards = _flatten_discard_counts(common_view.cards_discarded)
-    if before_discards == after_discards:
-        return
-    card = _card_from_discard_pile_diff(before_discards, after_discards)
+    """Clear legacy safe belief when ``card`` entering discard invalidates mid-rank safes."""
     if _pile_add_invalidates_safe_belief(card, common_view, settings):
         clear_legacy_safe(slot_belief)
 
@@ -719,39 +591,41 @@ def _pick_discard_slot_for_encoding(
         kind = physical_kind(slot)
         return CardKind.PLAYABLE == kind or CardKind.CRITICAL == kind
 
+    useless: List[int] = []
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if LegacyDiscardKind.USELESS == row[slot].legacy_kind:
-            return slot
+            useless.append(slot)
+            continue
         if (
             LegacyDiscardKind.UNKNOWN == row[slot].legacy_kind
             and CardKind.USELESS == physical_kind(slot)
         ):
-            return slot
+            useless.append(slot)
+    if useless:
+        # Oldest first so a later hint can point at the next-oldest trash.
+        return min(useless)
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if RecState.RECOMMENDED == row[slot].rec_state:
             return slot
-    dispensable: List[Tuple[int, int]] = []
+    dispensable: List[int] = []
     for slot in chain:
         if is_risky_discard(slot):
             continue
         if LegacyDiscardKind.SAFE == row[slot].legacy_kind:
-            dispensable.append((slot, hand[slot].number.value))
+            dispensable.append(slot)
             continue
         if (
             LegacyDiscardKind.UNKNOWN == row[slot].legacy_kind
             and CardKind.DISPENSABLE == physical_kind(slot)
         ):
-            dispensable.append((slot, hand[slot].number.value))
+            dispensable.append(slot)
     if dispensable:
-        # Same tie-break as RecommendationPlayer: highest rank first, then oldest slot.
-        # TODO: Prefer a dispensable whose card identity also appears in the other visible
-        # teammate hand (duplicate is safer to pitch than a unique copy).
-        dispensable.sort(key=lambda item: (-item[1], item[0]))
-        return dispensable[0][0]
+        # Newest among safe discards (sticky chop can pivot right).
+        return max(dispensable)
     for slot in chain:
         if not is_risky_discard(slot):
             return slot
@@ -846,6 +720,9 @@ def _build_hint_for_encoded(
         is_number = enc_type in (4, 5)
         hint_move = _build_shape_hint(target, hand, HintSlotShape.NEW, is_number)
         assert hint_move is not None, f"build_shape_hint failed for enc_type={enc_type} shape=NEW"
+        # Full-hand NEW (e.g. five 1s) is the abandon-convention signal, not a channel.
+        if _hint_touches_entire_hand(hint_move.cards, len(hand)):
+            return None
         _assert_encoded_hint_round_trip(hinter, enc_type, hint_move, hand)
         return hint_move
     is_number = enc_type in (0, 1)
@@ -862,8 +739,98 @@ def _build_hint_for_encoded(
     return None
 
 
+def _hint_touches_entire_hand(card_indices: List[int], hand_size: int) -> bool:
+    """True when every slot is touched — abandon-convention signal, never a mod-8 channel."""
+    return 0 < hand_size and len(set(card_indices)) == hand_size
+
+
+def _synthetic_view_for_hint_target_canonical(
+    hinter: int,
+    move: ColorHint | NumberHint,
+    hand_size: int,
+) -> PlayerView:
+    """Rebuild OLD/NEW attribute layout from the touch set for hint-target §8.4 checks."""
+    target = move.teammate
+    touched = set(move.cards)
+    if isinstance(move, NumberHint):
+        fillers = [n for n in Number if n != move.number]
+        fake: List[Card] = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(Color.RED, move.number))
+            else:
+                fake.append(Card(Color.RED, fillers[fi % len(fillers)]))
+                fi += 1
+    else:
+        assert isinstance(move, ColorHint)
+        fillers = [c for c in Color if c != move.color and Color.MULTI != c]
+        fake = []
+        fi = 0
+        for i in range(hand_size):
+            if i in touched:
+                fake.append(Card(move.color, Number.ONE))
+            else:
+                fake.append(Card(fillers[fi % len(fillers)], Number.ONE))
+                fi += 1
+    return PlayerView(teammates={target: Hand(fake)}, own_hand_size=hand_size)
+
+
+def _hint_target_accepts_as_convention(
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    target_size: int,
+    encoded_type: int,
+) -> bool:
+    """Whether the hint target should treat this hint as convention (§8.4).
+
+    Full-hand touches are never convention. OLD/NEW: recreate the search from the touch
+    set. MID: bots never emit MID-shaped literal fallbacks, so MID is convention for
+    discard/play encodings (types ``0``–``3``).
+    """
+    if _hint_touches_entire_hand(move.cards, target_size):
+        return False
+    shape = _hint_slot_shape(move.cards, target_size)
+    if HintSlotShape.MID == shape:
+        return encoded_type <= 3
+    synthetic = _synthetic_view_for_hint_target_canonical(hinter_index, move, target_size)
+    canonical = _build_hint_for_encoded(hinter_index, synthetic, encoded_type)
+    return canonical is not None and _hints_match(canonical, move)
+
+
+def _would_be_read_as_convention(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> bool:
+    """True when every observer who sees the target would apply a mod-8 decode."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    if _hint_touches_entire_hand(hint_move.cards, hand_size):
+        return False
+    inferred = _infer_encoded_type_from_hint(hinter, hint_move.teammate, hint_move, hand_size)
+    canonical = _build_hint_for_encoded(hinter, player_view, inferred)
+    return canonical is not None and _hints_match(canonical, hint_move)
+
+
+def _literal_fallback_sort_key(
+    hinter: int,
+    player_view: PlayerView,
+    hint_move: HintMove,
+) -> Tuple[int, int]:
+    """Lower is better: full-hand ones, then any full-hand, then other true literals."""
+    hand_size = len(player_view.teammates[hint_move.teammate].cards)
+    full = _hint_touches_entire_hand(hint_move.cards, hand_size)
+    if full and isinstance(hint_move, NumberHint) and Number.ONE == hint_move.number:
+        primary = 0
+    elif full:
+        primary = 1
+    else:
+        primary = 2
+    return (primary, 0)
+
+
 def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Optional[HintMove]:
-    """Any legal color/number hint that is not a canonical convention encoding (§8.4)."""
+    """Legal non-convention hint; never MID-shaped (hint target treats MID as convention)."""
     candidates: List[HintMove] = []
     for offset in (1, 2):
         target = (hinter + offset) % 3
@@ -882,16 +849,20 @@ def _build_literal_fallback_hint(hinter: int, player_view: PlayerView) -> Option
             indices = sorted(i for i, c in enumerate(hand) if col == c.color)
             if indices:
                 candidates.append(ColorHint(target, indices, col))
+    non_mid: List[HintMove] = []
+    true_literals: List[HintMove] = []
     for hint_move in candidates:
-        inferred = _infer_encoded_type_from_hint(
-            hinter, hint_move.teammate, hint_move, len(player_view.teammates[hint_move.teammate].cards)
-        )
-        canonical = _build_hint_for_encoded(hinter, player_view, inferred)
-        if canonical is not None and _hints_match(canonical, hint_move):
+        hand_size = len(player_view.teammates[hint_move.teammate].cards)
+        if HintSlotShape.MID == _hint_slot_shape(hint_move.cards, hand_size):
             continue
-        return hint_move
-    # Every legal hint coincides with some convention encoding; still must move.
-    return candidates[0] if candidates else None
+        non_mid.append(hint_move)
+        if _would_be_read_as_convention(hinter, player_view, hint_move):
+            continue
+        true_literals.append(hint_move)
+    if not true_literals:
+        return non_mid[0] if non_mid else None
+    true_literals.sort(key=lambda h: _literal_fallback_sort_key(hinter, player_view, h))
+    return true_literals[0]
 
 
 def _assert_encoded_hint_round_trip(
@@ -968,25 +939,6 @@ def _apply_decoded_hand_type(
     matrix[player_index] = legacy_kind_row(row)
 
 
-def _collapse_duplicate_identified_playables_in_row(
-    cards: List[Card],
-    slot_belief: List[List[SlotBelief]],
-    player_index: int,
-) -> None:
-    row = slot_belief[player_index]
-    assert len(cards) == len(row)
-    seen: Dict[Card, int] = {}
-    for slot, belief in enumerate(row):
-        if Playability.PLAYABLE != belief.playability:
-            continue
-        card = cards[slot]
-        if card in seen:
-            set_playability(belief, Playability.UNPLAYABLE)
-            belief.legacy_kind = LegacyDiscardKind.USELESS
-        else:
-            seen[card] = slot
-
-
 def _chop_slot_from_belief(belief: List[Optional[CardKind]]) -> Optional[int]:
     """Discard anchor from a legacy ``CardKind`` row (tests and encoding)."""
     row = _belief_row_from_input(belief)
@@ -1029,21 +981,16 @@ def _convention_hint_would_identify_new_playable(
 ) -> bool:
     """True when the convention hint is step-2-urgent for the **next** player.
 
-    Only the next seat ``(hinter + 1) % 3`` can make the hint urgent (they act next).
-    A newly decoded playable on that seat counts only if:
-    - the slot is not already ``playable`` and the card is physically playable;
-    - that seat currently has no ``playable`` slot (topping up can wait);
-    - that card identity is not already ``playable`` on any visible seat;
-    - the previous seat is not also newly marked with the same identity (double-play).
+    Peer codes use each teammate's shared public belief row plus that hand's cards.
     """
     next_player = (hinter + 1) % 3
     prev_player = (hinter + 2) % 3
+    if any(Playability.PLAYABLE == b.playability for b in slot_belief[next_player]):
+        return False
     enc_type, _type_sum = _channel_encoded_type(
         hinter, player_view, common_view, settings, slot_belief
     )
     if _build_hint_for_encoded(hinter, player_view, enc_type) is None:
-        return False
-    if any(Playability.PLAYABLE == b.playability for b in slot_belief[next_player]):
         return False
     next_card = _newly_decoded_playable_card(
         next_player,
@@ -1093,12 +1040,13 @@ def _newly_decoded_playable_card(
         settings,
     )
     decoded_type = (enc_type - peer_type) % 8
+    row = slot_belief[decoder]
     if not 1 <= decoded_type <= 5:
         return None
-    play_slot = slot_for_play_type(slot_belief[decoder], decoded_type)
+    play_slot = slot_for_play_type(row, decoded_type)
     if play_slot is None:
         return None
-    if Playability.PLAYABLE == slot_belief[decoder][play_slot].playability:
+    if Playability.PLAYABLE == row[play_slot].playability:
         return None
     card = player_view.teammates[decoder].cards[play_slot]
     if CardKind.PLAYABLE != common_view.card_kind(card, settings):
@@ -1112,7 +1060,7 @@ def _card_already_identified_playable_on_visible_seats(
     player_view: PlayerView,
     slot_belief: List[List[SlotBelief]],
 ) -> bool:
-    """True if ``card`` is already convention-``playable`` on a seat the hinter can see."""
+    """True when a visible teammate already has ``card`` convention-marked playable."""
     for seat, hand in player_view.teammates.items():
         assert seat != hinter
         for slot, held in enumerate(hand.cards):
@@ -1121,3 +1069,85 @@ def _card_already_identified_playable_on_visible_seats(
             if Playability.PLAYABLE == slot_belief[seat][slot].playability:
                 return True
     return False
+
+
+def assert_independent_own_decode_matches(
+    players: Sequence[DynamicHandType3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+    views: Sequence[PlayerView],
+    own_rows_before: Sequence[Sequence[SlotBelief]],
+) -> None:
+    """After observe, each decoder's own row must equal decode(pre-hint own row).
+
+    ``own_rows_before[seat]`` is a deep copy of that seat's own belief before observe.
+    """
+    assert 3 == len(players) == len(views) == len(own_rows_before)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        peer = other_non_hinter if seat == hint_target else hint_target
+        view = views[seat]
+        assert peer in view.teammates
+        if hint_target in view.teammates:
+            target_size = len(view.teammates[hint_target].cards)
+        else:
+            target_size = view.own_hand_size
+        enc = _infer_encoded_type_from_hint(hinter_index, hint_target, move, target_size)
+        if hint_target in view.teammates:
+            canonical = _build_hint_for_encoded(hinter_index, view, enc)
+            is_convention = canonical is not None and _hints_match(canonical, move)
+        else:
+            is_convention = _hint_target_accepts_as_convention(
+                hinter_index, move, target_size, enc
+            )
+        if not is_convention:
+            assert list(players[seat]._slot_belief[seat]) == list(own_rows_before[seat]), (
+                f"P{seat + 1} own belief changed on literal fallback hint"
+            )
+            continue
+        peer_code = _peer_code_for_hand(
+            view.teammates[peer].cards,
+            list(own_rows_before[peer]),
+            players[seat].common_view,
+            players[seat].game_settings,
+        )
+        # Hinter's view of the same peer hand must agree (public to both).
+        assert peer in views[hinter_index].teammates
+        assert peer_code == _peer_code_for_hand(
+            views[hinter_index].teammates[peer].cards,
+            list(own_rows_before[peer]),
+            players[hinter_index].common_view,
+            players[hinter_index].game_settings,
+        ), f"peer code for P{peer + 1} not publicly determined"
+        expected_row = [
+            SlotBelief(b.playability, b.legacy_kind, b.rec_state) for b in own_rows_before[seat]
+        ]
+        apply_decoded_value(expected_row, (enc - peer_code) % 8)
+        actual = players[seat]._slot_belief[seat]
+        assert actual == expected_row, (
+            f"P{seat + 1} own belief after hint != independent decode: "
+            f"actual={actual!r} expected={expected_row!r}"
+        )
+
+
+def assert_public_non_hinter_rows_agree(
+    players: Sequence[DynamicHandType3P],
+    hinter_index: int,
+    move: ColorHint | NumberHint,
+) -> None:
+    """After a convention hint, all seats must share the same next/prev belief rows."""
+    assert 3 == len(players)
+    if not isinstance(move, (ColorHint, NumberHint)):
+        return
+    hint_target = move.teammate
+    other_non_hinter = _third_player_index(hinter_index, hint_target)
+    for seat in (hint_target, other_non_hinter):
+        ref = players[0]._slot_belief[seat]
+        for player in players[1:]:
+            assert player._slot_belief[seat] == ref, (
+                f"P{player._player_index + 1} belief for P{seat + 1} != P1 after "
+                f"hint from P{hinter_index + 1}"
+            )

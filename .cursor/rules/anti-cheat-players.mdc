@@ -1,0 +1,27 @@
+---
+description: Keep BasePlayer AIs honest — no private card info via engine or encode
+globs: hanabi/core/game.py,hanabi/ai/**/*.py,test/ai/**/*.py,hanabi/gui/convention_belief_display.py
+alwaysApply: false
+---
+
+# Anti-cheat for honest players
+
+## Engine contract (`hanabi/core/game.py`)
+
+- For `BasePlayer` seats, `_notify_players` must **only** call `player.observe(mover, move, observer_view=_get_player_view(observer))`.
+- Do **not** add AI-specific belief sync, matrix copy, `hand_cards`, or omniscient align hooks in `Game`.
+- Non-cheater `play` receives only `PlayerView` (teammate cards + own hand **size**). Own card identities must never appear in that view.
+- Full-info bots use the separate `Cheater` type and `play(GameState)` — never smuggle that into `BasePlayer`.
+
+## Convention channel encode / decode (`hanabi/ai/*`)
+
+- Peer / hand codes used in the mod-8 channel must be functions of **one visible hand + that seat’s shared public belief row + public piles** only. Same inputs ⇒ same code for every observer who sees that hand. Do **not** reset encode to a blank / fresh belief row (chop and playability are public).
+- Do not add encode kwargs like `other_hands` / `almost_critical` that make peer codes hinter-asymmetric.
+- Do not read the encoder’s own cards or any other hand when computing a peer code.
+- On each convention hint, **every** observer updates **both** non-hinter belief rows from the public decode and **never** the hinter's row. When the peer hand is the observer's own (invisible), use that the channel is ``enc = (peer_next + peer_prev) % 8`` so the other seat's message equals that seat's visible peer code.
+- Hinter-only hint **quality** may use both visible hands; keep that in separately named helpers — never feed it into peer codes.
+- Prefer `assert_independent_own_decode_matches` and `assert_public_non_hinter_rows_agree` (or equivalent) in tests after multi-seat `observe` of a convention hint.
+
+## GUI
+
+- Do not show belief-vs-actual `kind_mismatch` on face-down / own-hidden seats (that leaks private identities to humans).

@@ -7,15 +7,22 @@ import unittest
 from hanabi.ai import dynamic_recommendation_3p as dr
 from hanabi.ai.dr_belief import (
     Playability,
+    any_five_possibly_playable,
     apply_decoded_value,
+    apply_play_decode,
+    copy_inferred_hand,
     discard_chain,
     discard_types_for_n_play,
     finalize_chop_after_shift,
-    fresh_hand_belief,
+    fresh_inferred_hand,
     indicable_discard_options,
+    is_discard_candidate,
+    mark_known_fives,
     n_play,
+    remaining_achievable_plays,
     reset_chop_after_removal,
     set_playability,
+    slot_for_play_type,
 )
 from hanabi.ai.dynamic_recommendation_3p import (
     ChopClass,
@@ -24,10 +31,10 @@ from hanabi.ai.dynamic_recommendation_3p import (
     HintSlotShape,
     _HINT_CHOP_MATRIX,
 )
-from hanabi.core.card import Card
+from hanabi.core.card import Card, Suit
 from hanabi.core.enums import CardKind, Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
-from hanabi.core.moves import Discard, Play
+from hanabi.core.moves import ColorHint, Discard, NumberHint, Play
 
 
 def _common(settings=None) -> CommonView:
@@ -72,57 +79,56 @@ class TestDiscardTypePartition(unittest.TestCase):
 
 class TestDiscardDecode(unittest.TestCase):
     def test_confirm_chop_closes_unknowns(self) -> None:
-        hand = fresh_hand_belief(5)
+        hand = fresh_inferred_hand(5)
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
-        apply_decoded_value(hand, 0)
-        self.assertTrue(all(Playability.UNPLAYABLE == b.playability for b in hand.slots))
+        apply_decoded_value(hand, 0, True)
+        self.assertTrue(all(Playability.UNPLAYABLE == b.playability for b in hand.cards))
         self.assertEqual(0, hand.chop)
         self.assertTrue(hand.chop_confirmed)
 
     def test_play_decode_marks_newest_unknown(self) -> None:
-        hand = fresh_hand_belief(5)
-        apply_decoded_value(hand, 1)
-        self.assertEqual(Playability.PLAYABLE, hand.slots[4].playability)
-        self.assertTrue(all(Playability.UNKNOWN == hand.slots[i].playability for i in range(4)))
+        hand = fresh_inferred_hand(5)
+        apply_decoded_value(hand, 1, True)
+        self.assertEqual(Playability.PLAYABLE, hand.cards[4].playability)
+        self.assertTrue(all(Playability.UNKNOWN == hand.cards[i].playability for i in range(4)))
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
 
     def test_play_decode_marks_newer_unknowns_unplayable(self) -> None:
         """Type k ⇒ k-th newest playable; newer unknowns become unplayable (§5.1)."""
-        hand = fresh_hand_belief(5)
-        apply_decoded_value(hand, 3)  # 3rd newest = slot 2
-        self.assertEqual(Playability.PLAYABLE, hand.slots[2].playability)
-        self.assertEqual(Playability.UNPLAYABLE, hand.slots[4].playability)
-        self.assertEqual(Playability.UNPLAYABLE, hand.slots[3].playability)
-        self.assertTrue(all(Playability.UNKNOWN == hand.slots[i].playability for i in range(2)))
+        hand = fresh_inferred_hand(5)
+        apply_decoded_value(hand, 3, True)  # 3rd newest = slot 2
+        self.assertEqual(Playability.PLAYABLE, hand.cards[2].playability)
+        self.assertEqual(Playability.UNPLAYABLE, hand.cards[4].playability)
+        self.assertEqual(Playability.UNPLAYABLE, hand.cards[3].playability)
+        self.assertTrue(all(Playability.UNKNOWN == hand.cards[i].playability for i in range(2)))
 
     def test_last_discard_code_names_mth_candidate_confirmed(self) -> None:
-        hand = fresh_hand_belief(5)
-        apply_decoded_value(hand, 6)  # D[2] when N_play=5 → candidate[2] = slot 2
+        hand = fresh_inferred_hand(5)
+        apply_decoded_value(hand, 6, True)  # D[2] when N_play=5 → candidate[2] = slot 2
         self.assertEqual(2, hand.chop)
         self.assertTrue(hand.chop_confirmed)
-        self.assertTrue(hand.chop_hinted)
 
     def test_candidates_are_first_m_of_wrapped_chain(self) -> None:
         """Chop on 3 → chain [3,4,0,1,2]; m=3 candidates are 3/4/0 — not min(remainder)."""
         from hanabi.ai.dr_belief import discard_code_candidates
 
-        hand = fresh_hand_belief(5)
+        hand = fresh_inferred_hand(5)
         hand.chop = 3
         self.assertEqual([3, 4, 0, 1, 2], discard_chain(hand))
-        self.assertEqual([3, 4, 0], discard_code_candidates(hand))
-        apply_decoded_value(hand, 6)  # D[2] → candidate[2] = slot 0
+        self.assertEqual([3, 4, 0], discard_code_candidates(hand, True))
+        apply_decoded_value(hand, 6, True)  # D[2] → candidate[2] = slot 0
         self.assertEqual(0, hand.chop)
         self.assertTrue(hand.chop_confirmed)
 
     def test_last_code_when_exactly_m_candidates(self) -> None:
         # N_play=3 → D=[0,7,6,5,4]; five candidates; last code names candidate[4].
-        hand = fresh_hand_belief(5)
-        set_playability(hand.slots[0], Playability.UNPLAYABLE)
-        set_playability(hand.slots[1], Playability.UNPLAYABLE)
-        self.assertEqual(3, n_play(hand))
-        apply_decoded_value(hand, 4)
+        hand = fresh_inferred_hand(5)
+        set_playability(hand.cards[0], Playability.UNPLAYABLE)
+        set_playability(hand.cards[1], Playability.UNPLAYABLE)
+        self.assertEqual(3, n_play(hand, True))
+        apply_decoded_value(hand, 4, True)
         self.assertEqual(4, hand.chop)
         self.assertTrue(hand.chop_confirmed)
 
@@ -130,66 +136,59 @@ class TestDiscardDecode(unittest.TestCase):
 class TestStickyChop(unittest.TestCase):
     def test_advances_to_next_newer_after_removal(self) -> None:
         """Recommended chop leaves → next newer candidate, default urgency (§8.2)."""
-        hand = fresh_hand_belief(5)
-        for belief in hand.slots:
+        hand = fresh_inferred_hand(5)
+        for belief in hand.cards:
             set_playability(belief, Playability.UNPLAYABLE)
         hand.chop = 2
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 2)
         self.assertEqual(2, hand.chop)  # pre-shift: old slot 3 → 2 after removal
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
-        hand.slots = hand.slots[:2] + hand.slots[3:]
+        hand.cards = hand.cards[:2] + hand.cards[3:]
         finalize_chop_after_shift(hand)
         self.assertEqual(2, hand.chop)
         self.assertEqual(ChopClass.DEFAULT, dr._chop_class(hand))
 
     def test_skips_playable_when_advancing(self) -> None:
-        hand = fresh_hand_belief(5)
-        for belief in hand.slots:
+        hand = fresh_inferred_hand(5)
+        for belief in hand.cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        set_playability(hand.slots[3], Playability.PLAYABLE)
+        set_playability(hand.cards[3], Playability.PLAYABLE)
         hand.chop = 2
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 2)
         self.assertEqual(3, hand.chop)  # old slot 4 → 3 after removal
-        hand.slots = hand.slots[:2] + hand.slots[3:]
+        hand.cards = hand.cards[:2] + hand.cards[3:]
         finalize_chop_after_shift(hand)
         self.assertEqual(3, hand.chop)
 
     def test_falls_back_to_leftmost_when_no_newer(self) -> None:
-        hand = fresh_hand_belief(5)
-        for belief in hand.slots:
+        hand = fresh_inferred_hand(5)
+        for belief in hand.cards:
             set_playability(belief, Playability.UNPLAYABLE)
         hand.chop = 4
         hand.chop_confirmed = True
-        hand.chop_hinted = True
         reset_chop_after_removal(hand, 4)
         self.assertIsNone(hand.chop)
-        hand.slots = hand.slots[:4]
+        hand.cards = hand.cards[:4]
         finalize_chop_after_shift(hand)
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
 
     def test_play_decode_on_chop_advances_right(self) -> None:
-        hand = fresh_hand_belief(5)
+        hand = fresh_inferred_hand(5)
         hand.chop = 4
         hand.chop_confirmed = True
-        hand.chop_hinted = True
-        apply_decoded_value(hand, 1)  # marks newest (slot 4) playable
-        self.assertEqual(Playability.PLAYABLE, hand.slots[4].playability)
+        apply_decoded_value(hand, 1, True)  # marks newest (slot 4) playable
+        self.assertEqual(Playability.PLAYABLE, hand.cards[4].playability)
         self.assertEqual(0, hand.chop)
         self.assertFalse(hand.chop_confirmed)
-        self.assertFalse(hand.chop_hinted)
 
 
 class TestIndicableOptions(unittest.TestCase):
     def test_opening_options(self) -> None:
-        hand = fresh_hand_belief(5)
-        opts = indicable_discard_options(hand)
+        hand = fresh_inferred_hand(5)
+        opts = indicable_discard_options(hand, True)
         codes = [c for c, _, _ in opts]
         self.assertEqual([0, 7, 6], codes)
         self.assertEqual(0, opts[0][1])
@@ -207,6 +206,155 @@ class TestHintSlotShape(unittest.TestCase):
         self.assertEqual(HintSlotShape.NEW, dr._hint_slot_shape([4], 5))
 
 
+class TestBuildHintOldThenMid(unittest.TestCase):
+    def test_builds_mid_when_old_unbuildable(self) -> None:
+        """Oldest number also on newest → OLD fails; MID number still encodes type 0."""
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.ONE),
+                        Card(Color.WHITE, Number.TWO),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        hint = dr._build_hint_for_encoded(0, view, 0)
+        self.assertIsInstance(hint, NumberHint)
+        self.assertEqual(HintSlotShape.MID, dr._hint_slot_shape(hint.cards, 5))
+
+    def test_literal_fallback_never_mid_shaped(self) -> None:
+        """When OLD is available, a mid-only color must not be chosen as literal."""
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.YELLOW, Number.THREE),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.WHITE, Number.FIVE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.BLUE, Number.THREE),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.YELLOW, Number.FIVE),
+                        Card(Color.WHITE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        # Force a situation where we ask for literal (any).
+        literal = dr._build_literal_fallback_hint(0, view)
+        self.assertIsNotNone(literal)
+        hand_size = len(view.teammates[literal.teammate].cards)
+        self.assertNotEqual(
+            HintSlotShape.MID, dr._hint_slot_shape(literal.cards, hand_size)
+        )
+
+
+class TestFullHandAbandonConvention(unittest.TestCase):
+    """Exp run 281: unbuildable type-1 with five 1s must abandon via full-hand ones."""
+
+    def _game_281_opening_view(self) -> PlayerView:
+        # Same deal as exp_ai_comparison/20260726_005529 game 281.
+        return PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.YELLOW, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.YELLOW, Number.FOUR),
+                        Card(Color.BLUE, Number.TWO),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.WHITE, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+
+    def test_new_type_unbuildable_when_it_would_touch_entire_hand(self) -> None:
+        view = self._game_281_opening_view()
+        # Type 5 = NEW number to prev; newest is a 1 and the whole hand is 1s.
+        self.assertIsNone(dr._build_hint_for_encoded(0, view, 5))
+
+    def test_literal_fallback_prefers_full_hand_ones(self) -> None:
+        view = self._game_281_opening_view()
+        self.assertIsNone(dr._build_hint_for_encoded(0, view, 1))  # wanted channel
+        literal = dr._build_literal_fallback_hint(0, view, avoid_enc_type=1)
+        self.assertIsInstance(literal, NumberHint)
+        assert isinstance(literal, NumberHint)
+        self.assertEqual(2, literal.teammate)
+        self.assertEqual(Number.ONE, literal.number)
+        self.assertEqual([0, 1, 2, 3, 4], literal.cards)
+        self.assertFalse(dr._would_be_read_as_convention(0, view, literal))
+
+    def test_full_hand_ones_leaves_belief_unchanged_for_all_observers(self) -> None:
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        view0 = self._game_281_opening_view()
+        hand_p1 = list(view0.teammates[1].cards)
+        hand_p2 = list(view0.teammates[2].cards)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for p in players:
+            p.set_game_settings(settings)
+            p.set_common_view(common)
+        views = [
+            view0,
+            PlayerView(
+                teammates={0: Hand([Card(Color.YELLOW, Number.THREE)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.YELLOW, Number.THREE)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        hint = NumberHint(2, [0, 1, 2, 3, 4], Number.ONE)
+        before = [[copy_inferred_hand(h) for h in p._inferred_hands] for p in players]
+        for player, view in zip(players, views):
+            player.observe_number_hint_move(0, hint, view)
+        for pi, player in enumerate(players):
+            for seat in range(3):
+                self.assertEqual(
+                    before[pi][seat],
+                    player._inferred_hands[seat],
+                    f"P{pi} belief for seat {seat} changed on full-hand abandon",
+                )
+
+    def test_opening_play_emits_abandon_full_hand_ones(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(_common(settings))
+        view = self._game_281_opening_view()
+        # Peer codes are 0+1 → type 1, unbuildable on all-1s prev → abandon.
+        move = player.play(view)
+        self.assertIsInstance(move, NumberHint)
+        assert isinstance(move, NumberHint)
+        self.assertEqual(2, move.teammate)
+        self.assertEqual(Number.ONE, move.number)
+        self.assertEqual([0, 1, 2, 3, 4], move.cards)
+        self.assertIn("abandon convention", move.why())
+
+
 class TestEncodePreferPlay(unittest.TestCase):
     def test_encodes_playable_unknown(self) -> None:
         settings = create_standard_game_settings(3)
@@ -218,7 +366,7 @@ class TestEncodePreferPlay(unittest.TestCase):
             Card(Color.YELLOW, Number.FOUR),
             Card(Color.RED, Number.ONE),
         ]
-        belief = fresh_hand_belief(5)
+        belief = fresh_inferred_hand(5)
         code, discard_card = dr._encode_peer_code(hand, belief, common, settings)
         self.assertEqual(1, code)  # newest playable → type 1
         self.assertIsNone(discard_card)
@@ -235,7 +383,7 @@ class TestEncodePreferPlay(unittest.TestCase):
             Card(Color.WHITE, Number.FOUR),
             Card(Color.GREEN, Number.ONE),
         ]
-        belief = fresh_hand_belief(5)
+        belief = fresh_inferred_hand(5)
         code, discard_card = dr._encode_peer_code(hand, belief, common, settings)
         self.assertEqual(1, code)
         self.assertIsNone(discard_card)
@@ -247,9 +395,9 @@ class TestDispatch(unittest.TestCase):
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
         player.set_common_view(_common(settings))
-        player._hand_belief[0].slots[2].playability = Playability.PLAYABLE
-        player._hand_belief[0].chop = 0
-        player._hand_belief[0].chop_confirmed = True
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
         move = player.play(_teammate_view())
         self.assertIsInstance(move, Play)
         self.assertEqual(2, move.card)
@@ -269,19 +417,18 @@ class TestDispatch(unittest.TestCase):
                 cards_played=common.cards_played,
             )
         )
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 0
-        player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
         # Step-2 must not fire: next seat already has a playable.
-        player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertIsInstance(move, Discard)
         self.assertEqual(0, move.card)
 
     def test_double_play_hint_kept_when_chop_default(self) -> None:
-        """Default/unhinted chop: still give the double-play convention hint."""
+        """Default chop + spare lives: double-play is fine, so still hint."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -295,11 +442,10 @@ class TestDispatch(unittest.TestCase):
                 cards_played=common.cards_played,
             )
         )
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 0
-        player._hand_belief[0].chop_confirmed = False
-        player._hand_belief[0].chop_hinted = False
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
         junk = Card(Color.BLUE, Number.FOUR)
         r1 = Card(Color.RED, Number.ONE)
         view = PlayerView(
@@ -311,14 +457,18 @@ class TestDispatch(unittest.TestCase):
         )
         self.assertTrue(
             dr._convention_hint_would_cause_double_play(
-                0, view, player.common_view, settings, player._hand_belief
+                0, view, player.common_view, settings, player._inferred_hands
             )
+        )
+        self.assertEqual(
+            HintQuality.FINE,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
         )
         move = player.play(view)
         self.assertNotIsInstance(move, Discard)
 
     def test_double_play_hint_prefers_confirmed_chop(self) -> None:
-        """Confirmed chop: skip double-play hint and discard that chop."""
+        """Confirmed chop: double-play is fine, so discard that chop."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -332,11 +482,10 @@ class TestDispatch(unittest.TestCase):
                 cards_played=common.cards_played,
             )
         )
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 2
-        player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
         junk = Card(Color.BLUE, Number.FOUR)
         r1 = Card(Color.RED, Number.ONE)
         view = PlayerView(
@@ -346,13 +495,222 @@ class TestDispatch(unittest.TestCase):
             },
             own_hand_size=5,
         )
-        self.assertEqual(ChopClass.CONFIRMED, dr._chop_class(player._hand_belief[0]))
+        self.assertEqual(ChopClass.CONFIRMED, dr._chop_class(player._inferred_hands[0]))
+        self.assertEqual(
+            HintQuality.FINE,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
+        )
         move = player.play(view)
         self.assertIsInstance(move, Discard)
         self.assertEqual(2, move.card)
 
-    def test_confirmed_chop_before_mediocre_hint(self) -> None:
-        """Confirmed chop: mediocre hint loses to discard."""
+    def test_double_play_is_bad_on_last_life(self) -> None:
+        """Last life: double-play is bad, so discard default chop when legal."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = _common(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=1,
+                hint_tokens=common.hint_tokens - 1,
+                cards_to_draw=common.cards_to_draw,
+                cards_discarded=common.cards_discarded,
+                cards_played=common.cards_played,
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
+        junk = Card(Color.BLUE, Number.FOUR)
+        r1 = Card(Color.RED, Number.ONE)
+        view = PlayerView(
+            teammates={
+                1: Hand([junk, junk, junk, junk, r1]),
+                2: Hand([junk, junk, junk, junk, r1]),
+            },
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._convention_hint_would_cause_double_play(
+                0, view, player.common_view, settings, player._inferred_hands
+            )
+        )
+        self.assertEqual(
+            HintQuality.BAD,
+            dr._hint_quality(0, view, player.common_view, settings, player._inferred_hands),
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(0, move.card)
+
+    def test_topping_up_existing_playable_is_bad(self) -> None:
+        """Newly marking B4 playable while another seat already has B4 playable is bad (§9.2)."""
+        settings = create_standard_game_settings(3)
+        # Mirror game 976 T53: P2 moves; P3 already has B4 playable; P1 all unknown.
+        player = DynamicRecommendation3P(1)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=2,
+                cards_to_draw=2,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.THREE,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        # P2 own: closed; P3: slot0 playable, rest closed; P1: fresh unknowns (opening-like).
+        for belief in player._inferred_hands[1].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        for belief in player._inferred_hands[2].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[2].cards[0], Playability.PLAYABLE)
+        player._inferred_hands[1].chop = 3
+        player._inferred_hands[1].chop_confirmed = True
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[2].chop = 2
+        player._inferred_hands[2].chop_confirmed = False
+        view = PlayerView(
+            teammates={
+                0: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.YELLOW, Number.TWO),
+                        Card(Color.WHITE, Number.ONE),
+                        Card(Color.YELLOW, Number.ONE),
+                        Card(Color.YELLOW, Number.THREE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.WHITE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.RED, Number.TWO),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        channel = dr._project_channel(1, view, player.common_view, settings, player._inferred_hands)
+        self.assertEqual(Card(Color.BLUE, Number.FOUR), channel.prev_new_playable)
+        self.assertIsNone(channel.next_new_playable)
+        self.assertEqual(HintQuality.BAD, channel.quality)
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(3, move.card)
+
+    def test_refuse_play_when_all_pile_next_visible_without_mutating_belief(self) -> None:
+        """Act-time only: skip marked playable; shared belief stays playable (channel-safe)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=1,
+                cards_to_draw=1,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.FOUR,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[0], Playability.PLAYABLE)
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.GREEN, Number.THREE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.THREE),
+                    ]
+                ),
+                2: Hand(
+                    [
+                        Card(Color.WHITE, Number.FOUR),
+                        Card(Color.GREEN, Number.TWO),
+                        Card(Color.GREEN, Number.FOUR),
+                        Card(Color.RED, Number.TWO),
+                        Card(Color.BLUE, Number.ONE),
+                    ]
+                ),
+            },
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._all_pile_next_cards_visible_in_teammates(view, player.common_view, settings)
+        )
+        move = player.play(view)
+        self.assertEqual(Playability.PLAYABLE, player._inferred_hands[0].cards[0].playability)
+        self.assertNotIsInstance(move, Play)
+
+    def test_one_of_two_playable_copies_visible_still_plays(self) -> None:
+        """Seeing one B3 does not refuse play — the other copy may be own."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=4,
+                cards_to_draw=10,
+                cards_discarded={},
+                cards_played={
+                    Color.BLUE: Number.TWO,
+                    Color.GREEN: Number.FIVE,
+                    Color.RED: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                },
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.PLAYABLE)
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FIVE),
+                        Card(Color.RED, Number.THREE),
+                        Card(Color.GREEN, Number.THREE),
+                        Card(Color.RED, Number.ONE),
+                        Card(Color.BLUE, Number.THREE),
+                    ]
+                ),
+                2: Hand([Card(Color.WHITE, Number.FOUR)] * 5),
+            },
+            own_hand_size=5,
+        )
+        self.assertFalse(
+            dr._all_pile_next_cards_visible_in_teammates(view, player.common_view, settings)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
+
+    def test_confirmed_chop_before_fine_hint(self) -> None:
+        """Confirmed chop: fine hint loses to discard."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -366,18 +724,17 @@ class TestDispatch(unittest.TestCase):
                 cards_played=common.cards_played,
             )
         )
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 2
-        player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
-        player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
+        player._inferred_hands[0].chop = 2
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertIsInstance(move, Discard)
         self.assertEqual(2, move.card)
 
     def test_default_unhinted_chop_after_hint(self) -> None:
-        """Opening/default chop: mediocre hint before default discard."""
+        """Opening/default chop: fine hint before default discard."""
         settings = create_standard_game_settings(3)
         player = DynamicRecommendation3P(0)
         player.set_game_settings(settings)
@@ -391,14 +748,345 @@ class TestDispatch(unittest.TestCase):
                 cards_played=common.cards_played,
             )
         )
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 0
-        player._hand_belief[0].chop_confirmed = False
-        player._hand_belief[0].chop_hinted = False
-        player._hand_belief[1].slots[4].playability = Playability.PLAYABLE
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
         move = player.play(_teammate_view())
         self.assertNotIsInstance(move, Discard)
+
+
+class TestFinalRoundScoreMode(unittest.TestCase):
+    """Deck empty + lives: play for score; hint only if good; skip chop discard."""
+
+    def _final_common(self, settings, *, hint_tokens: int, live_tokens: int = 2) -> CommonView:
+        return CommonView(
+            live_tokens=live_tokens,
+            hint_tokens=hint_tokens,
+            cards_to_draw=0,
+            cards_discarded={},
+            cards_played={},
+        )
+
+    def test_gate_requires_empty_deck_and_lives(self) -> None:
+        settings = create_standard_game_settings(3)
+        mid = _common(settings)
+        self.assertFalse(dr._in_final_round_score_mode(mid))
+        self.assertTrue(
+            dr._in_final_round_score_mode(
+                CommonView(
+                    live_tokens=1,
+                    hint_tokens=mid.hint_tokens,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={},
+                )
+            )
+        )
+        self.assertFalse(
+            dr._in_final_round_score_mode(
+                CommonView(
+                    live_tokens=0,
+                    hint_tokens=mid.hint_tokens,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={},
+                )
+            )
+        )
+
+    def test_plays_newest_unknown_instead_of_confirmed_chop(self) -> None:
+        """Midgame would discard confirmed chop; final round bombs newest unknown."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=settings.max_hint_tokens - 1))
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[3], Playability.UNKNOWN)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
+
+    def test_known_playable_before_unknown(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=4))
+        set_playability(player._inferred_hands[0].cards[1], Playability.PLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(1, move.card)
+
+    def test_skips_protect_to_play_own_playable(self) -> None:
+        """Dangerous next chop must not burn the final-round tempo play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=2,
+            hint_tokens=7,
+            cards_to_draw=0,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        set_playability(player._inferred_hands[0].cards[2], Playability.PLAYABLE)
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.ONE),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
+
+    def test_good_hint_before_unknown_play(self) -> None:
+        """When channel is good for next, spend the hint before bombing unknowns."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        player.set_common_view(self._final_common(settings, hint_tokens=4))
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNKNOWN)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = False
+        junk = Card(Color.BLUE, Number.FOUR)
+        r1 = Card(Color.RED, Number.ONE)
+        # Prev must not be a uniform hand: NEW color/number on five identical cards is
+        # full-hand abandon (unbuildable), which would drop quality from good → fine.
+        prev = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        view = PlayerView(
+            teammates={
+                1: Hand([junk, junk, junk, junk, r1]),
+                2: Hand(prev),
+            },
+            own_hand_size=5,
+        )
+        channel = dr._project_channel(0, view, player.common_view, settings, player._inferred_hands)
+        self.assertEqual(HintQuality.GOOD, channel.quality)
+        move = player.play(view)
+        self.assertIsInstance(move, (ColorHint, NumberHint))
+
+
+class TestProtectNext(unittest.TestCase):
+    """§9.0 ``_try_protect_next_player``."""
+
+    def test_save_hint_before_own_playable(self) -> None:
+        """Dangerous confirmed chop on next: protect hint beats own playable."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        # Next: R5 critical on confirmed chop; R1 newer so our channel can mark playable.
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.ONE),
+        ]
+        # Prev: no physical playables (so not next_likely_good).
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertTrue(
+            dr._channel_protects_next(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertNotIsInstance(move, Play)
+        self.assertIn("Protect next (save-hint)", move.why())
+
+    def test_next_likely_good_skips_protect(self) -> None:
+        """Prev has unidentified playable ⇒ assume next hints; do not defer own play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.RED, Number.ONE),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_likely_good(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertFalse(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
+
+    def test_token_gift_discards_confirmed_chop(self) -> None:
+        """At 0 tokens, default danger on next: discard own confirmed chop to gift a token."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=0,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 1
+        player._inferred_hands[0].chop_confirmed = True
+        # Next: dangerous chop, unconfirmed → with 1 token they would hint (default).
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = False
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(0, view, common, settings, player._inferred_hands)
+        )
+        self.assertFalse(
+            dr._next_would_discard_danger(
+                0, view, common, settings, player._inferred_hands, hint_tokens=1
+            )
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(1, move.card)
+        self.assertIn("Protect next (token gift", move.why())
+
+    def test_token_gift_skipped_when_still_burns_at_one_token(self) -> None:
+        """Confirmed danger + no next_likely_good: gift cannot help; fall through to play."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=0,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        )
+        player.set_common_view(common)
+        player._inferred_hands[0].cards[2].playability = Playability.PLAYABLE
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        next_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.WHITE, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        player._inferred_hands[1].chop = 0
+        player._inferred_hands[1].chop_confirmed = True
+        view = PlayerView(
+            teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
+            own_hand_size=5,
+        )
+        self.assertTrue(
+            dr._next_would_discard_danger(
+                0, view, common, settings, player._inferred_hands, hint_tokens=1
+            )
+        )
+        move = player.play(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(2, move.card)
 
 
 class TestHintQualityGoodTrashPlusPrevPlay(unittest.TestCase):
@@ -415,11 +1103,10 @@ class TestHintQualityGoodTrashPlusPrevPlay(unittest.TestCase):
             cards_played={Color.WHITE: Number.ONE},
         )
         player.set_common_view(common)
-        for belief in player._hand_belief[0].slots:
+        for belief in player._inferred_hands[0].cards:
             set_playability(belief, Playability.UNPLAYABLE)
-        player._hand_belief[0].chop = 0
-        player._hand_belief[0].chop_confirmed = True
-        player._hand_belief[0].chop_hinted = True
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
         # Next (P2): useless W1 at chop; no playables.
         next_hand = [
             Card(Color.WHITE, Number.ONE),
@@ -442,16 +1129,310 @@ class TestHintQualityGoodTrashPlusPrevPlay(unittest.TestCase):
         )
         self.assertTrue(
             dr._convention_hint_would_trash_next_and_play_prev(
-                0, view, common, settings, player._hand_belief
+                0, view, common, settings, player._inferred_hands
             )
         )
         self.assertEqual(
             HintQuality.GOOD,
-            dr._hint_quality(0, view, common, settings, player._hand_belief),
+            dr._hint_quality(0, view, common, settings, player._inferred_hands),
         )
         move = player.play(view)
         self.assertNotIsInstance(move, Discard)
         self.assertIn("trash for next + playable for prev", move.why())
+
+
+class TestHintQualityKnownFiveAssist(unittest.TestCase):
+    def test_playable_for_prev_plus_new_five_is_good(self) -> None:
+        """Prev new playable alone is not good; with newly marked known_five it is (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.WHITE: Number.ONE},
+        )
+        player.set_common_view(common)
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        # Next: no playables; chop is dispensable (not useless/dup), so not trash+play good.
+        next_hand = [
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.WHITE, Number.THREE),
+        ]
+        # Prev: oldest R5 → OLD number-5 physical; newest playable R1.
+        prev_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.RED, Number.ONE),
+        ]
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+        self.assertFalse(channel.identifies_new_playable_for_next)
+        self.assertFalse(channel.trash_next_and_play_prev)
+        self.assertTrue(channel.known_five_assist)
+        self.assertEqual(HintQuality.GOOD, channel.quality)
+        self.assertTrue(
+            dr._convention_hint_would_known_five_assist(
+                0, view, common, settings, player._inferred_hands
+            )
+        )
+        move = player.play(view)
+        self.assertNotIsInstance(move, Discard)
+        self.assertIn("known-5 assist", move.why())
+
+    def test_trash_for_next_plus_new_five_is_good(self) -> None:
+        """Useless trash for next + newly marked known_five (no playable) is good (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.WHITE: Number.ONE},
+        )
+        player.set_common_view(common)
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        # Lower N_play so discard codes can include 5 (NEW number to prev).
+        for seat in (1, 2):
+            for slot in (1, 2, 3):
+                set_playability(player._inferred_hands[seat].cards[slot], Playability.UNPLAYABLE)
+        next_hand = [
+            Card(Color.WHITE, Number.ONE),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.YELLOW, Number.FOUR),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.RED, Number.FIVE),
+        ]
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+        self.assertFalse(channel.identifies_new_playable_for_next)
+        self.assertFalse(channel.trash_next_and_play_prev)
+        self.assertTrue(channel.known_five_assist)
+        self.assertEqual(HintQuality.GOOD, channel.quality)
+        physical = dr._build_hint_for_encoded(0, view, channel.enc_type)
+        self.assertIsInstance(physical, NumberHint)
+        self.assertEqual(Number.FIVE, physical.number)
+
+    def test_new_five_alone_is_not_good(self) -> None:
+        """Number-5 newly marking known_five without playable/trash stays fine (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.WHITE: Number.ONE},
+        )
+        player.set_common_view(common)
+        for seat in (1, 2):
+            for slot in (1, 2, 3):
+                set_playability(player._inferred_hands[seat].cards[slot], Playability.UNPLAYABLE)
+        next_hand = [
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.WHITE, Number.THREE),
+        ]
+        prev_hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.FOUR),
+            Card(Color.RED, Number.FIVE),
+        ]
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+        physical = dr._build_hint_for_encoded(0, view, channel.enc_type)
+        self.assertIsInstance(physical, NumberHint)
+        self.assertEqual(Number.FIVE, physical.number)
+        self.assertTrue(dr._physical_hint_newly_marks_known_five(physical, player._inferred_hands))
+        self.assertFalse(channel.known_five_assist)
+        self.assertEqual(HintQuality.FINE, channel.quality)
+
+    def test_already_known_five_does_not_assist(self) -> None:
+        """Retouching an already-known five does not count as newly identifying (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.WHITE: Number.ONE},
+        )
+        player.set_common_view(common)
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        player._inferred_hands[0].chop = 0
+        player._inferred_hands[0].chop_confirmed = True
+        next_hand = [
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.BLUE, Number.FOUR),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.WHITE, Number.THREE),
+        ]
+        prev_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.RED, Number.ONE),
+        ]
+        mark_known_fives(player._inferred_hands[2], [0])
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+        physical = dr._build_hint_for_encoded(0, view, channel.enc_type)
+        self.assertIsInstance(physical, NumberHint)
+        self.assertEqual(Number.FIVE, physical.number)
+        self.assertFalse(dr._physical_hint_newly_marks_known_five(physical, player._inferred_hands))
+        self.assertFalse(channel.known_five_assist)
+        self.assertEqual(HintQuality.FINE, channel.quality)
+
+
+class TestLateDeckPhase(unittest.TestCase):
+    def test_remaining_achievable_plays_caps_dead_ranks(self) -> None:
+        """Achievable plays count pile tops upward, stopping at fully discarded ranks."""
+        settings = create_standard_game_settings(3)
+        self.assertEqual(25, remaining_achievable_plays(_common(settings), settings))
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=30,
+            cards_discarded={Color.WHITE: Suit({Number.THREE: 2})},
+            cards_played={Color.WHITE: Number.TWO},
+        )
+        # White: both 3s gone, so nothing above the 2 counts; other colors 5 each.
+        self.assertEqual(20, remaining_achievable_plays(common, settings))
+
+    def test_late_deck_phase_boundary(self) -> None:
+        """Late deck iff 0 < cards_to_draw <= remaining achievable plays (§9.3 guard)."""
+        settings = create_standard_game_settings(3)
+
+        def common_with(to_draw: int) -> CommonView:
+            return CommonView(
+                live_tokens=3,
+                hint_tokens=6,
+                cards_to_draw=to_draw,
+                cards_discarded={},
+                cards_played={},
+            )
+
+        self.assertFalse(dr._in_late_deck_phase(common_with(26), settings))
+        self.assertTrue(dr._in_late_deck_phase(common_with(25), settings))
+        self.assertFalse(dr._in_late_deck_phase(common_with(0), settings))
+
+    def test_late_deck_prefers_hint_over_confirmed_chop_with_pending_play(self) -> None:
+        """Late deck + teammate identified playable: fine hint beats confirmed chop (§9.3)."""
+        settings = create_standard_game_settings(3)
+        # Empty piles: 25 achievable; R1 on next is a real pending playable (survives stale clear).
+        # Already-marked next playable keeps the would-be channel fine (not "identifies for next").
+        view = PlayerView(
+            teammates={
+                1: Hand(
+                    [
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.BLUE, Number.FOUR),
+                        Card(Color.RED, Number.ONE),
+                    ]
+                ),
+                2: Hand([Card(Color.GREEN, Number.THREE)] * 5),
+            },
+            own_hand_size=5,
+        )
+        # (to_draw, mark a teammate playable, expect discard)
+        cases = ((40, True, True), (20, True, False), (20, False, True))
+        for to_draw, pending_play, expect_discard in cases:
+            player = DynamicRecommendation3P(0)
+            player.set_game_settings(settings)
+            common = CommonView(
+                live_tokens=3,
+                hint_tokens=6,
+                cards_to_draw=to_draw,
+                cards_discarded={},
+                cards_played={},
+            )
+            player.set_common_view(common)
+            for belief in player._inferred_hands[0].cards:
+                set_playability(belief, Playability.UNPLAYABLE)
+            player._inferred_hands[0].chop = 0
+            player._inferred_hands[0].chop_confirmed = True
+            if pending_play:
+                set_playability(player._inferred_hands[1].cards[4], Playability.PLAYABLE)
+            channel = dr._project_channel(0, view, common, settings, player._inferred_hands)
+            self.assertEqual(HintQuality.FINE, channel.quality, msg=(to_draw, pending_play))
+            case = (to_draw, pending_play)
+            move = player.play(view)
+            if expect_discard:
+                self.assertIsInstance(move, Discard, msg=case)
+                self.assertEqual(0, move.card, msg=case)
+            else:
+                self.assertNotIsInstance(move, Discard, msg=case)
+                self.assertIn("Hint", move.why(), msg=case)
+                self.assertEqual(
+                    Playability.PLAYABLE,
+                    player._inferred_hands[1].cards[4].playability,
+                    msg=case,
+                )
+
+    def test_final_round_no_gamble_on_last_life(self) -> None:
+        """Final round: unknown score attempt needs a spare life; last life discards instead."""
+        settings = create_standard_game_settings(3)
+        for lives, expect_play in ((2, True), (1, False)):
+            player = DynamicRecommendation3P(0)
+            player.set_game_settings(settings)
+            player.set_common_view(
+                CommonView(
+                    live_tokens=lives,
+                    hint_tokens=0,
+                    cards_to_draw=0,
+                    cards_discarded={},
+                    cards_played={
+                        Color.RED: Number.FOUR,
+                        Color.BLUE: Number.THREE,
+                        Color.GREEN: Number.FIVE,
+                        Color.YELLOW: Number.FIVE,
+                        Color.WHITE: Number.FIVE,
+                    },
+                )
+            )
+            for belief in player._inferred_hands[0].cards:
+                set_playability(belief, Playability.UNPLAYABLE)
+            set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+            move = player.play(_teammate_view())
+            if expect_play:
+                self.assertIsInstance(move, Play)
+                self.assertEqual(4, move.card)
+            else:
+                self.assertIsInstance(move, Discard)
 
 
 class TestHintChopMatrix(unittest.TestCase):
@@ -461,28 +1442,92 @@ class TestHintChopMatrix(unittest.TestCase):
                 self.assertIn((quality, chop), _HINT_CHOP_MATRIX)
 
     def test_matrix_prefers_hint_iff_expected(self) -> None:
-        # Spec §9.3: good always hints; confirmed beats non-good; default still hints.
+        # Spec §9.3: good always hints; bad always discards; confirmed beats fine;
+        # default still hints for fine.
         expect_hint = {
             (HintQuality.GOOD, ChopClass.CONFIRMED),
             (HintQuality.GOOD, ChopClass.DEFAULT),
-            (HintQuality.MEDIOCRE, ChopClass.DEFAULT),
-            (HintQuality.BAD, ChopClass.DEFAULT),
+            (HintQuality.FINE, ChopClass.DEFAULT),
         }
         for key, prefer_hint in _HINT_CHOP_MATRIX.items():
             self.assertEqual(key in expect_hint, prefer_hint, msg=key)
 
     def test_chop_class_partition(self) -> None:
-        confirmed = fresh_hand_belief(5)
+        confirmed = fresh_inferred_hand(5)
         confirmed.chop_confirmed = True
-        confirmed.chop_hinted = True
         self.assertEqual(ChopClass.CONFIRMED, dr._chop_class(confirmed))
-        default = fresh_hand_belief(5)
+        default = fresh_inferred_hand(5)
         self.assertEqual(ChopClass.DEFAULT, dr._chop_class(default))
-        hinted_unconfirmed = fresh_hand_belief(5)
-        hinted_unconfirmed.chop_hinted = True
-        hinted_unconfirmed.chop_confirmed = False
-        with self.assertRaises(AssertionError):
-            dr._chop_class(hinted_unconfirmed)
+
+
+class TestHintQualityBadDoubleMidrankDiscard(unittest.TestCase):
+    def test_same_g3_discard_on_both_peers_is_bad(self) -> None:
+        """Channel recommending both copies of a 3 for discard is bad (§9.2)."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        # Match game 33 T13 board shape: both peers' discard decode lands on G3.
+        # Use opening blank belief so encode+decode stay on the same n_play boundary.
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=7,
+            cards_to_draw=40,
+            cards_discarded={
+                Color.RED: Suit({Number.ONE: 1}),
+                Color.GREEN: Suit({Number.FOUR: 1}),
+                Color.BLUE: Suit({Number.TWO: 1, Number.THREE: 1}),
+            },
+            cards_played={Color.WHITE: Number.TWO, Color.RED: Number.ONE, Color.GREEN: Number.ONE},
+        )
+        player.set_common_view(common)
+        next_hand = [
+            Card(Color.GREEN, Number.FIVE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.RED, Number.THREE),
+            Card(Color.WHITE, Number.TWO),
+        ]
+        prev_hand = [
+            Card(Color.RED, Number.FIVE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.GREEN, Number.FOUR),
+            Card(Color.YELLOW, Number.TWO),
+            Card(Color.YELLOW, Number.FIVE),
+        ]
+        view = PlayerView(teammates={1: Hand(next_hand), 2: Hand(prev_hand)}, own_hand_size=5)
+        self.assertTrue(
+            dr._convention_hint_would_cause_double_midrank_discard(
+                0, view, common, settings, player._inferred_hands
+            )
+        )
+        self.assertEqual(
+            HintQuality.BAD,
+            dr._hint_quality(0, view, common, settings, player._inferred_hands),
+        )
+        self.assertFalse(_HINT_CHOP_MATRIX[(HintQuality.BAD, ChopClass.DEFAULT)])
+        move = player.play(view)
+        self.assertIsInstance(move, Discard)
+
+    def test_same_one_discard_is_not_bad(self) -> None:
+        """Double discard of 1s is outside the mid-rank bad tier."""
+        from unittest import mock
+
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        beliefs = [fresh_inferred_hand(5) for _ in range(3)]
+        filler = [Card(Color.BLUE, Number.FIVE)] * 5
+        view = PlayerView(teammates={1: Hand(filler), 2: Hand(filler)}, own_hand_size=5)
+        one = Card(Color.RED, Number.ONE)
+        with mock.patch.object(
+            dr,
+            "_newly_decoded_discard_card_from_codes",
+            side_effect=[one, one],
+        ):
+            self.assertFalse(
+                dr._convention_hint_would_cause_double_midrank_discard(
+                    0, view, common, settings, beliefs
+                )
+            )
 
 
 class TestGuiChopConfirmed(unittest.TestCase):
@@ -492,57 +1537,13 @@ class TestGuiChopConfirmed(unittest.TestCase):
         player.set_game_settings(settings)
         self.assertEqual(0, player.get_gui_chop_slot(0))
         self.assertFalse(player.get_gui_chop_confirmed(0))
-        player._hand_belief[0].chop_confirmed = True
+        player._inferred_hands[0].chop_confirmed = True
         self.assertTrue(player.get_gui_chop_confirmed(0))
 
 
 class TestDoubleDiscardGuard(unittest.TestCase):
-    def test_prev_avoids_card_already_discard_recommended_on_next(self) -> None:
-        """Prev encoding treats next's discard identity as almost-critical."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        # Higher-rank dispensable at chop is preferred unprotected; protect it → fall to Y2.
-        dup = Card(Color.YELLOW, Number.FOUR)
-        alt = Card(Color.YELLOW, Number.TWO)
-        next_hand = [
-            dup,
-            Card(Color.RED, Number.FIVE),
-            Card(Color.WHITE, Number.FOUR),
-            Card(Color.BLUE, Number.FIVE),
-            Card(Color.GREEN, Number.FIVE),
-        ]
-        prev_hand = [
-            dup,
-            alt,
-            Card(Color.WHITE, Number.FIVE),
-            Card(Color.BLUE, Number.THREE),
-            Card(Color.GREEN, Number.THREE),
-        ]
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(dup, settings))
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(alt, settings))
-
-        next_belief = fresh_hand_belief(5)
-        prev_belief = fresh_hand_belief(5)
-        _next_code, next_card = dr._encode_peer_code(
-            next_hand, next_belief, common, settings, other_hands=[prev_hand]
-        )
-        self.assertEqual(dup, next_card)
-        _unprotected, unprot_card = dr._encode_peer_code(
-            prev_hand, prev_belief, common, settings, other_hands=[next_hand]
-        )
-        self.assertEqual(dup, unprot_card)
-        _protected, prot_card = dr._encode_peer_code(
-            prev_hand,
-            prev_belief,
-            common,
-            settings,
-            almost_critical={dup},
-            other_hands=[next_hand],
-        )
-        self.assertEqual(alt, prot_card)
-        self.assertNotEqual(_unprotected, _protected)
-
-    def test_peer_codes_next_then_prev_applies_protect(self) -> None:
+    def test_peer_codes_are_independent_per_hand(self) -> None:
+        """Channel peer codes use only that hand + public state (no cross-hand protect)."""
         settings = create_standard_game_settings(3)
         common = _common(settings)
         dup = Card(Color.YELLOW, Number.FOUR)
@@ -561,47 +1562,60 @@ class TestDoubleDiscardGuard(unittest.TestCase):
             Card(Color.BLUE, Number.THREE),
             Card(Color.GREEN, Number.THREE),
         ]
-        beliefs = [fresh_hand_belief(5) for _ in range(3)]
+        beliefs = [fresh_inferred_hand(5) for _ in range(3)]
         view = PlayerView(
             teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
             own_hand_size=5,
         )
         codes = dr._peer_codes_next_then_prev(0, view, common, settings, beliefs)
-        prev_code, prev_card = dr._encode_peer_code(
-            prev_hand,
-            beliefs[2],
-            common,
-            settings,
-            almost_critical={dup},
-            other_hands=[next_hand],
+        self.assertEqual(
+            dr._peer_code_for_hand(next_hand, beliefs[1], common, settings),
+            codes[1],
         )
-        self.assertEqual(alt, prev_card)
-        self.assertEqual(prev_code, codes[2])
+        self.assertEqual(
+            dr._peer_code_for_hand(prev_hand, beliefs[2], common, settings),
+            codes[2],
+        )
+        # Without cross-hand protect, prev prefers the higher-rank dispensable at chop.
+        _code, prev_card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
+        self.assertEqual(dup, prev_card)
+        self.assertEqual(_code, codes[2])
 
-
-    def test_almost_critical_outranks_true_critical(self) -> None:
-        """Protected duplicate must not lose to a true critical (game 56 T23 style)."""
+    def test_sticky_chop_encode_can_name_useless_beyond_leftmost_window(self) -> None:
+        """Game 38 T04 shape: shared chop at slot 2 makes Y1 indicable; blank would not."""
         settings = create_standard_game_settings(3)
-        common = _common(settings)
-        # Force B4 critical: discard all other blue 4s... easier: use a 5 as critical
-        # and protect a dispensable Y4. Options: confirm crit 5 vs named dispensable protected.
-        # Simpler unit check on score only:
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.BLUE: Suit({Number.FOUR: 1})},
+            cards_played={Color.YELLOW: Number.ONE},
+        )
         hand = [
-            Card(Color.BLUE, Number.FIVE),  # critical
-            Card(Color.YELLOW, Number.FOUR),  # dispensable, protected
+            Card(Color.BLUE, Number.FOUR),
             Card(Color.WHITE, Number.FIVE),
-            Card(Color.RED, Number.FIVE),
             Card(Color.GREEN, Number.FIVE),
+            Card(Color.RED, Number.THREE),
+            Card(Color.YELLOW, Number.ONE),
         ]
-        protect = {hand[1]}
-        s_crit = dr._discard_option_score(hand, 0, common, settings, almost_critical=protect)
-        s_prot = dr._discard_option_score(hand, 1, common, settings, almost_critical=protect)
-        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[0], settings))
-        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[1], settings))
-        self.assertLess(s_prot, s_crit)
+        sticky = fresh_inferred_hand(5)
+        sticky.chop = 2
+        sticky.chop_confirmed = True
+        code, discard_card = dr._encode_peer_code(hand, sticky, common, settings)
+        self.assertEqual(Card(Color.YELLOW, Number.ONE), discard_card)
+        self.assertEqual(6, code)
+        _blank_code, blank_discard = dr._encode_peer_code(
+            hand, fresh_inferred_hand(5), common, settings
+        )
+        self.assertNotEqual(Card(Color.YELLOW, Number.ONE), blank_discard)
+        # Sticky and blank may share a discard *code* while naming different slots.
+        self.assertEqual(
+            code,
+            dr._peer_code_for_hand(hand, sticky, common, settings),
+        )
 
-    def test_critical_tiebreak_prefers_fewest_points_lost(self) -> None:
-        """Game 95 T19 style: last B2 loses 4 points; B5/G5 lose 1 — prefer a 5."""
+    def test_critical_discard_prefers_newest_only(self) -> None:
+        """Among criticals, newest wins even if an older critical loses fewer points."""
         from hanabi.core.card import Suit
 
         settings = create_standard_game_settings(3)
@@ -622,68 +1636,69 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[2], settings))
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[3], settings))
         self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[4], settings))
-        self.assertEqual(4, dr._critical_points_lost(hand[3], common, settings))
-        self.assertEqual(1, dr._critical_points_lost(hand[2], common, settings))
-        self.assertEqual(1, dr._critical_points_lost(hand[4], common, settings))
         s_b5 = dr._discard_option_score(hand, 2, common, settings)
         s_b2 = dr._discard_option_score(hand, 3, common, settings)
         s_g5 = dr._discard_option_score(hand, 4, common, settings)
-        self.assertLess(s_b5, s_b2)
+        # Newest critical first (ignore points-lost / rank).
         self.assertLess(s_g5, s_b2)
-        self.assertLess(s_b5, s_g5)  # same points + rank → older slot
-        belief = fresh_hand_belief(5)
-        # Keep only the three criticals on the discard chain (skip older trash via playable).
-        set_playability(belief.slots[0], Playability.PLAYABLE)
-        set_playability(belief.slots[1], Playability.PLAYABLE)
+        self.assertLess(s_b2, s_b5)
+        belief = fresh_inferred_hand(5)
+        set_playability(belief.cards[0], Playability.PLAYABLE)
+        set_playability(belief.cards[1], Playability.PLAYABLE)
         belief.chop = 2
         code, slot = dr._pick_discard_code(hand, belief, common, settings)
-        self.assertEqual(2, slot)
-        self.assertEqual(0, code)
+        self.assertEqual(4, slot)
+        self.assertEqual(6, code)
 
-    def test_critical_points_lost_skips_already_dead_higher_ranks(self) -> None:
-        """Both 4s gone ⇒ discarding last 3 loses only 1 (not 3+4+5)."""
-        from hanabi.core.card import Suit
-
+    def test_critical_window_of_fives_picks_newest(self) -> None:
+        """Game 16 style: indicable all critical 5s → recommend rightmost."""
         settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
-            cards_played={},
-        )
-        g3 = Card(Color.GREEN, Number.THREE)
-        self.assertEqual(CardKind.CRITICAL, common.card_kind(g3, settings))
-        self.assertEqual(1, dr._critical_points_lost(g3, common, settings))
-
-    def test_critical_same_points_prefers_lower_rank(self) -> None:
-        """Equal loss ⇒ discard lower rank to keep a 5 for hint-token bonus."""
-        from hanabi.core.card import Suit
-
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
-            cards_played={},
-        )
-        # G3 loses 1 (4/5 dead); B5 loses 1. Prefer G3 even if it is newer.
+        common = _common(settings)
         hand = [
             Card(Color.BLUE, Number.FIVE),
+            Card(Color.GREEN, Number.FIVE),
             Card(Color.RED, Number.FIVE),
-            Card(Color.YELLOW, Number.FIVE),
-            Card(Color.WHITE, Number.FIVE),
-            Card(Color.GREEN, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.YELLOW, Number.TWO),
         ]
-        s_b5 = dr._discard_option_score(hand, 0, common, settings)
-        s_g3 = dr._discard_option_score(hand, 4, common, settings)
-        self.assertEqual(1, s_b5[1])
-        self.assertEqual(1, s_g3[1])
-        self.assertLess(s_g3, s_b5)
+        for slot in range(3):
+            self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[slot], settings))
+        belief = fresh_inferred_hand(5)
+        code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
+        self.assertEqual(6, code)
+
+    def test_critical_newest_beats_lower_rank_older(self) -> None:
+        """A newer critical 5 beats an older critical 3 (perfect already impossible)."""
+        from hanabi.core.card import Suit
+
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={Color.GREEN: Suit({Number.FOUR: 2, Number.THREE: 1})},
+            cards_played={},
+        )
+        hand = [
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.RED, Number.FOUR),
+            Card(Color.BLUE, Number.FIVE),
+            Card(Color.WHITE, Number.TWO),
+            Card(Color.YELLOW, Number.TWO),
+        ]
+        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.CRITICAL, common.card_kind(hand[2], settings))
+        belief = fresh_inferred_hand(5)
+        set_playability(belief.cards[1], Playability.PLAYABLE)
+        set_playability(belief.cards[3], Playability.PLAYABLE)
+        set_playability(belief.cards[4], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
 
     def test_discard_chain_wraps_older_than_chop(self) -> None:
-        hand = fresh_hand_belief(5)
+        hand = fresh_inferred_hand(5)
         hand.chop = 3
         self.assertEqual([3, 4, 0, 1, 2], discard_chain(hand))
 
@@ -691,14 +1706,14 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         """Playability.PLAYABLE slots are never discard candidates / code targets."""
         from hanabi.ai.dr_belief import discard_code_candidates
 
-        hand = fresh_hand_belief(5)
+        hand = fresh_inferred_hand(5)
         hand.chop = 0
-        set_playability(hand.slots[1], Playability.PLAYABLE)
-        set_playability(hand.slots[3], Playability.PLAYABLE)
+        set_playability(hand.cards[1], Playability.PLAYABLE)
+        set_playability(hand.cards[3], Playability.PLAYABLE)
         self.assertEqual([0, 2, 4], discard_chain(hand))
         # N_play = 3 unknowns → m = 5, but only 3 discard candidates exist.
-        self.assertEqual(3, n_play(hand))
-        self.assertEqual([0, 2, 4], discard_code_candidates(hand))
+        self.assertEqual(3, n_play(hand, True))
+        self.assertEqual([0, 2, 4], discard_code_candidates(hand, True))
 
     def test_first_m_candidates_include_useless_before_wrap(self) -> None:
         """Game 48 T07 style: chop W3 → candidates W3/Y2/W1; prefer useless W1."""
@@ -722,61 +1737,15 @@ class TestDoubleDiscardGuard(unittest.TestCase):
             Card(Color.WHITE, Number.ONE),
         ]
         self.assertEqual(CardKind.USELESS, common.card_kind(hand[4], settings))
-        belief = fresh_hand_belief(5)
+        belief = fresh_inferred_hand(5)
         belief.chop = 2
         from hanabi.ai.dr_belief import discard_code_candidates
 
-        self.assertEqual([2, 3, 4], discard_code_candidates(belief))
+        self.assertEqual([2, 3, 4], discard_code_candidates(belief, True))
         code, slot = dr._pick_discard_code(hand, belief, common, settings)
         self.assertEqual(4, slot)
         self.assertEqual(hand[4], Card(Color.WHITE, Number.ONE))
         self.assertEqual(6, code)
-
-    def test_soon_playable_worse_than_ordinary_dispensable(self) -> None:
-        """W3 with visible W2 is soon-playable; prefer discarding R4 (game 40 T15 style)."""
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={Color.WHITE: Number.ONE, Color.GREEN: Number.ONE, Color.BLUE: Number.THREE},
-        )
-        hand = [
-            Card(Color.RED, Number.FOUR),
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.WHITE, Number.THREE),
-            Card(Color.GREEN, Number.FOUR),
-        ]
-        other = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.WHITE, Number.ONE),
-            Card(Color.YELLOW, Number.FIVE),
-        ]
-        self.assertTrue(
-            dr._has_visible_play_path(
-                hand[3], common, settings, [hand, other]
-            )
-        )
-        self.assertFalse(
-            dr._has_visible_play_path(
-                hand[0], common, settings, [hand, other]
-            )
-        )
-        s_w3 = dr._discard_option_score(hand, 3, common, settings, other_hands=[other])
-        s_r4 = dr._discard_option_score(hand, 0, common, settings, other_hands=[other])
-        self.assertEqual(4, s_w3[0])  # soon-playable
-        self.assertEqual(3, s_r4[0])  # dispensable
-        self.assertLess(s_r4, s_w3)
-        belief = fresh_hand_belief(5)
-        belief.chop = 3
-        code, slot = dr._pick_discard_code(hand, belief, common, settings, other_hands=[other])
-        self.assertEqual(0, slot)
-        self.assertEqual(hand[0], Card(Color.RED, Number.FOUR))
-        self.assertEqual(6, code)  # D[2] → 3rd candidate R4 (chain [3,4,0])
 
     def test_in_hand_duplicate_beats_lone_dispensable(self) -> None:
         settings = create_standard_game_settings(3)
@@ -808,10 +1777,68 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         s_left = dr._discard_option_score(hand, 0, common, settings)
         s_right = dr._discard_option_score(hand, 2, common, settings)
         self.assertLess(s_right, s_left)
-        belief = fresh_hand_belief(5)
+        belief = fresh_inferred_hand(5)
         code, slot = dr._pick_discard_code(hand, belief, common, settings)
         self.assertEqual(2, slot)
         self.assertEqual(6, code)
+
+    def test_dispensable_prefers_high_rank_then_older(self) -> None:
+        """Among lone dispensables, higher rank wins; same rank prefers older."""
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        hand = [
+            Card(Color.YELLOW, Number.FOUR),
+            Card(Color.WHITE, Number.FIVE),
+            Card(Color.GREEN, Number.TWO),
+            Card(Color.BLUE, Number.FIVE),
+            Card(Color.RED, Number.THREE),
+        ]
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[2], settings))
+        self.assertEqual(CardKind.DISPENSABLE, common.card_kind(hand[4], settings))
+        s_old_high = dr._discard_option_score(hand, 0, common, settings)
+        s_mid_low = dr._discard_option_score(hand, 2, common, settings)
+        s_new = dr._discard_option_score(hand, 4, common, settings)
+        self.assertLess(s_old_high, s_new)
+        self.assertLess(s_new, s_mid_low)
+        belief = fresh_inferred_hand(5)
+        set_playability(belief.cards[1], Playability.PLAYABLE)
+        set_playability(belief.cards[3], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(0, slot)
+
+    def test_useless_prefers_low_rank_then_older(self) -> None:
+        """Among useless trash, lower rank wins; same rank prefers older."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=8,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.BLUE: Number.THREE, Color.GREEN: Number.TWO},
+        )
+        hand = [
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.YELLOW, Number.FIVE),
+            Card(Color.GREEN, Number.ONE),
+            Card(Color.WHITE, Number.FIVE),
+            Card(Color.BLUE, Number.ONE),
+        ]
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[0], settings))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[2], settings))
+        self.assertEqual(CardKind.USELESS, common.card_kind(hand[4], settings))
+        s0 = dr._discard_option_score(hand, 0, common, settings)
+        s2 = dr._discard_option_score(hand, 2, common, settings)
+        s4 = dr._discard_option_score(hand, 4, common, settings)
+        self.assertLess(s2, s4)
+        self.assertLess(s4, s0)
+        belief = fresh_inferred_hand(5)
+        set_playability(belief.cards[1], Playability.PLAYABLE)
+        set_playability(belief.cards[3], Playability.PLAYABLE)
+        belief.chop = 0
+        _code, slot = dr._pick_discard_code(hand, belief, common, settings)
+        self.assertEqual(2, slot)
 
     def test_useless_beats_in_hand_duplicate(self) -> None:
         settings = create_standard_game_settings(3)
@@ -834,81 +1861,8 @@ class TestDoubleDiscardGuard(unittest.TestCase):
         s_dup = dr._discard_option_score(hand, 1, common, settings)
         self.assertLess(s_useless, s_dup)
 
-    def test_cross_hand_dup_beats_lone_dispensable(self) -> None:
-        """Game 40 T09 style: W2 also on other seat (not discard-recommended) beats B4."""
-        settings = create_standard_game_settings(3)
-        common = CommonView(
-            live_tokens=3,
-            hint_tokens=8,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={Color.BLUE: Number.TWO, Color.GREEN: Number.ONE},
-        )
-        hand = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.BLUE, Number.FOUR),
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.GREEN, Number.FOUR),
-        ]
-        other = [
-            Card(Color.WHITE, Number.TWO),
-            Card(Color.RED, Number.TWO),
-            Card(Color.WHITE, Number.ONE),
-            Card(Color.RED, Number.TWO),
-            Card(Color.BLUE, Number.THREE),
-        ]
-        s_w2 = dr._discard_option_score(hand, 0, common, settings, other_hands=[other])
-        s_b4 = dr._discard_option_score(hand, 1, common, settings, other_hands=[other])
-        self.assertLess(s_w2, s_b4)
-        code, card = dr._encode_peer_code(
-            hand, fresh_hand_belief(5), common, settings, other_hands=[other]
-        )
-        self.assertEqual(0, code)
-        self.assertEqual(Card(Color.WHITE, Number.TWO), card)
-
-    def test_cross_hand_dup_almost_critical_when_other_recommended(self) -> None:
-        """If the other seat was told to discard the dup, remaining copy is almost-critical."""
-        settings = create_standard_game_settings(3)
-        common = _common(settings)
-        w2 = Card(Color.WHITE, Number.TWO)
-        b4 = Card(Color.BLUE, Number.FOUR)
-        hand = [
-            w2,
-            b4,
-            Card(Color.GREEN, Number.THREE),
-            Card(Color.GREEN, Number.FIVE),
-            Card(Color.RED, Number.FIVE),
-        ]
-        other = [w2, Card(Color.YELLOW, Number.FOUR), Card(Color.RED, Number.FOUR),
-                 Card(Color.WHITE, Number.FIVE), Card(Color.BLUE, Number.FIVE)]
-        # Without protect: cross-hand W2 beats B4.
-        self.assertLess(
-            dr._discard_option_score(hand, 0, common, settings, other_hands=[other]),
-            dr._discard_option_score(hand, 1, common, settings, other_hands=[other]),
-        )
-        # With protect: W2 is almost-critical → prefer B4.
-        protect = {w2}
-        s_w2 = dr._discard_option_score(
-            hand, 0, common, settings, almost_critical=protect, other_hands=[other]
-        )
-        s_b4 = dr._discard_option_score(
-            hand, 1, common, settings, almost_critical=protect, other_hands=[other]
-        )
-        self.assertLess(s_b4, s_w2)
-        code, card = dr._encode_peer_code(
-            hand,
-            fresh_hand_belief(5),
-            common,
-            settings,
-            almost_critical=protect,
-            other_hands=[other],
-        )
-        self.assertEqual(b4, card)
-        self.assertEqual(7, code)
-
-    def test_protects_existing_next_chop_when_this_hint_is_play(self) -> None:
-        """Standing chop on next still protects prev even if this hint plays next."""
+    def test_standing_chop_does_not_cross_protect_in_peer_codes(self) -> None:
+        """Peer codes ignore the other seat's chop (local encode only)."""
         settings = create_standard_game_settings(3)
         dup = Card(Color.BLUE, Number.FOUR)
         alt = Card(Color.YELLOW, Number.FOUR)
@@ -934,57 +1888,285 @@ class TestDoubleDiscardGuard(unittest.TestCase):
             cards_played={Color.RED: Number.THREE},
         )
         self.assertEqual(CardKind.PLAYABLE, common.card_kind(next_hand[4], settings))
-        beliefs = [fresh_hand_belief(5) for _ in range(3)]
+        beliefs = [fresh_inferred_hand(5) for _ in range(3)]
         beliefs[1].chop = 0
         beliefs[1].chop_confirmed = True
-        beliefs[1].chop_hinted = True
         view = PlayerView(
             teammates={1: Hand(next_hand), 2: Hand(prev_hand)},
             own_hand_size=5,
         )
         codes = dr._peer_codes_next_then_prev(0, view, common, settings, beliefs)
-        # Next gets a play code for R4 (newest playable → type 1).
         self.assertEqual(1, codes[1])
-        # Prev must not confirm B4; standing next chop protects → Y4 (type 7).
-        self.assertEqual(7, codes[2])
-        _code, card = dr._encode_peer_code(
-            prev_hand, beliefs[2], common, settings, almost_critical={dup}
-        )
-        self.assertEqual(alt, card)
+        _code, card = dr._encode_peer_code(prev_hand, beliefs[2], common, settings)
+        self.assertEqual(dup, card)
         self.assertEqual(_code, codes[2])
 
 
-class TestBeliefAlign(unittest.TestCase):
-    def test_align_after_hint(self) -> None:
+class TestIndependentOwnDecode(unittest.TestCase):
+    def test_decoders_match_public_decode_hinter_updates_teammates_only(self) -> None:
+        """Every observer updates both non-hinter hands; hinter never writes own hand."""
+        from hanabi.core.moves import ColorHint
+
         settings = create_standard_game_settings(3)
+        common = _common(settings)
         players = [DynamicRecommendation3P(i) for i in range(3)]
         for p in players:
             p.set_game_settings(settings)
-        apply_decoded_value(players[0]._hand_belief[1], 0)
-        dr.propagate_convention_belief_from_hinter(players, 0)
-        dr.assert_convention_beliefs_in_sync(players)
-        self.assertTrue(players[1]._hand_belief[1].chop_confirmed)
+            p.set_common_view(common)
+        hand_p1 = [Card(Color.GREEN, Number.TWO)] * 4 + [Card(Color.RED, Number.ONE)]
+        hand_p2 = [Card(Color.BLUE, Number.ONE)] * 5
+        views = [
+            PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.FOUR)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.FOUR)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        enc = (
+            dr._peer_code_for_hand(hand_p1, players[0]._inferred_hands[1], common, settings)
+            + dr._peer_code_for_hand(hand_p2, players[0]._inferred_hands[2], common, settings)
+        ) % 8
+        hint = dr._build_hint_for_encoded(0, views[0], enc)
+        self.assertIsNotNone(hint)
+        own_before = [copy_inferred_hand(players[seat]._inferred_hands[seat]) for seat in range(3)]
+        hinter_own_before = copy_inferred_hand(players[0]._inferred_hands[0])
+        for player, view in zip(players, views):
+            if isinstance(hint, NumberHint):
+                player.observe_number_hint_move(0, hint, view)
+            else:
+                assert isinstance(hint, ColorHint)
+                player.observe_color_hint_move(0, hint, view)
+        self.assertEqual(hinter_own_before, players[0]._inferred_hands[0])
+        dr.assert_independent_own_decode_matches(players, 0, hint, views, own_before)
+        dr.assert_public_non_hinter_rows_agree(players, 0, hint)
 
     def test_reopen_keeps_chop_fields(self) -> None:
         """Reopen restores playability only; chop flags stay (§8.1)."""
         from hanabi.ai.dr_belief import reopen_unplayable
 
-        third = fresh_hand_belief(5)
-        apply_decoded_value(third, 6)
-        self.assertTrue(third.chop_hinted)
+        third = fresh_inferred_hand(5)
+        apply_decoded_value(third, 6, True)
         self.assertTrue(third.chop_confirmed)
         reopen_unplayable([third])
-        self.assertTrue(third.chop_hinted)
         self.assertTrue(third.chop_confirmed)
         self.assertEqual(2, third.chop)
 
-        confirmed = fresh_hand_belief(5)
-        apply_decoded_value(confirmed, 0)
+        confirmed = fresh_inferred_hand(5)
+        apply_decoded_value(confirmed, 0, True)
         self.assertTrue(confirmed.chop_confirmed)
-        self.assertTrue(confirmed.chop_hinted)
         reopen_unplayable([confirmed])
         self.assertTrue(confirmed.chop_confirmed)
-        self.assertTrue(confirmed.chop_hinted)
+
+
+class TestKnownFive(unittest.TestCase):
+    """Literal number-5 touches are public; known 5s skip discard and can be played."""
+
+    def test_mark_excludes_from_discard_chain_and_n_play(self) -> None:
+        hand = fresh_inferred_hand(5)
+        self.assertEqual(5, n_play(hand, True))
+        mark_known_fives(hand, [0, 4])
+        self.assertTrue(hand.cards[0].known_five)
+        self.assertTrue(hand.cards[4].known_five)
+        self.assertFalse(is_discard_candidate(hand.cards[0]))
+        # With a pile at 4 (fives possible) known 5s stay in N_play; with no pile at 4 they
+        # cannot play, so they leave the play-code set too (§3).
+        self.assertEqual(5, n_play(hand, True))
+        self.assertEqual(3, n_play(hand, False))
+        self.assertNotIn(0, discard_chain(hand))
+        self.assertNotIn(4, discard_chain(hand))
+        self.assertEqual(1, hand.chop)
+        self.assertFalse(hand.chop_confirmed)
+
+    def test_any_five_possibly_playable_requires_pile_at_four(self) -> None:
+        """Public gate: true iff some color pile is topped by a 4."""
+        settings = create_standard_game_settings(3)
+        no_fours = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.RED: Number.THREE, Color.BLUE: Number.FIVE},
+        )
+        self.assertFalse(any_five_possibly_playable(no_fours, settings))
+        with_four = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.GREEN: Number.FOUR},
+        )
+        self.assertTrue(any_five_possibly_playable(with_four, settings))
+
+    def test_encode_play_type_skips_known_five_when_no_pile_at_four(self) -> None:
+        """With no pile at 4, a known-5 newest slot does not consume play type 1 (§3/§5.1)."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.RED: Number.ONE},
+        )
+        hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.RED, Number.TWO),
+            Card(Color.WHITE, Number.FIVE),
+        ]
+        belief = fresh_inferred_hand(5)
+        mark_known_fives(belief, [4])
+        code, discard_card = dr._encode_peer_code(hand, belief, common, settings)
+        self.assertEqual(1, code)  # newest play-unknown is slot 3, not the known 5 at slot 4
+        self.assertIsNone(discard_card)
+        self.assertEqual(3, slot_for_play_type(belief, 1, False))
+
+    def test_encode_play_type_counts_known_five_when_pile_at_four(self) -> None:
+        """With a pile at 4 the known 5 stays in the play-code set (index shifts by one)."""
+        settings = create_standard_game_settings(3)
+        common = CommonView(
+            live_tokens=3,
+            hint_tokens=6,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={Color.RED: Number.ONE, Color.GREEN: Number.FOUR},
+        )
+        hand = [
+            Card(Color.YELLOW, Number.THREE),
+            Card(Color.BLUE, Number.THREE),
+            Card(Color.WHITE, Number.THREE),
+            Card(Color.RED, Number.TWO),
+            Card(Color.WHITE, Number.FIVE),
+        ]
+        belief = fresh_inferred_hand(5)
+        mark_known_fives(belief, [4])
+        code, discard_card = dr._encode_peer_code(hand, belief, common, settings)
+        self.assertEqual(2, code)  # slot 4 (known 5) is type 1; playable slot 3 is type 2
+        self.assertIsNone(discard_card)
+        self.assertEqual(3, slot_for_play_type(belief, 2, True))
+
+    def test_play_decode_negative_inference_skips_excluded_known_five(self) -> None:
+        """Decode with no pile at 4: known-5 slot is not marked unplayable as a newer unknown."""
+        hand = fresh_inferred_hand(5)
+        mark_known_fives(hand, [4])
+        apply_play_decode(hand, 1, False)  # newest play-unknown = slot 3
+        self.assertEqual(Playability.PLAYABLE, hand.cards[3].playability)
+        self.assertEqual(Playability.UNKNOWN, hand.cards[4].playability)
+        self.assertTrue(hand.cards[4].known_five)
+
+    def test_copy_preserves_known_five(self) -> None:
+        hand = fresh_inferred_hand(5)
+        mark_known_fives(hand, [2])
+        copied = copy_inferred_hand(hand)
+        self.assertTrue(copied.cards[2].known_five)
+        self.assertFalse(copied.cards[1].known_five)
+
+    def test_number_five_hint_marks_all_observers(self) -> None:
+        settings = create_standard_game_settings(3)
+        common = _common(settings)
+        players = [DynamicRecommendation3P(i) for i in range(3)]
+        for p in players:
+            p.set_game_settings(settings)
+            p.set_common_view(common)
+        hand_p1 = [Card(Color.BLUE, Number.FOUR)] * 4 + [Card(Color.RED, Number.FIVE)]
+        hand_p2 = [Card(Color.GREEN, Number.THREE)] * 5
+        views = [
+            PlayerView(teammates={1: Hand(hand_p1), 2: Hand(hand_p2)}, own_hand_size=5),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.TWO)] * 5), 2: Hand(hand_p2)},
+                own_hand_size=5,
+            ),
+            PlayerView(
+                teammates={0: Hand([Card(Color.WHITE, Number.TWO)] * 5), 1: Hand(hand_p1)},
+                own_hand_size=5,
+            ),
+        ]
+        # Literal non-convention 5 hint on P1 slot 4 (force via direct mark path after observe).
+        hint = NumberHint(teammate=1, cards=[4], number=Number.FIVE)
+        for i, p in enumerate(players):
+            p.observe_number_hint_move(0, hint, views[i])
+        for p in players:
+            self.assertTrue(p._inferred_hands[1].cards[4].known_five)
+            self.assertFalse(p._inferred_hands[1].cards[0].known_five)
+
+    def test_guaranteed_known_five_is_played(self) -> None:
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        played = {c: Number.FOUR for c in settings.cards}
+        player.set_common_view(
+            CommonView(
+                live_tokens=3,
+                hint_tokens=4,
+                cards_to_draw=10,
+                cards_discarded={},
+                cards_played=played,
+            )
+        )
+        mark_known_fives(player._inferred_hands[0], [3])
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(3, move.card)
+        self.assertIn("known 5", move.why())
+
+    def test_endgame_holds_unguaranteed_known_five_for_unknown_bomb(self) -> None:
+        """Known 5 with mixed pile heights is not forced; newest unknown still tried."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        # Only red awaits a 5; blue still at 3 — not guaranteed.
+        player.set_common_view(
+            CommonView(
+                live_tokens=2,
+                hint_tokens=4,
+                cards_to_draw=0,
+                cards_discarded={},
+                cards_played={
+                    Color.RED: Number.FOUR,
+                    Color.BLUE: Number.THREE,
+                    Color.GREEN: Number.FIVE,
+                    Color.YELLOW: Number.FIVE,
+                    Color.WHITE: Number.FIVE,
+                },
+            )
+        )
+        mark_known_fives(player._inferred_hands[0], [1])
+        for belief in player._inferred_hands[0].cards:
+            if not belief.known_five:
+                set_playability(belief, Playability.UNPLAYABLE)
+        set_playability(player._inferred_hands[0].cards[4], Playability.UNKNOWN)
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Play)
+        self.assertEqual(4, move.card)
+
+    def test_confirmed_chop_skips_known_five(self) -> None:
+        """Discard path must not chop a known 5; chop advances past it."""
+        settings = create_standard_game_settings(3)
+        player = DynamicRecommendation3P(0)
+        player.set_game_settings(settings)
+        common = _common(settings)
+        player.set_common_view(
+            CommonView(
+                live_tokens=common.live_tokens,
+                hint_tokens=common.hint_tokens - 1,
+                cards_to_draw=common.cards_to_draw,
+                cards_discarded=common.cards_discarded,
+                cards_played=common.cards_played,
+            )
+        )
+        for belief in player._inferred_hands[0].cards:
+            set_playability(belief, Playability.UNPLAYABLE)
+        mark_known_fives(player._inferred_hands[0], [0])
+        self.assertEqual(1, player._inferred_hands[0].chop)
+        player._inferred_hands[0].chop_confirmed = True
+        player._inferred_hands[1].cards[4].playability = Playability.PLAYABLE
+        move = player.play(_teammate_view())
+        self.assertIsInstance(move, Discard)
+        self.assertEqual(1, move.card)
 
 
 if __name__ == "__main__":
