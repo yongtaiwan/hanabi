@@ -367,7 +367,7 @@ class DynamicRecommendation3P(BasePlayer):
             return None
         return move_with_why(
             Discard(own.chop),
-            f"[3p DR] Protect next (token gift; discard confirmed chop slot {own.chop})",
+            f"[3p DR] Protect next (token gift; discard confirmed chop C{own.chop + 1})",
         )
 
     def _try_play_known_five(
@@ -385,7 +385,7 @@ class DynamicRecommendation3P(BasePlayer):
             if Playability.PLAYABLE == belief.playability:
                 continue  # already handled by convention-playable branch
             assert self.is_move_legal(player_view, Play(slot))
-            return move_with_why(Play(slot), f"{why} slot {slot}")
+            return move_with_why(Play(slot), f"{why} C{slot + 1}")
         return None
 
     def _try_play_leftmost_playable(self, player_view: PlayerView) -> Optional[Move]:
@@ -399,7 +399,7 @@ class DynamicRecommendation3P(BasePlayer):
                 if Playability.PLAYABLE != belief.playability:
                     continue
                 assert self.is_move_legal(player_view, Play(slot))
-                return move_with_why(Play(slot), f"[3p DR] Play slot {slot} (identified playable)")
+                return move_with_why(Play(slot), f"[3p DR] Play C{slot + 1} (identified playable)")
         return self._try_play_known_five(
             player_view,
             why="[3p DR] Play known 5 (all incomplete colors await a 5)",
@@ -415,7 +415,7 @@ class DynamicRecommendation3P(BasePlayer):
                 continue
             assert self.is_move_legal(player_view, Play(slot))
             return move_with_why(
-                Play(slot), f"[3p DR] Endgame play slot {slot} (unknown; score attempt)"
+                Play(slot), f"[3p DR] Endgame play C{slot + 1} (unknown; score attempt)"
             )
         return None
 
@@ -437,7 +437,7 @@ class DynamicRecommendation3P(BasePlayer):
                 self._player_index, player_view, avoid_enc_type=enc_type
             )
             assert hint_move is not None, (
-                f"literal fallback hint must exist when convention type {enc_type} is unbuildable"
+                f"literal fallback hint must exist when convention type {enc_type} is unavailable"
             )
             assert self.is_move_legal(player_view, hint_move), (
                 f"literal fallback hint is illegal: {hint_move!r}"
@@ -446,10 +446,10 @@ class DynamicRecommendation3P(BasePlayer):
             if _hint_touches_entire_hand(hint_move.cards, hand_size):
                 why = (
                     f"{why_prefix} abandon convention (full-hand; "
-                    f"unbuildable type={enc_type}, {type_sum})"
+                    f"unavailable type={enc_type}, {type_sum})"
                 )
             else:
-                why = f"{why_prefix} literal fallback (unbuildable type={enc_type}, {type_sum})"
+                why = f"{why_prefix} literal fallback (unavailable type={enc_type}, {type_sum})"
             return move_with_why(hint_move, why)
         assert self.is_move_legal(player_view, hint_move), (
             f"built convention hint is illegal: {hint_move!r} enc_type={enc_type}"
@@ -467,13 +467,13 @@ class DynamicRecommendation3P(BasePlayer):
             "confirmed" if hand.chop_confirmed else "unconfirmed"
         )
         return move_with_why(
-            Discard(hand.chop), f"[3p DR] Discard chop slot {hand.chop} ({label})"
+            Discard(hand.chop), f"[3p DR] Discard chop C{hand.chop + 1} ({label})"
         )
 
     def _discard_oldest(self, player_view: PlayerView) -> Optional[Move]:
         if not self.is_move_legal(player_view, Discard(0)):
             return None
-        return move_with_why(Discard(0), "[3p DR] Discard slot 0 (oldest; no chop)")
+        return move_with_why(Discard(0), "[3p DR] Discard C1 (no chop assigned)")
 
 
 def _in_final_round_score_mode(common_view: CommonView) -> bool:
@@ -1496,7 +1496,7 @@ def _hint_quality(
     settings: GameSettings,
     inferred_hands: List[InferredHand],
 ) -> HintQuality:
-    """Classify the would-be convention channel (§9.2). Unbuildable → fine."""
+    """Classify the would-be convention channel (§9.2). Unavailable → fine."""
     return _project_channel(hinter, player_view, common_view, settings, inferred_hands).quality
 
 

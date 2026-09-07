@@ -19,7 +19,7 @@ No extra install is required beyond the project’s normal dependencies (`PyYAML
 
 ## Quick start: 500-game 4-player recommendation batch
 
-Copy-paste this to run **500 games** of **4-player mini-recommendation** only, with base seed **42**:
+Copy-paste this to run **500 games** of **4-player Simple Recommendation** only, with base seed **42**:
 
 ```bash
 python3 run_ai_experiments.py \
@@ -123,7 +123,7 @@ python3 run_ai_experiments.py \
 
 Open `summary.md` for the comparison table.
 
-### 3p mini-recommendation only (500 games)
+### 3-player Simple Recommendation only (500 games)
 
 ```bash
 python3 run_ai_experiments.py \

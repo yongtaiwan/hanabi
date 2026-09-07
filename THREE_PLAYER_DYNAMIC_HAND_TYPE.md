@@ -5,8 +5,8 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 **Related (different bots):**
 
 - Pure-recommendation redesign draft: `DynamicRecommendation3P` — `THREE_PLAYER_DYNAMIC_RECOMMENDATION.md`
-- 3p mini recommendation (mod 7): `THREE_PLAYER_MINI_RECOMMENDATION.md`
-- 4p mini recommendation (mod 9): `FOUR_PLAYER_MINI_RECOMMENDATION.md`
+- 3p Simple Recommendation (mod 8): `THREE_PLAYER_MINI_RECOMMENDATION.md`
+- 4p Simple Recommendation (mod 12): `FOUR_PLAYER_MINI_RECOMMENDATION.md`
 - Legacy gDoc (superseded by this file for the upgraded convention): [hint-hand-type doc](https://docs.google.com/document/d/1KD2ZClK_OgtcjMIiKBMBUuzlSdV7nrGVEp5-n9IoZus/edit)
 
 ---

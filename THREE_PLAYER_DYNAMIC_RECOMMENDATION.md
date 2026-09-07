@@ -8,8 +8,8 @@ Human-executable convention for **3-player Hanabi** using **mod-8** hint encodin
 
 - Dual-mode dynamic hand-type (current bot): `DynamicHandType3P` — `THREE_PLAYER_DYNAMIC_HAND_TYPE.md`
 - Classic 3p hint-hand-type: `HintHandSubtype3P` — [gDoc](https://docs.google.com/document/d/1KD2ZClK_OgtcjMIiKBMBUuzlSdV7nrGVEp5-n9IoZus/edit)
-- 3p mini recommendation (mod 7): `THREE_PLAYER_MINI_RECOMMENDATION.md`
-- 4p mini recommendation (mod 9): `FOUR_PLAYER_MINI_RECOMMENDATION.md`
+- 3p Simple Recommendation (mod 8): `THREE_PLAYER_MINI_RECOMMENDATION.md`
+- 4p Simple Recommendation (mod 12): `FOUR_PLAYER_MINI_RECOMMENDATION.md`
 
 ---
 
