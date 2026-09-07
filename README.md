@@ -1,36 +1,37 @@
-# Hanabi Game Implementation
+# Hanabi Convention Lab
 
-A Python implementation of the Hanabi card game with support for different player strategies.
+A Python Hanabi engine, strategy testbed, and browser-based teaching tool. The main research
+strategies are the 3-, 4-, and 5-player **Simple Recommendation** conventions and the
+score-maximizing 3-player **Dynamic Recommendation** convention.
 
-## Project Structure
+## Convention Lab website
+
+Open the hosted [Hanabi Convention Lab](https://hanabi-convention-lab.youtiisnoob.chatgpt.site). It runs the Python game engine and bot classes inside the browser, so no local server is required. The lab includes a custom-position analyzer, explained bot games, and replay loading. See `WEB_APP.md` for details and the optional local development route.
+
+## Project structure
 
 ```
 hanabi/
-├── hanabi/
-│   ├── __init__.py          # Package initialization and exports
-│   ├── enums.py             # Color and Number enumerations
-│   ├── card.py              # Card and Suit classes
-│   ├── game.py              # Game state classes (GameSettings, CommonView, PlayerView, Hand)
-│   ├── moves.py             # Move classes (Move, Hint, CardMove, Play, Discard, etc.)
-│   ├── observer.py          # Observer interface
-│   └── player.py            # Player classes (BasePlayer, HumanPlayer, RandomPlayer, StrategyAlphaPlayer)
-├── README.md
-└── requirements.txt
+├── ai/             # Bot strategies and shared convention policy
+├── console/        # Terminal game
+├── core/           # Cards, moves, state, rules, players, and game history
+├── gui/            # Desktop GUI
+├── tools/          # Experiment and analysis helpers
+└── web/            # Convention Lab web adapter and static interface
+test/               # Unit and integration tests
+run_ai_experiments.py
 ```
 
-## Classes Overview
+## Main strategies
 
-### Enumerations
-- **Color**: MULTI, WHITE, RED, YELLOW, GREEN, BLUE
-- **Number**: ONE, TWO, THREE, FOUR, FIVE
+- **Simple Recommendation (3 players):** mod 8, using all four hint directions across the two other seats.
+- **Simple Recommendation (4 players):** mod 12, using all four hint directions across the three other seats.
+- **Simple Recommendation (5 players):** mod 16, using all four hint directions across the four other seats.
+- **Dynamic Recommendation (3 players):** a more complex convention intended to maximize score rather than minimize human bookkeeping.
 
-### Core Classes
-- **Card**: Represents a single card with color and number
-- **Suit**: Represents a suit with cards mapping numbers to quantities
-- **Hand**: Represents a player's hand of cards
-- **GameSettings**: Game configuration (players, tokens, cards)
-- **CommonView**: Common game state visible to all players
-- **PlayerView**: Game state from a player's perspective
+The three Simple strategies share the same recommended-play safety gate and keep only one
+current recommendation per seat. Their player-count-specific modules define the channel table,
+hand recommendation mapping, and hint-strength thresholds.
 
 ### Move Classes
 - **Move**: Base class for all moves
@@ -89,32 +90,13 @@ print(f"Player made move: {move}")
 pip install -r requirements.txt
 ```
 
-## Development
+## Development and verification
 
-This project follows the class diagram design with:
-- Type hints for better code clarity
-- Abstract base classes for interfaces
-- Property-based accessors matching the diagram's method signatures
-- Immutable data structures where appropriate
+Run the regression suite from the repository root:
 
-## Next Steps
+```bash
+python3 -m unittest discover -s test -q
+```
 
-- Implement game engine/logic
-- Complete strategy implementations
-- Add game state management
-- Create game loop and turn management
-- Add unit tests
-
-## TODO
-
-- Implement indirect hinting convention
-
-- **Document game record format**: Create comprehensive documentation for the concise YAML/JSON game record format, including:
-  - Field name mappings (short names and their meanings)
-  - Card notation format (e.g., G5 for GREEN 5)
-  - Move format specifications
-  - State representation
-  - Versioning information
-  - Example files
-  - Consider publishing as a potential community standard (no widely adopted format currently exists)
-
+The repository targets Python 3.10 or newer. The web adapter uses only the standard library;
+PyYAML is optional and needed only for YAML replay imports.

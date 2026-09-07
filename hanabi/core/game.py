@@ -677,8 +677,8 @@ class GameState:
         if player_index != self._current_player:
             return False
 
-        # Check if game is over
-        if 0 == self._turns_left:
+        # All terminal reasons stop play, not only the final-round countdown.
+        if self.is_finished():
             return False
 
         if isinstance(move, CardMove):
@@ -1395,4 +1395,3 @@ def _observer_move_with_outcome(
         moved_card = state_before.player_hands[player_index].cards[move.card]
         return finished_card_move_for_observer(move, moved_card)
     return move
-

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hanabi Convention Lab</title>
+    <meta name="description" content="Learn Hanabi's Simple and Dynamic Recommendation conventions through editable positions, explained bot games, and hands-on play." />
+    <link rel="canonical" href="https://hanabi-convention-lab.youtiisnoob.chatgpt.site/lab.html" />
+    <link rel="icon" href="/favicon.svg" />
+    <meta property="og:title" content="Hanabi Convention Lab" />
+    <meta property="og:description" content="Watch a game, edit a position, or play with the convention bots." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hanabi-convention-lab.youtiisnoob.chatgpt.site/lab.html" />
+    <meta property="og:image" content="https://hanabi-convention-lab.youtiisnoob.chatgpt.site/og.png" />
+    <meta property="og:image:alt" content="Hanabi Convention Lab card table" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Hanabi Convention Lab" />
+    <meta name="twitter:description" content="Watch a game, edit a position, or play with the convention bots." />
+    <meta name="twitter:image" content="https://hanabi-convention-lab.youtiisnoob.chatgpt.site/og.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Hanabi Convention Lab</h1>
+      </div>
+      <div class="header-tools">
+        <label class="debug-toggle" for="debug-mode" title="Show strategy internals such as stored recommendations and card classifications">
+          <input id="debug-mode" type="checkbox" role="switch" />
+          <span class="debug-switch" aria-hidden="true"><i></i></span>
+          <b>Debug / helper</b>
+        </label>
+        <div class="engine-badge loading" id="engine-status"><span></span> Loading strategy engine…</div>
+      </div>
+    </header>
+
+    <nav class="mode-tabs" aria-label="Lab modes">
+      <button class="mode-tab active" data-mode="position">Position lab</button>
+      <button class="mode-tab" data-mode="watch">Watch bots</button>
+      <button class="mode-tab" data-mode="replay">Replay</button>
+      <button class="mode-tab" data-mode="play">Play with bots</button>
+      <button class="mode-tab" data-mode="help">Help</button>
+    </nav>
+
+    <main>
+      <section class="mode-panel active" id="mode-position" aria-label="Position lab">
+        <div class="mode-controls">
+          <div class="intro-actions">
+            <button class="secondary-button" id="randomize-position">Likely random state</button>
+            <button class="secondary-button" id="reset-position">Reset example</button>
+          </div>
+        </div>
+
+        <div class="position-layout">
+          <aside class="control-panel">
+            <label class="field-label" for="position-bot">Strategy</label>
+            <select id="position-bot"></select>
+            <p class="microcopy strategy-help" id="recommendation-help"></p>
+
+            <details id="beliefs-details">
+              <summary>Public convention state</summary>
+              <div id="belief-editor" class="belief-editor"></div>
+            </details>
+
+            <details open id="card-bank-details">
+              <summary>Deck ⇄ discard</summary>
+              <div class="discard-editor" id="discard-editor"></div>
+            </details>
+
+            <button class="primary-button" id="analyze-position">Ask the bot <span>→</span></button>
+            <div class="continue-controls">
+              <button class="secondary-button" id="continue-position">Continue from position</button>
+            </div>
+            <p class="error-message" id="position-error" role="alert"></p>
+          </aside>
+
+          <div class="table-workspace">
+            <div class="history-source" id="history-source" hidden></div>
+            <div class="hanabi-table position-board-layout" id="hanabi-table">
+              <div class="table-center">
+                <div class="center-state" aria-label="Public game state">
+                  <div class="center-stat hint-stat"><span>Hints</span><div id="hint-tokens" class="position-token-control hint-token-control" role="group" aria-label="Hint tokens"></div></div>
+                  <div class="center-stat life-stat"><span>Lives</span><div id="life-tokens" class="position-token-control life-token-control" role="group" aria-label="Lives"></div></div>
+                  <div class="center-stat deck-stat"><span>Deck</span><button type="button" id="deck-count" class="deck-stack position-deck" title="Open deck order" aria-label="Open deck order; 0 cards in deck"><i></i><i></i><i></i><b>0</b></button></div>
+                  <label class="center-stat tempo-stat"><span>Team plays since hint</span><input id="plays-since-hint" type="number" min="0" max="99" /></label>
+                </div>
+                <div class="fireworks-editor" id="fireworks-editor"></div>
+              </div>
+              <div class="hands-editor" id="hands-editor"></div>
+            </div>
+            <section class="deck-order-workspace" id="deck-order-workspace" hidden aria-label="Deck draw order editor">
+              <div class="deck-order-header">
+                <div><p class="eyebrow gold">Exact draw order</p><h3>Order the deck</h3><p>Draw 1 is next. Drag before another card, tap two cards to swap, or use arrow keys. Changes stay here until you apply them.</p></div>
+                <div><button type="button" class="secondary-button" id="reset-deck-order">Restore original</button><button type="button" class="secondary-button" id="shuffle-deck-order">Shuffle</button><button type="button" class="secondary-button" id="cancel-deck-order">Cancel</button><button type="button" class="primary-button small" id="close-deck-order">Apply order</button></div>
+              </div>
+              <div class="deck-order-list" id="deck-order-list"></div>
+            </section>
+            <div class="game-board position-result-board position-board-layout" id="position-result-board" hidden aria-label="Position decision board"></div>
+            <p class="table-note"><span id="position-transfer" role="status"></span>Click a player badge to move the acting seat. C1 is leftmost from the card owner's view.</p>
+          </div>
+
+          <aside class="decision-panel" id="decision-panel" hidden>
+            <div class="empty-decision">
+              <span class="spark">✦</span>
+              <h3>Decision explanation</h3>
+              <p>Choose a state, then ask.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="mode-panel" id="mode-watch" aria-label="Watch bots">
+        <div class="mode-controls">
+          <div class="inline-controls">
+            <select id="watch-bot" aria-label="Watch strategy"></select>
+            <label class="seed-control">Seed <span><input id="watch-seed" type="number" value="42" min="0" /><button type="button" class="random-seed-button" id="random-watch-seed" title="Use a random seed" aria-label="Use a random watch seed">↻</button></span></label>
+            <button class="primary-button small" id="generate-game">Generate game</button>
+          </div>
+        </div>
+        <p class="error-message" id="watch-error" role="alert"></p>
+        <div id="watch-viewer" class="timeline-shell"></div>
+      </section>
+
+      <section class="mode-panel" id="mode-replay" aria-label="Replay">
+        <input id="replay-file" type="file" accept=".json,.yaml,.yml,application/json" hidden />
+        <p class="error-message" id="replay-error" role="alert"></p>
+        <div id="replay-viewer" class="timeline-shell"></div>
+      </section>
+
+      <section class="mode-panel" id="mode-play" aria-label="Play with bots">
+        <div class="mode-controls">
+          <div class="inline-controls play-start-controls">
+            <select id="play-bot" aria-label="Play strategy"></select>
+            <label>Your seat <select id="play-seat" aria-label="Your seat"></select></label>
+            <label class="seed-control">Seed <span><input id="play-seed" type="number" value="42" min="0" /><button type="button" class="random-seed-button" id="random-play-seed" title="Use a random seed" aria-label="Use a random play seed">↻</button></span></label>
+            <button class="primary-button small" id="start-play">New game</button>
+            <button type="button" class="secondary-button" id="export-play" disabled>Save replay</button>
+          </div>
+        </div>
+        <p class="error-message" id="play-error" role="alert"></p>
+        <div id="play-shell" class="play-shell">
+          <div class="timeline-empty"><div><span class="spark">✦</span><h3>Start a game</h3><p>You will see every hand except your own, just like at a Hanabi table.</p></div></div>
+        </div>
+      </section>
+
+      <section class="mode-panel help-panel" id="mode-help" aria-labelledby="help-title">
+        <header class="help-heading">
+          <h2 id="help-title">Help &amp; conventions</h2>
+          <p>A convention adds an agreed message to a legal color or number hint. Players still cannot see their own cards.</p>
+        </header>
+
+        <div class="help-conventions">
+          <article class="help-card">
+            <h3>Simple Recommendation</h3>
+            <p class="help-scope">3, 4, or 5 players</p>
+            <ol>
+              <li>The hint giver assigns a <strong>recommendation number</strong> to each other player's hand using that hand and the public board.</li>
+              <li>Add those numbers and take the remainder modulo 8, 12, or 16 for 3, 4, or 5 players. This selects a <strong>hint channel</strong>: a prescribed target and color/number hint. If that exact hint is unavailable, the bot skips it.</li>
+              <li>Each other player subtracts the recommendation numbers of the visible peers to recover their own. The <strong>action algorithm</strong> decides when to follow it or give a more useful hint.</li>
+            </ol>
+            <p class="help-example">Three-player arithmetic: channel 5 − visible peer's 3 = your 2 (modulo 8). Recommendation 2 means play C2, if the freshness rule permits.</p>
+          </article>
+          <article class="help-card">
+            <h3>Dynamic Recommendation</h3>
+            <p class="help-scope">3 players</p>
+            <p>Also uses modulo-8 encoding, but the decoded message updates a shared <strong>convention state</strong> rather than one stored action. Hint channels use which old, middle, or new positions are touched.</p>
+            <p>Each hand tracks <strong>unknown / playable / unplayable</strong> marks, known 5s, and a <strong>chop</strong>. These marks move with the cards; a successful play can make previously unplayable cards worth reconsidering.</p>
+            <p>In ordinary turns, the bot checks whether the next player needs protection before playing a marked playable card, then weighs a hint against discarding. The final-round policy changes when the deck is empty.</p>
+          </article>
+        </div>
+
+        <details class="help-reference">
+          <summary>Simple recommendation numbers</summary>
+          <div class="help-table-scroll"><table class="help-mapping">
+            <thead><tr><th scope="col">Players</th><th scope="col">Play</th><th scope="col">Discard / protect</th><th scope="col">No new action</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">3 · mod 8</th><td>1–5 → C1–C5</td><td>0 → discard chop; 6 → keep chop and discard the first legal non-chop position</td><td>7</td></tr>
+              <tr><th scope="row">4 · mod 12</th><td>1–4 → C1–C4</td><td>5–8 → discard C1–C4</td><td>0, 9–11</td></tr>
+              <tr><th scope="row">5 · mod 16</th><td>1–4 → C1–C4</td><td>5–8 → useless C1–C4; 9–12 → dispensable C1–C4</td><td>0, 13–15</td></tr>
+            </tbody>
+          </table></div>
+          <p>The number recommends an action; legality, freshness, and higher-priority hint rules still apply.</p>
+        </details>
+
+        <details class="help-reference">
+          <summary>Physical hint-channel lookup</summary>
+          <p>Seat offsets follow turn order and wrap around: +1 is the next player. A hint always touches every card of the chosen color or number, not just the card used to choose it.</p>
+          <h3>Simple Recommendation</h3>
+          <p><b>Left</b> means use C1's number or color. <b>Right</b> means scan from the newest card back toward C1 and use the first number or color different from C1's. If none differs, that right channel is unavailable.</p>
+          <div class="help-table-scroll"><table class="help-mapping">
+            <thead><tr><th>Hint choice</th><th>3 players: +1 / +2</th><th>4 players: +1 / +2 / +3</th><th>5 players: +1 / +2 / +3 / +4</th></tr></thead>
+            <tbody>
+              <tr><th>Left number</th><td>0 / 1</td><td>0 / 1 / 2</td><td>0 / 1 / 2 / 3</td></tr>
+              <tr><th>Left color</th><td>2 / 3</td><td>3 / 4 / 5</td><td>4 / 5 / 6 / 7</td></tr>
+              <tr><th>Right number</th><td>4 / 5</td><td>6 / 7 / 8</td><td>8 / 9 / 10 / 11</td></tr>
+              <tr><th>Right color</th><td>6 / 7</td><td>9 / 10 / 11</td><td>12 / 13 / 14 / 15</td></tr>
+            </tbody>
+          </table></div>
+          <h3>Dynamic Recommendation · 3 players</h3>
+          <p><b>NEW</b> touches the newest card (even if C1 is also touched). <b>OLD</b> touches C1 but not the newest card. <b>MID</b> touches neither end. For channels 0–3, the bot prefers OLD and uses MID only when OLD is unavailable. A full-hand hint is an abandon-convention signal, not an encoded channel.</p>
+          <div class="help-table-scroll"><table class="help-mapping">
+            <thead><tr><th>Hint direction and type</th><th>Next player (+1)</th><th>Previous player (+2)</th></tr></thead>
+            <tbody>
+              <tr><th>OLD / MID number</th><td>0</td><td>1</td></tr>
+              <tr><th>OLD / MID color</th><td>2</td><td>3</td></tr>
+              <tr><th>NEW number</th><td>4</td><td>5</td></tr>
+              <tr><th>NEW color</th><td>6</td><td>7</td></tr>
+            </tbody>
+          </table></div>
+          <p>NEW uses the newest card's attribute. MID uses the lowest rank, or first color in W/R/Y/G/B order, whose matches are all in middle positions. Dynamic also verifies that the physical hint matches the convention's chosen hint; an arbitrary literal hint need not encode a message. The channel number is the combined sum, not your decoded instruction: subtract the other visible receiver's recommendation modulo 8.</p>
+        </details>
+
+        <section class="help-card help-glossary" aria-labelledby="glossary-title">
+          <h3 id="glossary-title">Words on the board</h3>
+          <dl>
+            <div><dt>C1, C2, …</dt><dd>Positions in the card owner's hand order, oldest to newest. Read the C-labels even when the hand wraps into two rows.</dd></div>
+            <div><dt>Acting seat</dt><dd>The player whose decision is being evaluated. Click a player badge to change it in Position lab.</dd></div>
+            <div><dt>Hint giver / recipient / receiver</dt><dd>The giver sends the hint; the recipient's cards are touched. Every non-giver can be a receiver who decodes a recommendation, not just the recipient.</dd></div>
+            <div><dt>Hint channel</dt><dd>The agreed meaning of a hint's target, type, and touched positions. Its number encodes the combined message, not one player's action.</dd></div>
+            <div><dt>Stored recommendation · Rec</dt><dd>A Simple player's latest decoded instruction. A new encoded hint replaces it; playing or discarding clears that player's instruction.</dd></div>
+            <div><dt>Freshness</dt><dd>A Simple play recommendation can be followed after zero team plays since the hint, or after exactly one if at least two lives remain.</dd></div>
+            <div><dt>Chop</dt><dd>The convention's discard position. Simple uses the newest/rightmost card as chop, distinct from its default C1 discard. Dynamic tracks a movable chop.</dd></div>
+            <div><dt class="kind-playable">Playable</dt><dd>The next rank needed by its color's firework. A last remaining copy that is playable is still labeled playable.</dd></div>
+            <div><dt class="kind-useless">Useless</dt><dd>Already covered by a firework, or unreachable because every copy of a required lower rank was lost. Safe to discard for scoring.</dd></div>
+            <div><dt class="kind-critical">Critical</dt><dd>A still-needed, not-yet-playable card's last remaining copy. Losing it blocks further progress through that rank.</dd></div>
+            <div><dt class="kind-dispensable">Dispensable</dt><dd>Still useful but not playable now, with another copy remaining. Discarding it costs a backup copy; it is not automatically the best move.</dd></div>
+            <div><dt>Seed</dt><dd>Reproduces the initial shuffled deck. The same strategy, seed, and choices reproduce the same game.</dd></div>
+          </dl>
+          <p class="help-caution">Card classifications describe actual cards for learning. They are not extra knowledge a player has about their own hidden hand, and differ from Dynamic's inferred playability marks.</p>
+        </section>
+
+        <section class="help-card help-usage" aria-labelledby="help-usage-title">
+          <h3 id="help-usage-title">Using the Lab</h3>
+          <dl>
+            <div><dt>Position lab</dt><dd>Click a card's number or background to swap it with a real copy: deck first, then discard, then another hand. The outgoing card takes that copy's place. If the only copy is played, its firework is lowered and displaced cards return to the deck. Click the deck to order draws. Ask the bot explains the decision.</dd></div>
+            <div><dt>Watch / Replay</dt><dd>Step through generated games, or load JSON/YAML records. Replay flags moves where the current bot differs from the saved choice.</dd></div>
+            <div><dt>Play with bots</dt><dd>Click your hidden card to play/discard, or a teammate's card to hint. Each turn's animation finishes before the next appears.</dd></div>
+            <div><dt>Keyboard and playback</dt><dd>Tab through controls and use Enter or Space to choose an action. Opening card actions focuses the first choice; Cancel or Escape returns to that card. Timeline arrow keys move through turns. Stepping or scrubbing pauses autoplay so you can read the explanation. Reduced-motion preferences keep the feedback without the moving effects.</dd></div>
+            <div><dt>Debug / helper</dt><dd>Shows convention memory and readable card statuses. Your own cards stay hidden during Play. Watch and Replay let you inspect the deck. In Play, View inspects any past move without changing the game; Branch before one of your moves removes the later branch so you can choose again. Current turn returns to live play.</dd></div>
+            <div><dt>Saving and resuming</dt><dd>Open Workspace files at the bottom of the page. Save workspace downloads your position, games, and current timeline steps. Load workspace restores that file, including playable human games. Save replay downloads just one game for the Replay tab. Keep these files: closing or refreshing the page does not save automatically, and the browser warns about unsaved changes. Recordings reconstruct the game with the current strategy engine.</dd></div>
+            <div><dt>Deck editing</dt><dd>Opening the deck does not change it. Apply order commits your draft; Cancel leaves the original untouched. Restore original resets the draft to the order on entry. Shuffle creates a new draft order. Sampling a different position closes the old deck editor.</dd></div>
+          </dl>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <details class="workspace-files">
+        <summary>Workspace files</summary>
+        <div class="workspace-tools" aria-label="Workspace files">
+          <div><button type="button" class="secondary-button" id="save-workspace">Save workspace</button><button type="button" class="secondary-button" id="load-workspace">Load workspace</button><input id="workspace-file" type="file" accept=".json,application/json" hidden /></div>
+          <span id="workspace-status" role="status">Save a file to keep your position and games. Nothing is uploaded.</span>
+        </div>
+      </details>
+      <p>The original Python strategy engine runs privately inside your browser—the website does not duplicate the convention rules.</p>
+    </footer>
+    <script src="/app.js?v=37"></script>
+  </body>
+</html>

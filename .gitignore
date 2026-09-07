@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+site-deploy.tar.gz
 build/
 develop-eggs/
 dist/
@@ -164,4 +165,3 @@ test_*.txt
 Network Trash Folder
 Temporary Items
 .apdisk
-

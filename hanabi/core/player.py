@@ -6,7 +6,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import random
-from typing import TYPE_CHECKING, List, Dict, Optional, Union, assert_never
+from typing import TYPE_CHECKING, List, Dict, Optional, Union
+
+try:
+    from typing import assert_never
+except ImportError:  # Python 3.10 compatibility (the repository's declared target).
+    def assert_never(value) -> None:
+        raise AssertionError(f"unhandled value: {value!r}")
 
 if TYPE_CHECKING:
     from .game import PlayerView

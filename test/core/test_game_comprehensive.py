@@ -4,6 +4,7 @@ Comprehensive tests for Game class to ensure all functionality works correctly.
 
 import unittest
 import copy
+from unittest.mock import patch
 from hanabi.core.game import (
     create_standard_game_settings,
     Game,
@@ -206,35 +207,44 @@ class TestGameComprehensive(unittest.TestCase):
 
     def test_validate_game_over_no_moves(self):
         """Test that moves are invalid when game is over."""
-        # Lose all lives
-        while self.game.state.common_view.live_tokens > 0 and not self.game.is_finished:
-            # Play invalid cards
+        # A random hand can contain only ones, so searching for a misplay in
+        # an unbounded loop can hang without making a move. Keep the standard
+        # deck order: each dealt hand contains an unplayable rank above one.
+        with patch.object(Deck, "shuffle"):
+            self.game = Game.create(PlayerTeam(self.players), self.settings)
+
+        for lives_left in range(self.settings.max_live_tokens - 1, -1, -1):
             current_player = self.game.current_player
             hand = self.game.state.player_hands[current_player]
-            if hand.cards:
-                for i, card in enumerate(hand.cards):
-                    if card.number != Number.ONE:
-                        move = Play(i)
-                        try:
-                            self.game.process_move(current_player, move)
-                            self.game._advance_turn()
-                            break
-                        except AssertionError:
-                            pass
-            if self.game.state.common_view.live_tokens <= 0:
-                break
+            slot = next(i for i, card in enumerate(hand.cards) if card.number != Number.ONE)
+            self.game.process_move(current_player, Play(slot))
+            self.game._advance_turn()
+            self.assertEqual(self.game.state.common_view.live_tokens, lives_left)
 
-        # Game should be finished
-        if self.game.state.common_view.live_tokens <= 0:
-            self.assertTrue(self.game.is_finished)
+        self.assertTrue(self.game.is_finished)
+        self.assertIsNone(self.game.state.turns_left)
+        actor = self.game.current_player
+        self.assertFalse(self.game.state._validate(actor, Play(0)))
+        target = (actor + 1) % self.settings.num_players
+        cards = self.game.state.player_hands[target].cards
+        color = cards[0].color
+        touched = [i for i, card in enumerate(cards) if card.color == color]
+        self.assertFalse(self.game.state._validate(actor, ColorHint(target, touched, color)))
 
-            # Moves should be invalid (turns_left should be 0 or game finished)
-            # Actually, when lives are 0, is_finished() returns True, but turns_left might not be 0
-            # The validation checks 0 == turns_left, so let's check that condition
-            if 0 == self.game.state.turns_left:
-                if self.game.state.player_hands[0].cards:
-                    move = Play(0)
-                    self.assertFalse(self.game.state._validate(0, move))
+    def test_validate_rejects_moves_after_other_game_endings(self):
+        """All terminal reasons reject an otherwise legal card move."""
+        for ending in ("perfect_score", "final_round"):
+            with self.subTest(ending=ending):
+                state = copy.deepcopy(self.game.state)
+                self.assertTrue(state._validate(state.current_player, Play(0)))
+                if ending == "perfect_score":
+                    state._common_view._cards_played = {
+                        color: Number.FIVE for color in self.settings.cards
+                    }
+                else:
+                    state._turns_left = 0
+                self.assertTrue(state.is_finished())
+                self.assertFalse(state._validate(state.current_player, Play(0)))
 
     def test_play_valid_card_sequence(self):
         """Test playing cards in correct sequence."""
