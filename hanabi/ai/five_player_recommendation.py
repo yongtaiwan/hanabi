@@ -1,9 +1,9 @@
 """
-Mini recommendation strategy for **5-player** Hanabi.
+Simple Recommendation strategy for **5-player** Hanabi.
 
 Extension of :class:`~hanabi.ai.four_player_recommendation.FourPlayerRecommendationPlayer`
-with a **mod-16** alphabet over visible hands. **Sixteen physical channels** (``0``–``15``):
-**4 hint shapes × 4 seat directions** ``next``, ``next+1``, ``next+2``, ``next+3`` (``next+3`` is
+with a **mod-16** alphabet over visible hands. **Sixteen hint channels** (``0``–``15``):
+**4 hint directions × 4 targets** ``next``, ``next+1``, ``next+2``, ``next+3`` (``next+3`` is
 the previous seat for 5p).
 
 - **0–3:** left number  → next / next+1 / next+2 / next+3
@@ -20,50 +20,49 @@ the previous seat for 5p).
 **Seat offset:** ``pos = (T - H - 1) % 5`` ∈ {0, 1, 2, 3}; channel ``c`` ⇒ direction ``c % 4``,
 hint kind ``c // 4``.
 
-**Decoded value** (receiver action; peer codes on the wire are **0**–**12**):
+**Recommendation code** (receiver action; peer codes on the wire are **0**–**12**):
 
 - ``0`` — no info; fall through to default discard.
 - ``1`` – ``4`` — play slot ``value - 1``.
 - ``5`` – ``8`` — slot ``value - 5`` is a **USELESS** discard (never playable).
 - ``9`` – ``12`` — slot ``value - 9`` is a **DISPENSABLE** discard (acceptable, not critical).
 
-Mod-16 decode values **13**–**15** are inert (treated like ``0``). They should not arise when every
+Mod-16 decode values **13**–**15** are unused (treated like ``0``). They should not arise when every
 peer uses codes ``0``–``12``, but are normalized defensively.
 
-**Receiver-as-target ambiguity:** when the observer is the hint target, left vs right is
-approximated from public fields (``0 in move.cards``), same as 3p/4p mini-rec.
+**Receiver-as-target decoding:** when the observer is the hint target, left versus right is
+identified from public fields (``0 in move.cards``), as in the 3p/4p strategies.
 """
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional
 
 NUM_PLAYERS_FOR_FIVE_PLAYER_RECOMMENDATION = 5
 NUM_CHANNELS = 16
 MAX_ACTIONABLE_REC_CODE = 12
 CODE_USELESS_DISCARD_OFFSET = 5
 CODE_DISPENSABLE_DISCARD_OFFSET = 9
-# Drop queued recommendations once global ``_plays_since_hint`` exceeds this (resets on each hint).
-MAX_PLAYS_SINCE_HINT_FOR_REC = 3
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import FinishedPlay, FinishedDiscard, Move, Play, Discard, ColorHint, NumberHint, HintMove, move_with_why
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
+from hanabi.ai.recommendation_policy import allows_recommended_play, replace_current_recommendation
 
 _REC_SLOT_ORDER = (0, 1, 2, 3, 4)
-
-
-def _recommendation_slot(code: int) -> Optional[int]:
-    if 1 <= code <= 4:
-        return code - 1
-    if 5 <= code <= 8:
-        return code - CODE_USELESS_DISCARD_OFFSET
-    if 9 <= code <= 12:
-        return code - CODE_DISPENSABLE_DISCARD_OFFSET
-    return None
 
 
 def _discard_code_offset(code: int) -> Optional[int]:
@@ -72,92 +71,6 @@ def _discard_code_offset(code: int) -> Optional[int]:
     if 9 <= code <= 12:
         return CODE_DISPENSABLE_DISCARD_OFFSET
     return None
-
-
-def _normalize_decoded_code(decoded: int) -> int:
-    """Map mod-16 decode to actionable peer code ``0``–``12`` (``13``–``15`` → ``0``)."""
-    return decoded if 0 <= decoded <= MAX_ACTIONABLE_REC_CODE else 0
-
-
-def _remap_code_after_removal(code: int, removed_idx: int) -> Optional[int]:
-    """Return ``code`` with its slot index shifted after a card is removed at ``removed_idx``."""
-    slot = _recommendation_slot(code)
-    if slot is None:
-        return None
-    if slot < removed_idx:
-        return code
-    if slot == removed_idx:
-        return None
-    new_slot = slot - 1
-    if 1 <= code <= 4:
-        return 1 + new_slot
-    offset = _discard_code_offset(code)
-    assert offset is not None
-    return offset + new_slot
-
-
-class _QueuedRecommendation(NamedTuple):
-    """One decoded recommendation code waiting in a seat's FIFO queue."""
-
-    code: int
-
-
-class _RecommendationQueue:
-    """FIFO recommendation backlog for a single seat (oldest at index ``0``)."""
-
-    __slots__ = ("_entries",)
-
-    def __init__(self) -> None:
-        self._entries: List[_QueuedRecommendation] = []
-
-    def __len__(self) -> int:
-        return len(self._entries)
-
-    def codes(self) -> List[int]:
-        return [entry.code for entry in self._entries]
-
-    def enqueue(self, code: int) -> None:
-        self.enqueue_codes([code])
-
-    def set_latest(self, code: int) -> None:
-        """Replace the queue with at most one code (single-rec semantics; clears on ``0``)."""
-        self._entries.clear()
-        if 0 != code:
-            self._entries.append(_QueuedRecommendation(code))
-
-    def clear(self) -> None:
-        self._entries.clear()
-
-    def enqueue_codes(self, codes: Iterable[int]) -> None:
-        for code in codes:
-            if 0 != code:
-                self._entries.append(_QueuedRecommendation(code))
-
-    def pop_oldest_matching(self, move: Move) -> bool:
-        """Remove the oldest entry whose implied play/discard matches ``move``."""
-        for idx, entry in enumerate(self._entries):
-            slot = _recommendation_slot(entry.code)
-            if slot is None:
-                continue
-            if isinstance(move, Play) and 1 <= entry.code <= 4 and move.card == slot:
-                self._entries.pop(idx)
-                return True
-            if isinstance(move, Discard) and _discard_code_offset(entry.code) is not None and move.card == slot:
-                self._entries.pop(idx)
-                return True
-        return False
-
-    def remap_after_removal(self, removed_idx: int) -> None:
-        """Shift slot indices in surviving entries after a play/discard at ``removed_idx``."""
-        remapped: List[_QueuedRecommendation] = []
-        for entry in self._entries:
-            new_code = _remap_code_after_removal(entry.code, removed_idx)
-            if new_code is not None and 0 != new_code:
-                remapped.append(_QueuedRecommendation(new_code))
-        self._entries[:] = remapped
-
-    def replace_entries(self, entries: List[_QueuedRecommendation]) -> None:
-        self._entries[:] = entries
 
 
 class _HintScore(NamedTuple):
@@ -189,109 +102,44 @@ def _is_dispensable_discard_code(code: int) -> bool:
     return 9 <= code <= 12
 
 
-class PlayFollowGate(NamedTuple):
-    """When to follow a decoded play recommendation (codes ``1``–``4``).
-
-    Default matches 3p / Cox et al.: follow only when ``plays_since_hint`` is ``0`` or ``1``
-    (and ``errors`` allow). :meth:`none` is the legacy loose 5p rule (any ``ps`` if ``errors < 2``).
-    """
-
-    max_plays_since_hint: int = 999
-    max_errors_exclusive: int = 2
-
-    @classmethod
-    def paper(cls) -> PlayFollowGate:
-        """Cox / 3p: follow only if ``plays_since_hint`` is ``0`` or ``1`` (and errors allow)."""
-        return cls(max_plays_since_hint=1, max_errors_exclusive=2)
-
-    @classmethod
-    def strict_zero(cls) -> PlayFollowGate:
-        """Follow play rec only when no team **Play** since the last encoding hint."""
-        return cls(max_plays_since_hint=0, max_errors_exclusive=0)
-
-    @classmethod
-    def none(cls) -> PlayFollowGate:
-        """Always follow a legal play rec (no plays/errors gate)."""
-        return cls(max_plays_since_hint=999, max_errors_exclusive=999)
-
-    def allows(self, plays_since_hint: int, errors: int) -> bool:
-        if 0 == plays_since_hint:
-            return True
-        if plays_since_hint > self.max_plays_since_hint:
-            return False
-        return errors < self.max_errors_exclusive
+def _is_strong_hint(score: _HintScore) -> bool:
+    """The single committed five-player strong-hint rule from the paper."""
+    combined_changes = (
+        score.new_plays
+        + score.new_useless_discards
+        + score.new_dispensable_discards
+        + score.flips
+    )
+    return (
+        score.saves >= 1
+        or score.new_plays >= 2
+        or score.new_useless_discards >= 1
+        or combined_changes >= 2
+    )
 
 
-DEFAULT_PLAY_FOLLOW_GATE = PlayFollowGate.paper()
+def _is_medium_hint(score: _HintScore) -> bool:
+    """Medium means at least one new dispensable-discard recommendation."""
+    return score.new_dispensable_discards >= 1
 
 
-class HintThresholds(NamedTuple):
-    """Strong / medium / weak hint gates (grid-tunable; see ``tools/hint_threshold_grid_5p.py``)."""
-
-    strong_min_new_plays: int = 2
-    strong_min_new_useless_discards: int = 1  # ``0`` disables; USELESS discard is strong-tier safe info
-    strong_min_saves: int = 1
-    medium_min_new_dispensable_discards: int = 1  # ``0`` disables
-    medium_min_new_plays: int = 0  # ``0`` disables; default medium is dispensable-discard only
-    weak_min_total: int = 1
-    strong_min_combined: int = 2  # ``np+nud+ndd+flips`` OR bar; ``0`` disables
-    medium_min_combined: int = 0  # ``total`` bar for medium; ``0`` disables
-
-    def passes_strong(self, score: _HintScore) -> bool:
-        if score.saves >= self.strong_min_saves:
-            return True
-        if score.new_plays >= self.strong_min_new_plays:
-            return True
-        if 0 < self.strong_min_new_useless_discards and (
-            score.new_useless_discards >= self.strong_min_new_useless_discards
-        ):
-            return True
-        if 0 < self.strong_min_combined and (
-            score.new_plays + score.new_useless_discards + score.new_dispensable_discards + score.flips
-        ) >= self.strong_min_combined:
-            return True
-        return False
-
-    def passes_medium(self, score: _HintScore) -> bool:
-        if 0 < self.medium_min_new_dispensable_discards and (
-            score.new_dispensable_discards >= self.medium_min_new_dispensable_discards
-        ):
-            return True
-        if 0 < self.medium_min_new_plays and score.new_plays >= self.medium_min_new_plays:
-            return True
-        if 0 < self.medium_min_combined and score.total() >= self.medium_min_combined:
-            return True
-        return False
-
-    def passes_weak(self, score: _HintScore) -> bool:
-        return score.total() >= self.weak_min_total
-
-
-DEFAULT_HINT_THRESHOLDS = HintThresholds()
-# Grid-validated (500×3 seeds, tools/hint_threshold_grid_5p.py): strong ``np>=2 | nud>=1 | sv>=1 |
-# comb>=2``; medium ``ndd>=1``; weak ``total>=1`` → ~23.03 mean (matches paper-gate baseline).
+def _is_weak_hint(score: _HintScore) -> bool:
+    """Weak means any remaining positive recommendation change."""
+    return score.total() >= 1
 
 
 class FivePlayerRecommendationPlayer(BasePlayer):
     """
-    5-player mini recommendation bot (mod-16 decode, sixteen hint channels ``0``–``15``).
+    5-player Simple Recommendation bot (mod-16 decode, sixteen hint channels ``0``–``15``).
 
     Only standard 5-player settings from :func:`~hanabi.core.game.create_standard_game_settings`.
     """
 
-    def __init__(
-        self,
-        player_index: int,
-        hint_thresholds: HintThresholds = DEFAULT_HINT_THRESHOLDS,
-        play_follow_gate: PlayFollowGate = DEFAULT_PLAY_FOLLOW_GATE,
-    ):
+    def __init__(self, player_index: int):
         super().__init__(player_index)
-        self._hint_thresholds = hint_thresholds
-        self._play_follow_gate = play_follow_gate
         self._plays_since_hint: int = 0
         self._last_decision_summary: Optional[str] = None
-        self._my_recommendation_queue = _RecommendationQueue()
-        self._known_recommendation_queues: Dict[int, _RecommendationQueue] = {}  # key: player index, value: recommendation queue
+        self._latest_recommendation_by_seat: Dict[int, int] = {}
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
@@ -305,12 +153,12 @@ class FivePlayerRecommendationPlayer(BasePlayer):
 
     def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        self._maybe_consume_peer_recommendation(player_index, move)
+        self._clear_recommendation_after_hand_change(player_index)
         self._plays_since_hint += 1
 
     def observe_discard_move(self, player_index: int, move: FinishedDiscard, observer_view: PlayerView) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        self._maybe_consume_peer_recommendation(player_index, move)
+        self._clear_recommendation_after_hand_change(player_index)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -335,7 +183,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
             or self._try_follow_dispensable_discard_recommendation(player_view)
             or self._try_weak_hint(player_view)
             or self._try_discard_c1(player_view)
-            or self._try_play_newest_as_last_resort(player_view)
+            or self._try_play_c1_as_last_resort(player_view)
         )
         assert move is not None
         assert self.is_move_legal(player_view, move), "FivePlayerRecommendationPlayer chooses legal moves only"
@@ -357,23 +205,23 @@ class FivePlayerRecommendationPlayer(BasePlayer):
         if self._player_index != player_index:
             others_sum = self._sum_other_peer_recommendations(observer_view, exclude_index=player_index)
             decoded = (channel_id - others_sum) % NUM_CHANNELS
-            self._my_recommendation_queue.set_latest(_normalize_decoded_code(decoded))
+            self._set_recommendation_for_seat(self._player_index, decoded)
 
-    def _queue_for_seat(self, seat: int) -> _RecommendationQueue:
-        if seat == self._player_index:
-            return self._my_recommendation_queue
-        if seat not in self._known_recommendation_queues:
-            self._known_recommendation_queues[seat] = _RecommendationQueue()
-        return self._known_recommendation_queues[seat]
+    def _recommendation_for_seat(self, seat: int) -> Optional[int]:
+        return self._latest_recommendation_by_seat.get(seat)
 
-    def _maybe_consume_peer_recommendation(self, mover_index: int, move: Move) -> None:
-        if mover_index == self._player_index:
-            return
-        self._queue_for_seat(mover_index).pop_oldest_matching(move)
+    def _set_recommendation_for_seat(self, seat: int, code: int) -> None:
+        replace_current_recommendation(
+            self._latest_recommendation_by_seat,
+            seat,
+            code,
+            minimum_code=1,
+            maximum_code=MAX_ACTIONABLE_REC_CODE,
+        )
 
-    def _get_my_recommendation_code(self) -> Optional[int]:
-        codes = self._my_recommendation_queue.codes()
-        return codes[0] if codes else None
+    def _clear_recommendation_after_hand_change(self, seat: int) -> None:
+        """A play or discard shifts positions, so that seat's old code is stale."""
+        self._latest_recommendation_by_seat.pop(seat, None)
 
     def _update_peer_recommendations_from_hint(
         self, hinter_index: int, observer_view: PlayerView
@@ -388,7 +236,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
                 self.common_view,
                 self.game_settings,
             )
-            self._queue_for_seat(p).set_latest(rec)
+            self._set_recommendation_for_seat(p, rec)
 
     def _hand_cards_for_hint_target(self, target: int, observer_view: PlayerView) -> Optional[List[Card]]:
         if target != self._player_index:
@@ -426,19 +274,20 @@ class FivePlayerRecommendationPlayer(BasePlayer):
         return total, total % NUM_CHANNELS, ", ".join(parts)
 
     def get_gui_recommendation_by_slot(self, player_view: PlayerView) -> Dict[int, str]:
-        """Map hand slot indices to ``play`` or ``discard`` for GUI indicators."""
-        out: Dict[int, str] = {}
-        for code in self._my_recommendation_queue.codes():
-            if 1 <= code <= 4:
-                slot = code - 1
-                if slot < player_view.own_hand_size:
-                    out[slot] = "play"
-            elif 5 <= code <= 12:
-                offset = CODE_USELESS_DISCARD_OFFSET if 5 <= code <= 8 else CODE_DISPENSABLE_DISCARD_OFFSET
-                slot = code - offset
-                if slot < player_view.own_hand_size and slot not in out:
-                    out[slot] = "discard"
-        return out
+        """Map the latest actionable code to one GUI indicator."""
+        code = self._recommendation_for_seat(self._player_index)
+        if code is None:
+            return {}
+        if 1 <= code <= 4:
+            slot = code - 1
+            return {slot: "play"} if slot < player_view.own_hand_size else {}
+        offset = (
+            CODE_USELESS_DISCARD_OFFSET
+            if 5 <= code <= 8
+            else CODE_DISPENSABLE_DISCARD_OFFSET
+        )
+        slot = code - offset
+        return {slot: "discard"} if 0 <= slot < player_view.own_hand_size else {}
 
     def _get_recommendation_for_hand(
         self,
@@ -514,7 +363,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
         plays_since_hint: int,
         errors: int,
     ) -> Optional[Move]:
-        recommendation = self._get_my_recommendation_code()
+        recommendation = self._recommendation_for_seat(self._player_index)
         if recommendation is None:
             return None
         assert 0 <= recommendation <= MAX_ACTIONABLE_REC_CODE
@@ -525,19 +374,16 @@ class FivePlayerRecommendationPlayer(BasePlayer):
             return None
         if not self.is_move_legal(player_view, Play(play_idx)):
             return None
-        if not self._play_follow_gate.allows(plays_since_hint, errors):
+        if not allows_recommended_play(plays_since_hint, errors):
             return None
         if 0 == plays_since_hint:
             detail = "no play since last hint → follow"
         else:
-            detail = (
-                f"plays_since_hint={plays_since_hint}, "
-                f"errors={errors} → follow (gate max_ps={self._play_follow_gate.max_plays_since_hint})"
-            )
+            detail = "one play since hint, <2 errors → follow"
         self._last_decision_summary = (
-            f"[5p mod-16] Play card {play_idx + 1} (code {recommendation}) — {detail}"
+            f"[5p mod-16] Play C{play_idx + 1} (code {recommendation}) — {detail}"
         )
-        self._my_recommendation_queue.clear()
+        self._latest_recommendation_by_seat.pop(self._player_index, None)
         return Play(play_idx)
 
     def _try_follow_useless_discard_recommendation(self, player_view: PlayerView) -> Optional[Move]:
@@ -563,7 +409,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
         code_max: int,
         kind_label: str,
     ) -> Optional[Move]:
-        recommendation = self._get_my_recommendation_code()
+        recommendation = self._recommendation_for_seat(self._player_index)
         if recommendation is None:
             return None
         if not (code_min <= recommendation <= code_max):
@@ -574,9 +420,9 @@ class FivePlayerRecommendationPlayer(BasePlayer):
         if not self.is_move_legal(player_view, Discard(discard_idx)):
             return None
         self._last_decision_summary = (
-            f"[5p mod-16] Discard card {discard_idx + 1} (code {recommendation} · {kind_label} slot)"
+            f"[5p mod-16] Discard C{discard_idx + 1} (code {recommendation} · {kind_label.lower()})"
         )
-        self._my_recommendation_queue.clear()
+        self._latest_recommendation_by_seat.pop(self._player_index, None)
         return Discard(discard_idx)
 
     def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
@@ -596,7 +442,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
 
     def _try_strong_hint(self, player_view: PlayerView) -> Optional[Move]:
         score = self._score_candidate_hint(player_view)
-        if not self._hint_thresholds.passes_strong(score):
+        if not _is_strong_hint(score):
             return None
         move = self._try_give_encoded_hint(player_view)
         if move is None:
@@ -606,7 +452,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
 
     def _try_medium_hint(self, player_view: PlayerView) -> Optional[Move]:
         score = self._score_candidate_hint(player_view)
-        if not self._hint_thresholds.passes_medium(score):
+        if not _is_medium_hint(score):
             return None
         move = self._try_give_encoded_hint(player_view)
         if move is None:
@@ -616,9 +462,11 @@ class FivePlayerRecommendationPlayer(BasePlayer):
 
     def _try_weak_hint(self, player_view: PlayerView) -> Optional[Move]:
         score = self._score_candidate_hint(player_view)
-        if not self._hint_thresholds.passes_weak(score):
+        if not _is_weak_hint(score):
             return None
         move = self._try_give_encoded_hint(player_view)
+        if move is None:
+            return None
         self._last_decision_summary = f"{self._last_decision_summary} · {score.fmt()} [weak]"
         return move
 
@@ -628,8 +476,7 @@ class FivePlayerRecommendationPlayer(BasePlayer):
             if p == self._player_index:
                 continue
             peer_hand = player_view.teammates[p].cards
-            peer_codes = self._queue_for_seat(p).codes()
-            before = peer_codes[0] if peer_codes else None
+            before = self._recommendation_for_seat(p)
             after = self._get_recommendation_for_hand(peer_hand, self.common_view, self.game_settings)
 
             before_offset = _discard_code_offset(before) if before is not None else None
@@ -665,20 +512,19 @@ class FivePlayerRecommendationPlayer(BasePlayer):
                 flips += 1
         return _HintScore(new_plays, new_useless, new_dispensable, saves, flips)
 
-    def _try_play_newest_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
-        newest_idx = player_view.own_hand_size - 1
-        assert 0 <= newest_idx
-        if not self.is_move_legal(player_view, Play(newest_idx)):
+    def _try_play_c1_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
+        """Play C1 as the common Simple-strategy last resort."""
+        if not self.is_move_legal(player_view, Play(0)):
             return None
         self._last_decision_summary = (
-            f"[5p mod-16] Play slot {newest_idx + 1} (last resort: no exact hint buildable at max tokens)"
+            "[5p mod-16] Play C1 (last resort: exact channel unavailable at max tokens)"
         )
-        return Play(newest_idx)
+        return Play(0)
 
     def _try_discard_c1(self, player_view: PlayerView) -> Optional[Move]:
         if not self.is_move_legal(player_view, Discard(0)):
             return None
-        self._last_decision_summary = "[5p mod-16] Discard oldest (C1 / index 0) — fallback"
+        self._last_decision_summary = "[5p mod-16] Discard C1 — default"
         return Discard(0)
 
 

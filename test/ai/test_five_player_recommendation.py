@@ -5,43 +5,38 @@ import unittest
 from hanabi.ai.five_player_recommendation import (
     CODE_DISPENSABLE_DISCARD_OFFSET,
     CODE_USELESS_DISCARD_OFFSET,
-    DEFAULT_PLAY_FOLLOW_GATE,
     NUM_CHANNELS,
     NUM_PLAYERS_FOR_FIVE_PLAYER_RECOMMENDATION,
     FivePlayerRecommendationPlayer,
-    HintThresholds,
-    PlayFollowGate,
-    _RecommendationQueue,
     _HintScore,
+    _is_medium_hint,
+    _is_strong_hint,
+    _is_weak_hint,
+    _build_channel_hint,
     _infer_channel_id,
-    _normalize_decoded_code,
-    _remap_code_after_removal,
 )
-from hanabi.core.moves import Discard, Play, ColorHint, NumberHint
+from hanabi.core.moves import Discard, ColorHint, NumberHint, Play
 from hanabi.core.card import Card
 from hanabi.core.enums import Color, Number
 from hanabi.core.game import CommonView, Hand, PlayerView, create_standard_game_settings
 
 
-class TestHintThresholds(unittest.TestCase):
-    def test_baseline_strong_gate(self) -> None:
-        th = HintThresholds()
-        self.assertTrue(th.passes_strong(_HintScore(2, 0, 0, 0, 0)))
-        self.assertTrue(th.passes_strong(_HintScore(0, 1, 0, 0, 0)))
-        self.assertTrue(th.passes_strong(_HintScore(0, 0, 0, 1, 0)))
-        self.assertTrue(th.passes_strong(_HintScore(1, 0, 1, 0, 0)))  # comb>=2
-        self.assertFalse(th.passes_strong(_HintScore(1, 0, 0, 0, 0)))
+class TestHintUrgency(unittest.TestCase):
+    def test_committed_strong_rule(self) -> None:
+        self.assertTrue(_is_strong_hint(_HintScore(2, 0, 0, 0, 0)))
+        self.assertTrue(_is_strong_hint(_HintScore(0, 1, 0, 0, 0)))
+        self.assertTrue(_is_strong_hint(_HintScore(0, 0, 0, 1, 0)))
+        self.assertTrue(_is_strong_hint(_HintScore(1, 0, 1, 0, 0)))  # combined changes >= 2
+        self.assertFalse(_is_strong_hint(_HintScore(1, 0, 0, 0, 0)))
 
-    def test_medium_gate(self) -> None:
-        th = HintThresholds()
-        self.assertTrue(th.passes_medium(_HintScore(0, 0, 1, 0, 0)))
-        self.assertFalse(th.passes_medium(_HintScore(1, 0, 0, 0, 0)))
-        self.assertFalse(th.passes_medium(_HintScore(0, 1, 0, 0, 0)))
+    def test_committed_medium_rule(self) -> None:
+        self.assertTrue(_is_medium_hint(_HintScore(0, 0, 1, 0, 0)))
+        self.assertFalse(_is_medium_hint(_HintScore(1, 0, 0, 0, 0)))
+        self.assertFalse(_is_medium_hint(_HintScore(0, 1, 0, 0, 0)))
 
-    def test_weak_gate(self) -> None:
-        th = HintThresholds()
-        self.assertFalse(th.passes_weak(_HintScore(0, 0, 0, 0, 0)))
-        self.assertTrue(th.passes_weak(_HintScore(0, 0, 0, 0, 1)))
+    def test_committed_weak_rule(self) -> None:
+        self.assertFalse(_is_weak_hint(_HintScore(0, 0, 0, 0, 0)))
+        self.assertTrue(_is_weak_hint(_HintScore(0, 0, 0, 0, 1)))
 
 
 class TestFivePlayerRecommendationSettings(unittest.TestCase):
@@ -57,7 +52,7 @@ class TestFivePlayerRecommendationSettings(unittest.TestCase):
 
 
 class TestChannelInference(unittest.TestCase):
-    """Hint shape maps to channel id 0..15 (4 hint shapes × 4 directions)."""
+    """Hint direction and target map to channel id 0..15 (4 × 4)."""
 
     def test_left_number_to_next_is_channel_0(self) -> None:
         hand = [Card(Color.RED, Number.ONE), Card(Color.RED, Number.TWO)]
@@ -107,15 +102,22 @@ class TestChannelInference(unittest.TestCase):
         move = ColorHint(teammate=2, cards=[1, 2], color=Color.GREEN)
         self.assertEqual(13, _infer_channel_id(0, 2, move, None))
 
-
-class TestNormalizeDecodedCode(unittest.TestCase):
-    def test_actionable_codes_unchanged(self) -> None:
-        for code in range(13):
-            self.assertEqual(code, _normalize_decoded_code(code))
-
-    def test_leftover_mod16_values_map_to_zero(self) -> None:
-        for code in range(13, 16):
-            self.assertEqual(0, _normalize_decoded_code(code))
+    def test_all_sixteen_channels_build_and_round_trip(self) -> None:
+        hand = [
+            Card(Color.RED, Number.ONE),
+            Card(Color.BLUE, Number.TWO),
+            Card(Color.GREEN, Number.THREE),
+            Card(Color.YELLOW, Number.FOUR),
+        ]
+        view = PlayerView(
+            teammates={1: Hand(hand), 2: Hand(hand), 3: Hand(hand), 4: Hand(hand)},
+            own_hand_size=4,
+        )
+        for channel in range(16):
+            with self.subTest(channel=channel):
+                move = _build_channel_hint(0, view, channel)
+                self.assertIsNotNone(move)
+                self.assertEqual(channel, _infer_channel_id(0, move.teammate, move, hand))
 
 
 class TestPeerDiscardCodes(unittest.TestCase):
@@ -157,24 +159,7 @@ class TestPeerDiscardCodes(unittest.TestCase):
         code = FivePlayerRecommendationPlayer._rec_dispensable_slot(hand, common, settings)
         self.assertEqual(CODE_DISPENSABLE_DISCARD_OFFSET + 3, code)
 
-    def test_remap_dispensable_code_after_removal(self) -> None:
-        self.assertEqual(10, _remap_code_after_removal(11, 0))
-
-
-class TestRecommendationQueue(unittest.TestCase):
-    def test_remap_shifts_higher_slots_down(self) -> None:
-        self.assertEqual(2, _remap_code_after_removal(3, 0))
-        self.assertEqual(6, _remap_code_after_removal(7, 0))
-
-    def test_set_latest_replaces_prior_recommendation(self) -> None:
-        queue = _RecommendationQueue()
-        queue.set_latest(2)
-        queue.set_latest(6)
-        self.assertEqual([6], queue.codes())
-
-    def test_default_play_follow_gate_is_paper(self) -> None:
-        self.assertEqual(PlayFollowGate.paper(), DEFAULT_PLAY_FOLLOW_GATE)
-
+class TestLatestRecommendation(unittest.TestCase):
     def test_gated_play_does_not_follow(self) -> None:
         settings = create_standard_game_settings(5)
         view = PlayerView(
@@ -196,40 +181,17 @@ class TestRecommendationQueue(unittest.TestCase):
         player = FivePlayerRecommendationPlayer(0)
         player.set_game_settings(settings)
         player.set_common_view(common)
-        player._my_recommendation_queue.set_latest(2)
+        player._set_recommendation_for_seat(0, 2)
         player._plays_since_hint = 2
         errors = settings.max_live_tokens - common.live_tokens
         self.assertIsNone(player._try_follow_play_recommendation(view, player._plays_since_hint, errors))
-        self.assertEqual([2], player._my_recommendation_queue.codes())
+        self.assertEqual(2, player._recommendation_for_seat(0))
 
-    def test_loose_gate_follows_after_two_plays_with_one_error(self) -> None:
-        """Legacy loose gate (not default): ``ps==2`` still follows when ``errors < 2``."""
-        settings = create_standard_game_settings(5)
-        view = PlayerView(
-            teammates={
-                1: Hand([Card(Color.RED, Number.ONE)] * 4),
-                2: Hand([Card(Color.BLUE, Number.TWO)] * 4),
-                3: Hand([Card(Color.GREEN, Number.THREE)] * 4),
-                4: Hand([Card(Color.YELLOW, Number.FOUR)] * 4),
-            },
-            own_hand_size=4,
-        )
-        common = CommonView(
-            live_tokens=settings.max_live_tokens - 1,
-            hint_tokens=settings.max_hint_tokens,
-            cards_to_draw=40,
-            cards_discarded={},
-            cards_played={},
-        )
-        player = FivePlayerRecommendationPlayer(0, play_follow_gate=PlayFollowGate())
-        player.set_game_settings(settings)
-        player.set_common_view(common)
-        player._my_recommendation_queue.set_latest(2)
-        player._plays_since_hint = 2
-        errors = settings.max_live_tokens - common.live_tokens
-        move = player._try_follow_play_recommendation(view, player._plays_since_hint, errors)
-        self.assertIsInstance(move, Play)
-        self.assertEqual([], player._my_recommendation_queue.codes())
+    def test_hand_change_clears_latest_code(self) -> None:
+        player = FivePlayerRecommendationPlayer(0)
+        player._set_recommendation_for_seat(3, 11)
+        player._clear_recommendation_after_hand_change(3)
+        self.assertNotIn(3, player._latest_recommendation_by_seat)
 
     def test_follow_dispensable_discard(self) -> None:
         settings = create_standard_game_settings(5)
@@ -252,12 +214,12 @@ class TestRecommendationQueue(unittest.TestCase):
         player = FivePlayerRecommendationPlayer(0)
         player.set_game_settings(settings)
         player.set_common_view(common)
-        player._my_recommendation_queue.set_latest(CODE_DISPENSABLE_DISCARD_OFFSET + 2)
+        player._set_recommendation_for_seat(0, CODE_DISPENSABLE_DISCARD_OFFSET + 2)
         move = player._try_follow_dispensable_discard_recommendation(view)
         self.assertIsInstance(move, Discard)
         self.assertEqual(2, move.card)
 
-    def test_get_gui_recommendation_by_slot_maps_queue(self) -> None:
+    def test_get_gui_recommendation_by_slot_maps_latest_code(self) -> None:
         settings = create_standard_game_settings(5)
         view = PlayerView(
             teammates={
@@ -278,11 +240,33 @@ class TestRecommendationQueue(unittest.TestCase):
         player = FivePlayerRecommendationPlayer(0)
         player.set_game_settings(settings)
         player.set_common_view(common)
-        player._my_recommendation_queue.set_latest(7)
+        player._set_recommendation_for_seat(0, 7)
         self.assertEqual({2: "discard"}, player.get_gui_recommendation_by_slot(view))
 
+    def test_latest_recommendation_replaces_instead_of_queueing(self) -> None:
+        player = FivePlayerRecommendationPlayer(0)
+        player._set_recommendation_for_seat(2, 3)
+        player._set_recommendation_for_seat(2, 10)
+        self.assertEqual({2: 10}, player._latest_recommendation_by_seat)
 
-class TestMiniRecommendationSmoke(unittest.TestCase):
+
+class TestSimpleRecommendationSmoke(unittest.TestCase):
+    def test_last_resort_plays_c1(self) -> None:
+        settings = create_standard_game_settings(5)
+        view = PlayerView(teammates={}, own_hand_size=4)
+        player = FivePlayerRecommendationPlayer(0)
+        player.set_game_settings(settings)
+        player.set_common_view(CommonView(
+            live_tokens=settings.max_live_tokens,
+            hint_tokens=settings.max_hint_tokens,
+            cards_to_draw=40,
+            cards_discarded={},
+            cards_played={},
+        ))
+        move = player._try_play_c1_as_last_resort(view)
+        self.assertIsInstance(move, Play)
+        self.assertEqual(0, move.card)
+
     def test_play_returns_legal_move_five_player(self) -> None:
         settings = create_standard_game_settings(5)
         view = PlayerView(

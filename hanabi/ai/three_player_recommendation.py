@@ -1,8 +1,8 @@
 """
-Mini recommendation strategy for **3-player** Hanabi.
+Simple Recommendation strategy for **3-player** Hanabi.
 
-Encodes a value with **mod-7** arithmetic over visible hands. **Seven physical channels**
-(``0``–``6``); there is **no** eighth channel (legacy “right suit to previous” is unused).
+Encodes a value with **mod-8** arithmetic over visible hands. **Eight hint channels**
+(``0``–``7``): four hint directions × next/previous target.
 
 - **0–1:** left number — rank of the card at **index 0** (C1 / oldest), all matching indices;
   **next** / **prev** teammate by seat order.
@@ -13,9 +13,9 @@ Encodes a value with **mod-7** arithmetic over visible hands. **Seven physical c
   number is **2**’s (slots ``0`` and ``4``); right number is the rightmost non-``2`` rank,
   which is ``R1`` at slot ``3`` → **1**’s on slot ``3``. Channel **unavailable** only if every
   card in the hand has the same rank.
-- **6:** right color — color of the **rightmost** card whose color differs from the left-color
-  (i.e. from slot ``0``'s color), then all cards of that color on the hand. Emitted only toward
-  **next** teammate (no “right color to previous” channel). Channel **unavailable** only if
+- **6–7:** right color — color of the **rightmost** card whose color differs from the left-color
+  (i.e. from slot ``0``'s color), then all cards of that color on the hand → next / previous.
+  Channel **unavailable** only if
   every card in the hand has the same color.
 
 **Seat offset (same pattern as :class:`~hanabi.ai.recommendation_player.RecommendationPlayer`):**
@@ -25,39 +25,55 @@ for hinter ``H`` and hint target ``T``,
 ``T`` is the **previous** player. No separate “my seat” notion — **global** indices ``0,1,2``.
 
 When the observer is the hint **receiver**, their own hand is **not** in
-:class:`~hanabi.core.game.PlayerView` ``teammates``. Channel inference then uses the same
-left/right idea **approximated** from public fields (number vs color, ``pos``, whether slot
-``0`` is touched); when the target hand is visible (observer not the receiver), inference uses
-the full hand lists.
+:class:`~hanabi.core.game.PlayerView` ``teammates``. Channel inference still uses public
+fields: number versus color, ``pos``, and whether C1 (slot ``0``) is touched. Left directions
+always touch C1 and right directions never do; a visible target hand supplies a direct cross-check.
 
 **Chop vs C1 vs :class:`~hanabi.ai.recommendation_player.RecommendationPlayer`:** The paper
 **RecommendationPlayer** does **not** track chop: it uses fixed slots C1–C4 (indices ``0``–``3``),
 and the default discard is **Discard(0)** = oldest card (**C1**), not the rightmost slot. This bot
-matches that for the **fallback** discard. **Decoded** actions ``0`` / ``6`` still refer to
+matches that for the **fallback** discard. Recommendation codes ``0`` / ``6`` still refer to
 **chop** = ``hand_size - 1`` (newest / rightmost), per your 3p convention.
 
-**Decoded value** (receiver action):
+**Recommendation code** (receiver action):
 
 - ``0`` — chop is safe to discard.
 - ``1``–``5`` — play slot ``value - 1``.
 - ``6`` — chop should **not** be discarded.
+- ``7`` — unused; no new action.
 """
 
 from __future__ import annotations
 
 from typing import Dict, List, NamedTuple, Optional
 
-NUM_PLAYERS_FOR_MINI_RECOMMENDATION = 3
-NUM_CHANNELS = 7
+NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION = 3
+NUM_CHANNELS = 8
+MAX_ACTIONABLE_REC_CODE = 6
 _PLAY_CODES = frozenset({1, 2, 3, 4, 5})
 _CHOP_REC_CODES = frozenset({0, 6})
 
 from hanabi.core.player import BasePlayer
 from hanabi.core.game import CommonView, GameSettings, PlayerView
-from hanabi.core.moves import FinishedPlay, FinishedDiscard, Move, Play, Discard, ColorHint, NumberHint, HintMove, move_with_why
-
+from hanabi.core.moves import (
+    ColorHint,
+    Discard,
+    FinishedDiscard,
+    FinishedPlay,
+    HintMove,
+    Move,
+    NumberHint,
+    Play,
+    move_with_why,
+)
 from hanabi.core.enums import Color, Number, CardKind
 from hanabi.core.card import Card
+from hanabi.ai.recommendation_policy import (
+    allows_recommended_play,
+    is_positive_hint,
+    is_shared_strong_hint,
+    replace_current_recommendation,
+)
 
 _REC_SLOT_ORDER = (0, 1, 2, 3, 4)
 
@@ -82,7 +98,7 @@ class _HintScore(NamedTuple):
 
 class ThreePlayerRecommendationPlayer(BasePlayer):
     """
-    3-player mini recommendation bot (mod-7 decode, seven hint channels ``0``–``6``).
+    3-player Simple Recommendation bot (mod-8 decode, eight hint channels ``0``–``7``).
 
     Only standard 3-player settings from :func:`~hanabi.core.game.create_standard_game_settings`.
     """
@@ -91,28 +107,28 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         super().__init__(player_index)
         self._plays_since_hint: int = 0
         self._last_decision_summary: Optional[str] = None
-        self._my_decoded_recommendation: Optional[int] = None
-        # Per-peer codes from the last hint cycle (for hint scoring ``before``); mirrors 4p queue tracking.
-        self._peer_tracked_rec: Dict[int, int] = {}
+        # Exactly one latest actionable code per seat. A new hint replaces the
+        # entry; a play or discard clears the acting seat.
+        self._latest_recommendation_by_seat: Dict[int, int] = {}
 
     @classmethod
     def supports_game_settings(cls, game_settings: GameSettings) -> bool:
-        return NUM_PLAYERS_FOR_MINI_RECOMMENDATION == game_settings.num_players
+        return NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION == game_settings.num_players
 
     def set_game_settings(self, game_settings: GameSettings) -> None:
-        assert NUM_PLAYERS_FOR_MINI_RECOMMENDATION == game_settings.num_players, (
+        assert NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION == game_settings.num_players, (
             "ThreePlayerRecommendationPlayer requires 3-player games"
         )
         super().set_game_settings(game_settings)
 
     def observe_play_move(self, player_index: int, move: FinishedPlay, observer_view: PlayerView) -> None:
         super().observe_play_move(player_index, move, observer_view)
-        self._maybe_consume_peer_recommendation(player_index, move)
+        self._clear_recommendation_after_hand_change(player_index)
         self._plays_since_hint += 1
 
     def observe_discard_move(self, player_index: int, move: FinishedDiscard, observer_view: PlayerView) -> None:
         super().observe_discard_move(player_index, move, observer_view)
-        self._maybe_consume_peer_recommendation(player_index, move)
+        self._clear_recommendation_after_hand_change(player_index)
 
     def observe_color_hint_move(self, player_index: int, move: ColorHint, observer_view: PlayerView) -> None:
         super().observe_color_hint_move(player_index, move, observer_view)
@@ -130,17 +146,16 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         # without recording its rationale.
         self._last_decision_summary = None
         errors = self.game_settings.max_live_tokens - self.common_view.live_tokens
-        recommendation = self._get_my_recommendation()
+        recommendation = self._recommendation_for_seat(self._player_index)
 
         move = (
             self._try_follow_play_recommendation(player_view, recommendation, self._plays_since_hint, errors)
-            # Strong hint sits above discard-follow (same thresholds as 4p mini-rec grid winner).
-            # Hint stays BEFORE discard-follow — swapping cratered 3p scores (22.86 → 20.31 on 500g).
+            # A strong hint stays above discard-follow because it refreshes every receiver.
             or self._try_strong_hint(player_view)
             or self._try_follow_chop_and_discard_recommendation(player_view, recommendation)
             or self._try_weak_hint(player_view)
             or self._try_discard_c1(player_view)
-            or self._try_play_oldest_as_last_resort(player_view)
+            or self._try_play_c1_as_last_resort(player_view)
         )
         assert move is not None
         assert self.is_move_legal(player_view, move), "ThreePlayerRecommendationPlayer chooses legal moves only"
@@ -161,30 +176,42 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         channel_id = _infer_channel_id(player_index, target, move, hand_cards)
         if self._player_index != player_index:
             peer_rec = self._peer_recommendation_for_decode(observer_view, exclude_index=player_index)
-            self._my_decoded_recommendation = (channel_id - peer_rec) % NUM_CHANNELS
+            decoded = (channel_id - peer_rec) % NUM_CHANNELS
+            self._set_recommendation_for_seat(self._player_index, decoded)
+
+    def _recommendation_for_seat(self, seat: int) -> Optional[int]:
+        return self._latest_recommendation_by_seat.get(seat)
+
+    def _set_recommendation_for_seat(self, seat: int, code: int) -> None:
+        replace_current_recommendation(
+            self._latest_recommendation_by_seat,
+            seat,
+            code,
+            minimum_code=0,
+            maximum_code=MAX_ACTIONABLE_REC_CODE,
+        )
 
     def _update_peer_recommendations_from_hint(
         self, hinter_index: int, observer_view: PlayerView
     ) -> None:
         """Refresh tracked peer codes after a hint (``before`` for hint scoring)."""
-        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+        for p in range(NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION):
             if p == hinter_index or p == self._player_index:
                 continue
             if p not in observer_view.teammates:
                 continue
-            self._peer_tracked_rec[p] = self._get_recommendation_for_hand(
-                observer_view.teammates[p].cards,
-                self.common_view,
-                self.game_settings,
+            self._set_recommendation_for_seat(
+                p,
+                self._get_recommendation_for_hand(
+                    observer_view.teammates[p].cards,
+                    self.common_view,
+                    self.game_settings,
+                ),
             )
 
-    def _maybe_consume_peer_recommendation(self, mover_index: int, move: Move) -> None:
-        if mover_index == self._player_index:
-            return
-        if mover_index not in self._peer_tracked_rec:
-            return
-        if _move_matches_3p_rec(move, self._peer_tracked_rec[mover_index]):
-            del self._peer_tracked_rec[mover_index]
+    def _clear_recommendation_after_hand_change(self, mover_index: int) -> None:
+        """A play or discard shifts positions, so that seat's old code is stale."""
+        self._latest_recommendation_by_seat.pop(mover_index, None)
 
     def _hand_cards_for_hint_target(self, target: int, observer_view: PlayerView) -> Optional[List[Card]]:
         """Visible cards on the hinted seat, or ``None`` when the observer is the receiver (own hand omitted)."""
@@ -193,7 +220,7 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         return None
 
     def _peer_recommendation_for_decode(self, player_view: PlayerView, *, exclude_index: int) -> int:
-        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+        for p in range(NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION):
             if p == self._player_index or p == exclude_index:
                 continue
             if p not in player_view.teammates:
@@ -208,7 +235,7 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
     def _sum_peer_recommendations(self, player_view: PlayerView) -> tuple[int, int, str]:
         parts: list[str] = []
         total = 0
-        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+        for p in range(NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION):
             if p == self._player_index or p not in player_view.teammates:
                 continue
             rec = self._get_recommendation_for_hand(
@@ -220,12 +247,9 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
             parts.append(f"P{p + 1}:{rec}")
         return total, total % NUM_CHANNELS, ", ".join(parts)
 
-    def _get_my_recommendation(self) -> Optional[int]:
-        return self._my_decoded_recommendation
-
     def get_gui_recommendation_by_slot(self, player_view: PlayerView) -> Dict[int, str]:
         """Map hand slot indices to ``play`` or ``discard`` for GUI indicators."""
-        rec = self._my_decoded_recommendation
+        rec = self._recommendation_for_seat(self._player_index)
         if rec is None:
             return {}
         if 0 == rec:
@@ -234,6 +258,9 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         if 1 <= rec <= 5:
             slot = rec - 1
             return {slot: "play"} if slot < player_view.own_hand_size else {}
+        if 6 == rec:
+            slot = _recommended_discard_slot_for_code(player_view.own_hand_size, rec)
+            return {slot: "discard"} if slot is not None else {}
         return {}
 
     def _get_recommendation_for_hand(
@@ -338,7 +365,7 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
     ) -> Optional[Move]:
         if recommendation is None:
             return None
-        assert 0 <= recommendation <= 6
+        assert 0 <= recommendation <= MAX_ACTIONABLE_REC_CODE
         if not (1 <= recommendation <= 5):
             return None
         play_idx = recommendation - 1
@@ -346,24 +373,24 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
             return None
         if not self.is_move_legal(player_view, Play(play_idx)):
             return None
+        if not allows_recommended_play(plays_since_hint, errors):
+            return None
         if 0 == plays_since_hint:
             detail = "no play since last hint → follow"
-        elif 1 == plays_since_hint and 2 > errors:
-            detail = "one play since hint, <2 errors → follow"
         else:
-            return None
+            detail = "one play since hint, <2 errors → follow"
         self._last_decision_summary = (
-            f"[3p mod-7] Play card {play_idx + 1} (code {recommendation}) — {detail}"
+            f"[3p mod-8] Play C{play_idx + 1} (code {recommendation}) — {detail}"
         )
         # Recommendation consumed: clear so we don't act on it again on a future turn
         # before a fresh hint arrives. Stale follow-play is what caused replay-debug
         # misplays like P3 playing slot 0 a second time after only discards in between.
-        self._my_decoded_recommendation = None
+        self._latest_recommendation_by_seat.pop(self._player_index, None)
         return Play(play_idx)
 
     def _try_give_encoded_hint(self, player_view: PlayerView) -> Optional[Move]:
         """
-        Emit a hint that encodes ``sum_mod7`` on the **exact** channel ``cid == sum_mod7``.
+        Emit a hint that encodes ``sum_mod8`` on the **exact** channel ``cid == sum_mod8``.
 
         If that channel can't be built on the target's hand (only possible when the target
         hand is entirely one rank or one color — see :func:`_right_number_spec` and
@@ -373,22 +400,22 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         """
         if 0 == self.common_view.hint_tokens:
             return None
-        _, sum_mod7, peer_breakdown = self._sum_peer_recommendations(player_view)
-        hint_move = _build_channel_hint(self._player_index, player_view, sum_mod7)
+        _, sum_mod8, peer_breakdown = self._sum_peer_recommendations(player_view)
+        hint_move = _build_channel_hint(self._player_index, player_view, sum_mod8)
         if hint_move is None:
             return None
         if not self.is_move_legal(player_view, hint_move):
             return None
         self._last_decision_summary = (
-            f"[3p mod-7] Hint channel {sum_mod7} (exact) · "
-            f"peer codes sum mod 7 = {sum_mod7} · {peer_breakdown}"
+            f"[3p mod-8] Hint channel {sum_mod8} (exact) · "
+            f"peer codes sum mod 8 = {sum_mod8} · {peer_breakdown}"
         )
         return hint_move
 
     def _try_strong_hint(self, player_view: PlayerView) -> Optional[Move]:
-        """Hint gate: ``new_plays >= 2`` OR ``new_discards >= 1`` OR ``saves >= 1``."""
+        """Strong-hint threshold: two new plays, one new discard, or one save."""
         score = self._score_candidate_hint(player_view)
-        if not (score.new_plays >= 2 or score.new_discards >= 1 or score.saves >= 1):
+        if not is_shared_strong_hint(score.new_plays, score.new_discards, score.saves):
             return None
         move = self._try_give_encoded_hint(player_view)
         if move is None:
@@ -397,22 +424,24 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         return move
 
     def _try_weak_hint(self, player_view: PlayerView) -> Optional[Move]:
-        """Hint gate: any scoring bucket non-zero (before blind C1 discard)."""
+        """Weak-hint threshold: any positive effect before the default C1 discard."""
         score = self._score_candidate_hint(player_view)
-        if score.total() == 0:
+        if not is_positive_hint(score.total()):
             return None
         move = self._try_give_encoded_hint(player_view)
+        if move is None:
+            return None
         self._last_decision_summary = f"{self._last_decision_summary} · {score.fmt()} [weak]"
         return move
 
     def _score_candidate_hint(self, player_view: PlayerView) -> _HintScore:
         """Score a hint now; 3p codes: play ``1``–``5``, chop recs ``0`` / ``6``."""
         new_plays = new_discards = saves = flips = 0
-        for p in range(NUM_PLAYERS_FOR_MINI_RECOMMENDATION):
+        for p in range(NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION):
             if p == self._player_index or p not in player_view.teammates:
                 continue
             peer_hand = player_view.teammates[p].cards
-            before = self._peer_tracked_rec.get(p)
+            before = self._recommendation_for_seat(p)
             after = self._get_recommendation_for_hand(peer_hand, self.common_view, self.game_settings)
 
             is_save = False
@@ -426,12 +455,11 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
                     if CardKind.CRITICAL == self.common_view.card_kind(peer_hand[chop], self.game_settings):
                         is_save = True
                 elif 6 == before:
-                    for idx in _REC_SLOT_ORDER:
-                        if idx >= len(peer_hand) or idx == chop:
-                            continue
-                        if CardKind.CRITICAL == self.common_view.card_kind(peer_hand[idx], self.game_settings):
-                            is_save = True
-                            break
+                    discard_slot = _recommended_discard_slot_for_code(len(peer_hand), before)
+                    if discard_slot is not None and CardKind.CRITICAL == self.common_view.card_kind(
+                        peer_hand[discard_slot], self.game_settings
+                    ):
+                        is_save = True
 
             is_new_play = after in _PLAY_CODES and before not in _PLAY_CODES
             is_new_discard = after in _CHOP_REC_CODES and before not in _CHOP_REC_CODES
@@ -447,23 +475,21 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
                 flips += 1
         return _HintScore(new_plays, new_discards, saves, flips)
 
-    def _try_play_oldest_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
+    def _try_play_c1_as_last_resort(self, player_view: PlayerView) -> Optional[Move]:
         """
         Last-resort fallback for the rare state where no other branch can fire:
 
         - no play / discard recommendation to follow,
-        - exact-channel hint unbuildable (target hand all one rank or all one color),
+        - exact channel unavailable (target hand all one rank or all one color),
         - C1 discard illegal (max hint tokens).
 
-        Playing slot ``0`` is always legal as long as the hand is non-empty. The card is
-        typically the oldest in the hand (most accumulated hints) and so has the highest
-        a-priori chance of being playable. This replaces the old ``allow_shift=True`` branch
-        which would broadcast a wrong-channel code to every teammate at once.
+        Playing slot ``0`` is always legal as long as the hand is non-empty. This common C1
+        fallback is shared by the three-, four-, and five-player Simple strategies.
         """
         if not self.is_move_legal(player_view, Play(0)):
             return None
         self._last_decision_summary = (
-            "[3p mod-7] Play slot 0 (last resort: no exact hint buildable at max tokens)"
+            "[3p mod-8] Play C1 (last resort: exact channel unavailable at max tokens)"
         )
         return Play(0)
 
@@ -479,21 +505,21 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
 
         if 0 == recommendation:
             if self.is_move_legal(player_view, Discard(chop)):
-                self._last_decision_summary = "[3p mod-7] Discard chop (code 0 · chop safe)"
+                self._last_decision_summary = "[3p mod-8] Discard chop (code 0 · chop safe)"
                 # Recommendation consumed (see _try_follow_play_recommendation for rationale).
-                self._my_decoded_recommendation = None
+                self._latest_recommendation_by_seat.pop(self._player_index, None)
                 return Discard(chop)
             return None
 
         if 6 == recommendation:
-            for idx in _REC_SLOT_ORDER:
-                if idx >= hs or idx == chop:
-                    continue
-                if self.is_move_legal(player_view, Discard(idx)):
-                    self._last_decision_summary = "[3p mod-7] Discard non-chop slot (code 6 · keep chop)"
-                    # Recommendation consumed (see _try_follow_play_recommendation for rationale).
-                    self._my_decoded_recommendation = None
-                    return Discard(idx)
+            idx = _recommended_discard_slot_for_code(hs, recommendation)
+            if idx is not None and self.is_move_legal(player_view, Discard(idx)):
+                self._last_decision_summary = (
+                    f"[3p mod-8] Discard C{idx + 1} (code 6 · keep chop)"
+                )
+                # Recommendation consumed (see _try_follow_play_recommendation for rationale).
+                self._latest_recommendation_by_seat.pop(self._player_index, None)
+                return Discard(idx)
             return None
 
         return None
@@ -502,7 +528,7 @@ class ThreePlayerRecommendationPlayer(BasePlayer):
         """Discard slot 0 if legal. Illegal (and so returns ``None``) at max hint tokens."""
         if not self.is_move_legal(player_view, Discard(0)):
             return None
-        self._last_decision_summary = "[3p mod-7] Discard oldest (C1 / index 0) — fallback"
+        self._last_decision_summary = "[3p mod-8] Discard C1 — default"
         return Discard(0)
 
 
@@ -515,20 +541,21 @@ def _chop_index(hand_size: int) -> int:
     return hand_size - 1
 
 
-def _move_matches_3p_rec(move: Move, rec: int) -> bool:
-    """True when ``move`` follows tracked recommendation ``rec`` (3p chop/play codes)."""
-    if rec in _PLAY_CODES and isinstance(move, Play):
-        return move.card == rec - 1
-    if 0 == rec and isinstance(move, Discard):
-        return True
-    if 6 == rec and isinstance(move, Discard):
-        return True
-    return False
+def _recommended_discard_slot_for_code(hand_size: int, code: int) -> Optional[int]:
+    """Return the exact discard slot instructed by a 3-player recommendation code."""
+    if hand_size <= 0:
+        return None
+    if 0 == code:
+        return _chop_index(hand_size)
+    if 6 == code:
+        chop = _chop_index(hand_size)
+        return next((slot for slot in _REC_SLOT_ORDER if slot < hand_size and slot != chop), None)
+    return None
 
 
 def _seat_offset_pos(hinter: int, target: int) -> int:
     """Same ring offset as :meth:`RecommendationPlayer._observe_recommendation_hint` (``pos``)."""
-    return (target - hinter - 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    return (target - hinter - 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
 
 
 def _infer_channel_id(
@@ -537,16 +564,16 @@ def _infer_channel_id(
     move: ColorHint | NumberHint,
     hand_cards: Optional[List[Card]],
 ) -> int:
-    """Map an observed hint to channel index ``0``–``6`` (see module docstring)."""
+    """Map an observed hint to channel index ``0``–``7`` (see module docstring)."""
     if hand_cards is not None:
         return _infer_channel_id_from_hand(hinter, target, move, hand_cards)
     return _infer_channel_id_public(hinter, target, move)
 
 
 def _infer_channel_id_from_hand(hinter: int, target: int, move: ColorHint | NumberHint, hand_cards: List[Card]) -> int:
-    next_p = (hinter + 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    next_p = (hinter + 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
     to_next = target == next_p
-    assert target == next_p or target == (hinter - 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    assert target == next_p or target == (hinter - 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
 
     sort_idx = sorted(move.cards)
 
@@ -566,10 +593,10 @@ def _infer_channel_id_from_hand(hinter: int, target: int, move: ColorHint | Numb
         return 2 if to_next else 3
 
     rcs = _right_color_spec(hand_cards)
-    if rcs is not None and to_next:
+    if rcs is not None:
         rc, rci = rcs
         if move.color == rc and sort_idx == rci:
-            return 6
+            return 6 if to_next else 7
 
     assert False, "color hint does not match left/right color specs"
 
@@ -581,9 +608,9 @@ def _infer_channel_id_public(hinter: int, target: int, move: ColorHint | NumberH
     Uses ``pos = (target - hinter - 1) % 3`` for next vs previous (same as RecommendationPlayer’s
     seat offset) and ``0 in move.cards`` to separate left vs right-style channels (see module doc).
     """
-    next_p = (hinter + 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    next_p = (hinter + 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
     to_next = target == next_p
-    assert target == next_p or target == (hinter - 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    assert target == next_p or target == (hinter - 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
     pos = _seat_offset_pos(hinter, target)
     assert to_next == (0 == pos)
 
@@ -597,18 +624,16 @@ def _infer_channel_id_public(hinter: int, target: int, move: ColorHint | NumberH
 
     if touches_slot0:
         return 2 if to_next else 3
-    if to_next:
-        return 6
-    return 3
+    return 6 if to_next else 7
 
 
 def _build_channel_hint(player_index: int, player_view: PlayerView, channel_id: int) -> Optional[HintMove]:
-    """Construct the hint move for ``channel_id`` (``0``–``6``) if legal on ``player_view``."""
-    if not (0 <= channel_id <= 6):
+    """Construct the hint move for ``channel_id`` (``0``–``7``) if legal on ``player_view``."""
+    if not (0 <= channel_id < NUM_CHANNELS):
         return None
 
-    next_t = (player_index + 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
-    prev_t = (player_index - 1) % NUM_PLAYERS_FOR_MINI_RECOMMENDATION
+    next_t = (player_index + 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
+    prev_t = (player_index - 1) % NUM_PLAYERS_FOR_SIMPLE_RECOMMENDATION
     to_next = channel_id in (0, 2, 4, 6)
     target = next_t if to_next else prev_t
     if target not in player_view.teammates:
@@ -629,7 +654,7 @@ def _build_channel_hint(player_index: int, player_view: PlayerView, channel_id: 
         color, indices = _left_color_spec(hand)
         return ColorHint(target, indices, color)
 
-    assert 6 == channel_id
+    assert channel_id in (6, 7)
     built = _build_right_color_hint(target, hand)
     return built
 

@@ -101,12 +101,12 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
             ("Random", RandomPlayer, RandomPlayer),
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
-            ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
+            ("3p Simple Recommendation", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
             ("3p Hint Hand Type", HintHandSubtype3P, HintHandSubtype3P),
             ("3p Dynamic Hand Type", DynamicHandType3P, DynamicHandType3P),
             ("3p Dynamic Rec", DynamicRecommendation3P, DynamicRecommendation3P),
-            ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
-            ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
+            ("4p Simple Recommendation", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
+            ("5p Simple Recommendation", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -285,17 +285,17 @@ def play_console_game(num_players: int = None, one_player_mode: bool = None) -> 
         )
         if 3 == num_players and ai_type_name == "ThreePlayerRecommendationPlayer":
             print(
-                f"{Colors.BRIGHT_BLUE}3p mini-recommendation: mod-7 decode · physical channels 0–6 "
+                f"{Colors.BRIGHT_BLUE}3p Simple Recommendation: mod-8 decode · hint channels 0–7 "
                 f"(left/right rank & color × next/prev teammate).{Colors.RESET}"
             )
         if 4 == num_players and ai_type_name == "FourPlayerRecommendationPlayer":
             print(
-                f"{Colors.BRIGHT_BLUE}4p mini-recommendation: mod-9 decode · physical channels 0–8 "
-                f"(left rank & color, right rank × next / next+1 / next+2 teammate).{Colors.RESET}"
+                f"{Colors.BRIGHT_BLUE}4p Simple Recommendation: mod-12 decode · hint channels 0–11 "
+                f"(left/right rank & color × next / next+1 / next+2 teammate).{Colors.RESET}"
             )
         if 5 == num_players and ai_type_name == "FivePlayerRecommendationPlayer":
             print(
-                f"{Colors.BRIGHT_BLUE}5p mini-recommendation: mod-16 decode · physical channels 0–15 "
+                f"{Colors.BRIGHT_BLUE}5p Simple Recommendation: mod-16 decode · hint channels 0–15 "
                 f"(left/right rank & color × next … next+3 teammate).{Colors.RESET}"
             )
     print("=" * 70)

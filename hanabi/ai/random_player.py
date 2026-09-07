@@ -57,10 +57,8 @@ class RandomPlayer(BasePlayer):
         potential_moves = self._generate_all_valid_moves(player_view)
 
         if not potential_moves:
-            # No moves available - create a play move as fallback
-            hand_size = player_view.own_hand_size
-            fallback = Play(0) if hand_size > 0 else Play(0)
-            return move_with_why(fallback, "random: no valid moves generated (fallback Play(0))")
+            # The engine will reject this only for an already-finished or malformed game.
+            return move_with_why(Play(0), "random: no valid moves generated (fallback Play(0))")
 
         # Filter moves to only include valid ones RIGHT NOW
         # This is critical because the common_view is shared and can change
@@ -80,8 +78,7 @@ class RandomPlayer(BasePlayer):
 
             # If still no valid moves, return a play move anyway (game will validate)
             if not valid_moves:
-                fallback = Play(0) if hand_size > 0 else Play(0)
-                return move_with_why(fallback, "random: no legal moves after filter (fallback Play(0))")
+                return move_with_why(Play(0), "random: no legal moves after filter (fallback Play(0))")
 
         # Randomly select from validated moves
         selected = self._rng.choice(valid_moves)

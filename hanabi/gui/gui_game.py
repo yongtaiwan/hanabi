@@ -334,12 +334,12 @@ class GUIGame:
             ("Random", RandomPlayer, RandomPlayer),
             ("CommonSense", CommonSensePlayer, CommonSensePlayer),
             ("Recommendation", RecommendationPlayer, RecommendationPlayer),
-            ("3p Mini Rec", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
+            ("3p Simple Recommendation", ThreePlayerRecommendationPlayer, ThreePlayerRecommendationPlayer),
             ("3p Hint Hand Type", HintHandSubtype3P, HintHandSubtype3P),
             ("3p Dynamic Hand Type", DynamicHandType3P, DynamicHandType3P),
             ("3p Dynamic Rec", DynamicRecommendation3P, DynamicRecommendation3P),
-            ("4p Mini Rec", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
-            ("5p Mini Rec", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
+            ("4p Simple Recommendation", FourPlayerRecommendationPlayer, FourPlayerRecommendationPlayer),
+            ("5p Simple Recommendation", FivePlayerRecommendationPlayer, FivePlayerRecommendationPlayer),
             ("MonteCarlo", create_monte_carlo_player, MonteCarloPlayer),
         ]
         ai_types = [
@@ -728,25 +728,25 @@ class GUIGame:
                 player.set_common_view(self._game.state.common_view)
 
             if 3 == num_players and getattr(ai_player_type, "__name__", "") == "ThreePlayerRecommendationPlayer":
-                from hanabi.console.console_display import Colors as _MiniRecColors
+                from hanabi.console.console_display import Colors as _StrategyColors
 
                 print(
-                    f"{_MiniRecColors.BRIGHT_BLUE}3p mini-recommendation: mod-7 decode · channels 0–6 — "
-                    f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
+                    f"{_StrategyColors.BRIGHT_BLUE}3p Simple Recommendation: mod-8 decode · channels 0–7 — "
+                    f"this terminal shows colored AI reasoning after each bot move.{_StrategyColors.RESET}"
                 )
             if 4 == num_players and getattr(ai_player_type, "__name__", "") == "FourPlayerRecommendationPlayer":
-                from hanabi.console.console_display import Colors as _MiniRecColors
+                from hanabi.console.console_display import Colors as _StrategyColors
 
                 print(
-                    f"{_MiniRecColors.BRIGHT_BLUE}4p mini-recommendation: mod-9 decode · channels 0–8 — "
-                    f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
+                    f"{_StrategyColors.BRIGHT_BLUE}4p Simple Recommendation: mod-12 decode · channels 0–11 — "
+                    f"this terminal shows colored AI reasoning after each bot move.{_StrategyColors.RESET}"
                 )
             if 5 == num_players and getattr(ai_player_type, "__name__", "") == "FivePlayerRecommendationPlayer":
-                from hanabi.console.console_display import Colors as _MiniRecColors
+                from hanabi.console.console_display import Colors as _StrategyColors
 
                 print(
-                    f"{_MiniRecColors.BRIGHT_BLUE}5p mini-recommendation: mod-16 decode · channels 0–15 — "
-                    f"this terminal shows colored AI reasoning after each bot move.{_MiniRecColors.RESET}"
+                    f"{_StrategyColors.BRIGHT_BLUE}5p Simple Recommendation: mod-16 decode · channels 0–15 — "
+                    f"this terminal shows colored AI reasoning after each bot move.{_StrategyColors.RESET}"
                 )
 
         # Set game reference in players (needed for display updates)

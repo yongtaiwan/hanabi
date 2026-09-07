@@ -4,12 +4,12 @@ Run AI comparison experiments for different player counts.
 This script compares selected AIs on the same shuffled decks for 2–5-player games.
 Use ``--ais`` to include only the bots you want (e.g. omit ``montecarlo`` for faster batches).
 ``recommendation`` runs only for 5-player settings; ``three_player_recommendation`` runs only
-for 3-player settings (mod-7 mini variant); ``hint_hand_subtype_3p`` runs only for
+for 3-player settings (mod-8 Simple strategy); ``hint_hand_subtype_3p`` runs only for
 3-player settings (classic gDoc hint-hand-subtype convention); ``dynamic_hand_type_3p`` runs only for
 3-player settings (legacy↔recommendation dynamic hand-type); ``dynamic_recommendation_3p`` runs only for
 3-player settings (pure recommendation chop convention); ``four_player_recommendation`` runs only for
-4-player settings (mod-9 mini variant); ``five_player_recommendation`` runs only for
-5-player settings (mod-16 mini variant).
+4-player settings (mod-12 Simple strategy); ``five_player_recommendation`` runs only for
+5-player settings (mod-16 Simple strategy).
 ``commonsense_cheater`` (``CommonSenseCheater``) and ``paper_cheater`` (``PaperCheater``) are
 for benchmarking only and are not offered in the GUI or console apps.
 
@@ -108,17 +108,17 @@ def create_recommendation_player(player_index: int) -> RecommendationPlayer:
 
 
 def create_three_player_recommendation_player(player_index: int) -> ThreePlayerRecommendationPlayer:
-    """Factory for ThreePlayerRecommendationPlayer (mod-7 mini variant; 3-player games only)."""
+    """Factory for ThreePlayerRecommendationPlayer (mod-8 Simple strategy; 3-player games only)."""
     return ThreePlayerRecommendationPlayer(player_index)
 
 
 def create_four_player_recommendation_player(player_index: int) -> FourPlayerRecommendationPlayer:
-    """Factory for FourPlayerRecommendationPlayer (mod-9 mini variant; 4-player games only)."""
+    """Factory for FourPlayerRecommendationPlayer (mod-12 Simple strategy; 4-player games only)."""
     return FourPlayerRecommendationPlayer(player_index)
 
 
 def create_five_player_recommendation_player(player_index: int) -> FivePlayerRecommendationPlayer:
-    """Factory for FivePlayerRecommendationPlayer (mod-16 mini variant; 5-player games only)."""
+    """Factory for FivePlayerRecommendationPlayer (mod-16 Simple strategy; 5-player games only)."""
     return FivePlayerRecommendationPlayer(player_index)
 
 
@@ -217,7 +217,10 @@ def _ai_factories_for_settings(settings, enabled: FrozenSet[str]) -> Dict[str, C
             continue
         if key == "recommendation" and not RecommendationPlayer.supports_game_settings(settings):
             continue
-        if key == "three_player_recommendation" and not ThreePlayerRecommendationPlayer.supports_game_settings(settings):
+        if (
+            key == "three_player_recommendation"
+            and not ThreePlayerRecommendationPlayer.supports_game_settings(settings)
+        ):
             continue
         if key == "hint_hand_subtype_3p" and not HintHandSubtype3P.supports_game_settings(settings):
             continue
