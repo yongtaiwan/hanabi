@@ -1,0 +1,232 @@
+{
+  "engine_commit": "c516c769e78b341dff6d14e182e7a683dd4f141e",
+  "seed_start": 42,
+  "games_per_strategy": 500,
+  "score_rule": "0 on third error; otherwise sum of fireworks; raw_score retained",
+  "settings": "standard 50-card deck; auto_end_when_no_points_possible=True",
+  "summary": [
+    {
+      "players": 3,
+      "strategy": "Simple",
+      "games": 500,
+      "wins": 182,
+      "win_rate": 0.364,
+      "win_rate_95ci": [
+        0.32301143591892645,
+        0.4070623846866158
+      ],
+      "mean": 23.546,
+      "sd": 1.6003143478779562,
+      "min": 16,
+      "raw_mean": 23.546,
+      "outcomes": {
+        "perfect": 182,
+        "tempo": 161,
+        "needed_last_copy_lost": 157
+      },
+      "turns": 28626,
+      "zero_hint_turns": 4101,
+      "zero_hint_games": 421,
+      "last_resort_plays": 1,
+      "last_resort_games": 1,
+      "failed_plays": 448,
+      "needed_last_copy_loss_games": 157,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0,
+      "baseline_perfect_nonperfect_subject_count": 293,
+      "baseline_perfect_outcomes": {
+        "needed_last_copy_lost": 141,
+        "tempo": 152
+      }
+    },
+    {
+      "players": 3,
+      "strategy": "Cheater",
+      "games": 500,
+      "wins": 475,
+      "win_rate": 0.95,
+      "win_rate_95ci": [
+        0.9272318388284524,
+        0.9659062547561506
+      ],
+      "mean": 24.94,
+      "sd": 0.2766823200214008,
+      "min": 23,
+      "raw_mean": 24.94,
+      "outcomes": {
+        "perfect": 475,
+        "tempo": 25
+      },
+      "turns": 22484,
+      "zero_hint_turns": 0,
+      "zero_hint_games": 0,
+      "last_resort_plays": 0,
+      "last_resort_games": 0,
+      "failed_plays": 0,
+      "needed_last_copy_loss_games": 0,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0
+    },
+    {
+      "players": 3,
+      "strategy": "Dynamic",
+      "games": 500,
+      "wins": 385,
+      "win_rate": 0.77,
+      "win_rate_95ci": [
+        0.7311377813252322,
+        0.8047450748255296
+      ],
+      "mean": 24.59,
+      "sd": 1.3658811304520793,
+      "min": 0,
+      "raw_mean": 24.636,
+      "outcomes": {
+        "perfect": 385,
+        "tempo": 91,
+        "needed_last_copy_lost": 23,
+        "all_lives_lost": 1
+      },
+      "turns": 27606,
+      "zero_hint_turns": 2942,
+      "zero_hint_games": 426,
+      "last_resort_plays": 0,
+      "last_resort_games": 0,
+      "failed_plays": 253,
+      "needed_last_copy_loss_games": 23,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0,
+      "baseline_perfect_nonperfect_subject_count": 92,
+      "baseline_perfect_outcomes": {
+        "tempo": 70,
+        "needed_last_copy_lost": 22
+      }
+    },
+    {
+      "players": 4,
+      "strategy": "Simple",
+      "games": 500,
+      "wins": 213,
+      "win_rate": 0.426,
+      "win_rate_95ci": [
+        0.38338257836675194,
+        0.46974582402155785
+      ],
+      "mean": 23.65,
+      "sd": 1.8607592132512467,
+      "min": 0,
+      "raw_mean": 23.658,
+      "outcomes": {
+        "perfect": 213,
+        "tempo": 235,
+        "needed_last_copy_lost": 51,
+        "all_lives_lost": 1
+      },
+      "turns": 27546,
+      "zero_hint_turns": 1882,
+      "zero_hint_games": 263,
+      "last_resort_plays": 8,
+      "last_resort_games": 4,
+      "failed_plays": 530,
+      "needed_last_copy_loss_games": 51,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0,
+      "baseline_perfect_nonperfect_subject_count": 236,
+      "baseline_perfect_outcomes": {
+        "tempo": 189,
+        "needed_last_copy_lost": 46,
+        "all_lives_lost": 1
+      }
+    },
+    {
+      "players": 4,
+      "strategy": "Cheater",
+      "games": 500,
+      "wins": 448,
+      "win_rate": 0.896,
+      "win_rate_95ci": [
+        0.8661557291243417,
+        0.919805793230109
+      ],
+      "mean": 24.852,
+      "sd": 0.48431924415670397,
+      "min": 21,
+      "raw_mean": 24.852,
+      "outcomes": {
+        "perfect": 448,
+        "tempo": 52
+      },
+      "turns": 22663,
+      "zero_hint_turns": 5,
+      "zero_hint_games": 1,
+      "last_resort_plays": 0,
+      "last_resort_games": 0,
+      "failed_plays": 0,
+      "needed_last_copy_loss_games": 0,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0
+    },
+    {
+      "players": 5,
+      "strategy": "Simple",
+      "games": 500,
+      "wins": 115,
+      "win_rate": 0.23,
+      "win_rate_95ci": [
+        0.1952549251744704,
+        0.26886221867476784
+      ],
+      "mean": 23.034,
+      "sd": 1.7852782519466672,
+      "min": 17,
+      "raw_mean": 23.034,
+      "outcomes": {
+        "tempo": 317,
+        "perfect": 115,
+        "needed_last_copy_lost": 68
+      },
+      "turns": 25268,
+      "zero_hint_turns": 2484,
+      "zero_hint_games": 334,
+      "last_resort_plays": 1,
+      "last_resort_games": 1,
+      "failed_plays": 524,
+      "needed_last_copy_loss_games": 68,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0,
+      "baseline_perfect_nonperfect_subject_count": 305,
+      "baseline_perfect_outcomes": {
+        "tempo": 251,
+        "needed_last_copy_lost": 54
+      }
+    },
+    {
+      "players": 5,
+      "strategy": "Cheater",
+      "games": 500,
+      "wins": 416,
+      "win_rate": 0.832,
+      "win_rate_95ci": [
+        0.7967256709103735,
+        0.8622117670231558
+      ],
+      "mean": 24.786,
+      "sd": 0.5298731273258951,
+      "min": 21,
+      "raw_mean": 24.786,
+      "outcomes": {
+        "perfect": 416,
+        "tempo": 84
+      },
+      "turns": 19939,
+      "zero_hint_turns": 0,
+      "zero_hint_games": 0,
+      "last_resort_plays": 0,
+      "last_resort_games": 0,
+      "failed_plays": 0,
+      "needed_last_copy_loss_games": 0,
+      "all_lives_and_last_copy_loss_games": 0,
+      "tempo_without_playable_card_in_hand": 0
+    }
+  ]
+}

@@ -4,6 +4,10 @@ A Python Hanabi engine, strategy testbed, and browser-based teaching tool. The m
 strategies are the 3-, 4-, and 5-player **Simple Recommendation** conventions and the
 score-maximizing 3-player **Dynamic Recommendation** convention.
 
+This repository continues the code history from [shenwan/hanabi](https://github.com/shenwan/hanabi).
+See [paper statistics](analysis/README.md) for the reproducible 500-game comparisons,
+outcome categories, and figure source data.
+
 ## Convention Lab website
 
 Open the hosted [Hanabi Convention Lab](https://hanabi-convention-lab.youtiisnoob.chatgpt.site). It runs the Python game engine and bot classes inside the browser, so no local server is required. The lab includes a custom-position analyzer, explained bot games, and replay loading. See `WEB_APP.md` for details and the optional local development route.
