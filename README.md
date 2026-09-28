@@ -8,6 +8,14 @@ This repository continues the code history from [shenwan/hanabi](https://github.
 See [paper statistics](analysis/README.md) for the reproducible 500-game comparisons,
 outcome categories, and figure source data.
 
+## Simulation dataset
+
+The [500-game-per-bot dataset](datasets/hanabi-500-games/README.md) contains
+3,500 recorded games across Simple (3/4/5 players), Dynamic (3 players), and
+Cheater (3/4/5 players). Download a combined CSV, separate 500-row files, exact
+summary statistics, and the complete deck/move archive. The dataset includes
+scoring definitions, provenance, checksums, and reproducible validation.
+
 ## Convention Lab website
 
 Open the hosted [Hanabi Convention Lab](https://hanabi-convention-lab.youtiisnoob.chatgpt.site). It runs the Python game engine and bot classes inside the browser, so no local server is required. The lab includes a custom-position analyzer, explained bot games, and replay loading. See `WEB_APP.md` for details and the optional local development route.

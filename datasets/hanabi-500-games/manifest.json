@@ -1,0 +1,56 @@
+{
+  "dataset": "Hanabi paper simulations: 500 games per bot configuration",
+  "schema_version": "1.0.0",
+  "frozen_run": "2026-09-12",
+  "games": 3500,
+  "moves": 174132,
+  "games_per_configuration": 500,
+  "seed_start": 42,
+  "seed_end_inclusive": 541,
+  "engine_commit": "c516c769e78b341dff6d14e182e7a683dd4f141e",
+  "evidence_commit": "b041097a1c64086460a9b54f11a02e2310ba545a",
+  "score_rule": "0 on third error; otherwise sum of fireworks; raw_score retained",
+  "settings": "standard 50-card deck; auto_end_when_no_points_possible=True",
+  "source": {
+    "path": "analysis/reviewer-stats-2026-09-12/evidence.json.gz",
+    "sha256": "bb903823f932aa4afdfcdf986a662f2e988a2e486aca508aeeb475e22cc0ae13"
+  },
+  "files": {
+    "cheater-3p.csv": {
+      "sha256": "7a5bbb3fd23ffd45f86a334ce384ef8fff7c820aab5b11f53d05fa3b36b9f103",
+      "rows": 500
+    },
+    "cheater-4p.csv": {
+      "sha256": "22cc8f0f147a2b01f6e5ec49ddd2110c36921aa4ed31de132f31ce68ce111410",
+      "rows": 500
+    },
+    "cheater-5p.csv": {
+      "sha256": "7f06ba8e781679aa9cd2367597ecfd456143cfa487d08c8e75b148fd3b79fa1b",
+      "rows": 500
+    },
+    "dynamic-3p.csv": {
+      "sha256": "be7dd7f486b03d2dbde6d17433697620eb7e1149ba45b7b2e010ae076b1fdb2a",
+      "rows": 500
+    },
+    "games.csv": {
+      "sha256": "f9d906e9efec0445e8d4af7c1ae8245b266dd5e1703e4bd8c230604c886aee58",
+      "rows": 3500
+    },
+    "simple-3p.csv": {
+      "sha256": "577dfda41f64b65e46ef042142207c47a513b6a4fa9d9ebeba6ffc7bb4299326",
+      "rows": 500
+    },
+    "simple-4p.csv": {
+      "sha256": "7beae1401825316e50d5e630420f3f1f7782dccad2c83d0465cc02513d85de41",
+      "rows": 500
+    },
+    "simple-5p.csv": {
+      "sha256": "684458ada1c67425faf44a50f5d6445569a35b15426a5f9ae0d22bce1ecfdde4",
+      "rows": 500
+    },
+    "summary.csv": {
+      "sha256": "2491f160dec5719dcf910222e915d8161964f58a0327b415c1eefe7ad0035bf8",
+      "rows": 7
+    }
+  }
+}

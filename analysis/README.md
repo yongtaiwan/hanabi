@@ -1,5 +1,9 @@
 # Paper statistics
 
+For downloadable game-level CSVs, see the
+[documented simulation dataset](../datasets/hanabi-500-games/README.md).
+It exports these same frozen records without rerunning or changing the bots.
+
 Run from the repository root:
 
 ```sh
